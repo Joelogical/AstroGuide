@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AstroGuide - Disclaimer</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="disclaimer-container">
+      <h1>Important Notice</h1>
+
+      <div class="disclaimer-content">
+        <p>
+          Welcome to AstroGuide! Before you begin your astrological journey,
+          please take a moment to read this important information.
+        </p>
+
+        <div class="disclaimer-section">
+          <h2>Disclaimer</h2>
+          <p>
+            This is a placeholder for your disclaimer text. You can edit this
+            section later to include:
+          </p>
+          <ul>
+            <li>Important disclaimers about astrological readings</li>
+            <li>Privacy policy information</li>
+            <li>Terms of service</li>
+            <li>Any other relevant legal information</li>
+          </ul>
+        </div>
+
+        <div class="disclaimer-section">
+          <h2>Your Privacy</h2>
+          <p>
+            This is a placeholder for privacy-related information. You can edit
+            this section later to include:
+          </p>
+          <ul>
+            <li>How user data is handled</li>
+            <li>Data protection measures</li>
+            <li>User rights and consent</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="disclaimer-actions">
+        <button id="accept-button" class="submit-button">
+          I Accept and Continue
+        </button>
+        <button id="decline-button" class="decline-button">I Decline</button>
+      </div>
+    </div>
+
+    <script>
+      document.getElementById("accept-button").addEventListener("click", () => {
+        // Store that user has accepted the disclaimer
+        localStorage.setItem("disclaimerAccepted", "true");
+        // Redirect to chat page
+        window.location.href = "index.html";
+      });
+
+      document
+        .getElementById("decline-button")
+        .addEventListener("click", () => {
+          // Clear user data and redirect to landing page
+          localStorage.clear();
+          window.location.href = "landing.html";
+        });
+    </script>
+  </body>
+</html>

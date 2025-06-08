@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AstroGuide - Welcome</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="landing-container">
+      <h1>Welcome to AstroGuide</h1>
+      <p class="subtitle">Your personal astrological companion</p>
+
+      <div class="auth-toggle">
+        <button class="toggle-btn active" data-mode="signup">
+          Create Account
+        </button>
+        <button class="toggle-btn" data-mode="login">Login</button>
+      </div>
+
+      <div id="error-message" class="error-message"></div>
+
+      <form id="user-info-form" class="user-form">
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input
+            type="email"
+            id="email"
+            name="email"
+            required
+            placeholder="Enter your email"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            required
+            placeholder="Enter your password"
+          />
+        </div>
+
+        <div id="signup-fields">
+          <div class="form-group">
+            <label for="name">Your Name</label>
+            <input
+              type="text"
+              id="name"
+              name="name"
+              placeholder="Enter your name"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="birth-date">Birth Date</label>
+            <input type="date" id="birth-date" name="birth-date" />
+          </div>
+
+          <div class="form-group">
+            <label for="birth-time">Birth Time</label>
+            <input type="time" id="birth-time" name="birth-time" />
+          </div>
+
+          <div class="form-group">
+            <label for="birth-place">Birth Place</label>
+            <input
+              type="text"
+              id="birth-place"
+              name="birth-place"
+              placeholder="City, Country"
+            />
+          </div>
+        </div>
+
+        <button type="submit" class="submit-button">Create Account</button>
+      </form>
+    </div>
+
+    <script>
+      const form = document.getElementById("user-info-form");
+      const signupFields = document.getElementById("signup-fields");
+      const toggleBtns = document.querySelectorAll(".toggle-btn");
+      const submitBtn = document.querySelector(".submit-button");
+      const errorMessage = document.getElementById("error-message");
+
+      // Get all signup field inputs
+      const signupInputs = signupFields.querySelectorAll("input");
+
+      // Function to update required attributes based on mode
+      function updateRequiredFields(isLogin) {
+        signupInputs.forEach((input) => {
+          input.required = !isLogin;
+        });
+      }
+
+      // Toggle between login and signup
+      toggleBtns.forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const mode = btn.dataset.mode;
+          toggleBtns.forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
+
+          if (mode === "login") {
+            signupFields.style.display = "none";
+            submitBtn.textContent = "Login";
+            updateRequiredFields(true);
+          } else {
+            signupFields.style.display = "flex";
+            submitBtn.textContent = "Create Account";
+            updateRequiredFields(false);
+          }
+          // Clear error message when switching modes
+          errorMessage.textContent = "";
+          errorMessage.style.display = "none";
+        });
+      });
+
+      // Initialize required fields
+      updateRequiredFields(false);
+
+      form.addEventListener("submit", async function (e) {
+        e.preventDefault();
+
+        const isLogin =
+          !signupFields.style.display || signupFields.style.display === "none";
+        const formData = {
+          email: document.getElementById("email").value,
+          password: document.getElementById("password").value,
+        };
+
+        if (!isLogin) {
+          // Add signup fields to formData
+          formData.name = document.getElementById("name").value;
+          formData.birthDate = document.getElementById("birth-date").value;
+          formData.birthTime = document.getElementById("birth-time").value;
+          formData.birthPlace = document.getElementById("birth-place").value;
+
+          // Validate signup fields
+          if (
+            !formData.name ||
+            !formData.birthDate ||
+            !formData.birthTime ||
+            !formData.birthPlace
+          ) {
+            errorMessage.textContent = "Please fill in all required fields";
+            errorMessage.style.display = "block";
+            return;
+          }
+        }
+
+        try {
+          // Show loading state
+          submitBtn.classList.add("loading");
+          submitBtn.disabled = true;
+          errorMessage.style.display = "none";
+
+          // Log the request data (excluding password)
+          console.log("Sending request:", {
+            isLogin: isLogin,
+            email: formData.email,
+            hasPassword: !!formData.password,
+            endpoint: isLogin ? "login" : "signup",
+          });
+
+          const response = await fetch(
+            "http://localhost:3000/api/" + (isLogin ? "login" : "signup"),
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Accept: "application/json",
+              },
+              body: JSON.stringify(formData),
+            }
+          );
+
+          console.log("Response status:", response.status);
+          const data = await response.json();
+          console.log("Response data:", {
+            ...data,
+            token: data.token ? "[REDACTED]" : null,
+          });
+
+          // Detailed response validation
+          if (!data) {
+            console.error("No data received from server");
+            throw new Error("No response data received");
+          }
+
+          // If we have a token and user data, consider it successful even if success flag is missing
+          if (data.token && data.user) {
+            // Store auth token and user data
+            localStorage.setItem("authToken", data.token);
+            localStorage.setItem("userData", JSON.stringify(data.user));
+
+            // Use default redirect if not provided
+            const redirectUrl = data.redirectTo
+              ? data.redirectTo.startsWith("/")
+                ? `http://localhost:3000${data.redirectTo}`
+                : data.redirectTo
+              : "http://localhost:3000/index.html";
+
+            console.log("Redirecting to:", redirectUrl);
+            window.location.href = redirectUrl;
+            return;
+          }
+
+          // If we don't have the required data, throw an error
+          if (!data.token) {
+            console.error("No token received:", data);
+            throw new Error("No authentication token received");
+          }
+
+          if (!data.user) {
+            console.error("No user data received:", data);
+            throw new Error("No user data received");
+          }
+
+          // If we get here, something went wrong
+          throw new Error(data.error || "Authentication failed");
+        } catch (error) {
+          // Show error message
+          console.error("Auth error:", error);
+          errorMessage.textContent = error.message;
+          errorMessage.style.display = "block";
+
+          // Clear password field on error
+          document.getElementById("password").value = "";
+
+          // Focus on the first empty field
+          if (!document.getElementById("email").value) {
+            document.getElementById("email").focus();
+          } else {
+            document.getElementById("password").focus();
+          }
+        } finally {
+          // Remove loading state
+          submitBtn.classList.remove("loading");
+          submitBtn.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>
