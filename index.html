@@ -69,6 +69,10 @@
 
           console.log("Sending birth data:", userData);
 
+          // Parse birth date and time
+          const birthDate = new Date(userData.birthDate);
+          const [hours, minutes] = userData.birthTime.split(":").map(Number);
+
           // Make API call to backend
           fetch("http://localhost:3000/api/birth-chart", {
             method: "POST",
@@ -76,14 +80,14 @@
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              year: parseInt(userData.year),
-              month: parseInt(userData.month),
-              day: parseInt(userData.day),
-              hour: parseInt(userData.hour),
-              minute: parseInt(userData.minute),
-              latitude: parseFloat(userData.latitude),
-              longitude: parseFloat(userData.longitude),
-              timezone: userData.timezone,
+              year: birthDate.getFullYear(),
+              month: birthDate.getMonth() + 1, // JavaScript months are 0-based
+              day: birthDate.getDate(),
+              hour: hours,
+              minute: minutes,
+              latitude: 40.7128, // Default to New York coordinates
+              longitude: -74.006,
+              timezone: "America/New_York",
             }),
           })
             .then((response) => {
