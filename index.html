@@ -57,15 +57,98 @@
           addMessage(message, true);
           messageInput.value = "";
 
-          // TODO: Add API call to OpenAI here
-          // For now, we'll just echo a simple response
-          setTimeout(() => {
+          // Get user data from localStorage
+          const userData = JSON.parse(localStorage.getItem("userData"));
+
+          if (!userData) {
             addMessage(
-              "I'm processing your message. This is a placeholder response."
+              "Error: No user data found. Please log in or create an account first."
             );
-          }, 1000);
+            return;
+          }
+
+          console.log("Sending birth data:", userData);
+
+          // Make API call to backend
+          fetch("http://localhost:3000/api/birth-chart", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              year: parseInt(userData.year),
+              month: parseInt(userData.month),
+              day: parseInt(userData.day),
+              hour: parseInt(userData.hour),
+              minute: parseInt(userData.minute),
+              latitude: parseFloat(userData.latitude),
+              longitude: parseFloat(userData.longitude),
+              timezone: userData.timezone,
+            }),
+          })
+            .then((response) => {
+              if (!response.ok) {
+                return response.json().then((err) => {
+                  throw new Error(
+                    err.details ||
+                      err.error ||
+                      "Failed to calculate birth chart"
+                  );
+                });
+              }
+              return response.json();
+            })
+            .then((data) => {
+              console.log("Received birth chart data:", data);
+              // Format the birth chart information
+              const birthChartInfo = `
+              Birth Chart Details:
+              Sun Position: ${data.planets.sun.toFixed(2)}°
+              Moon Position: ${data.planets.moon.toFixed(2)}°
+              Ascendant: ${data.ascendant.toFixed(2)}°
+              
+              Planetary Positions:
+              ${Object.entries(data.planets)
+                .map(([planet, position]) => {
+                  const planetNames = {
+                    sun: "Sun",
+                    moon: "Moon",
+                    mars: "Mars",
+                    mercury: "Mercury",
+                    jupiter: "Jupiter",
+                    venus: "Venus",
+                    saturn: "Saturn",
+                    uranus: "Uranus",
+                    neptune: "Neptune",
+                    pluto: "Pluto",
+                  };
+                  return `${planetNames[planet]}: ${position.toFixed(2)}°`;
+                })
+                .join("\n")}
+            `;
+              addMessage(birthChartInfo);
+            })
+            .catch((error) => {
+              console.error("Error:", error);
+              addMessage(`Error: ${error.message}`);
+            });
         }
       }
+
+      // Add a function to test the backend connection
+      function testBackendConnection() {
+        fetch("http://localhost:3000/api/test")
+          .then((response) => response.json())
+          .then((data) => {
+            console.log("Backend test response:", data);
+          })
+          .catch((error) => {
+            console.error("Backend connection test failed:", error);
+          });
+      }
+
+      // Test backend connection when page loads
+      testBackendConnection();
 
       // Logout handler
       logoutButton.addEventListener("click", () => {

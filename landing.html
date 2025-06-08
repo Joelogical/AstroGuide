@@ -201,7 +201,7 @@
               ? data.redirectTo.startsWith("/")
                 ? `http://localhost:3000${data.redirectTo}`
                 : data.redirectTo
-              : "http://localhost:3000/index.html";
+              : "/index.html";
 
             console.log("Redirecting to:", redirectUrl);
             window.location.href = redirectUrl;
