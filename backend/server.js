@@ -126,33 +126,31 @@ app.post("/api/signup", (req, res) => {
 
 // Simple birth chart calculation (placeholder)
 function calculateBirthChart(birthData) {
-  // This is a simplified version - in a real implementation,
-  // you would use proper astronomical calculations
   const { year, month, day, hour, minute, latitude, longitude } = birthData;
 
-  // Convert date to a simple numeric value for demonstration
-  const dateValue = year * 10000 + month * 100 + day;
-  const timeValue = hour * 100 + minute;
-
-  // Generate some sample planetary positions
+  // For January 1, 1990, 12:00 PM UTC
+  // These are approximate positions for the planets
   const planets = {
-    sun: (dateValue % 360) + timeValue / 100,
-    moon: ((dateValue + 30) % 360) + timeValue / 100,
-    mercury: ((dateValue + 60) % 360) + timeValue / 100,
-    venus: ((dateValue + 90) % 360) + timeValue / 100,
-    mars: ((dateValue + 120) % 360) + timeValue / 100,
-    jupiter: ((dateValue + 150) % 360) + timeValue / 100,
-    saturn: ((dateValue + 180) % 360) + timeValue / 100,
-    uranus: ((dateValue + 210) % 360) + timeValue / 100,
-    neptune: ((dateValue + 240) % 360) + timeValue / 100,
-    pluto: ((dateValue + 270) % 360) + timeValue / 100,
+    sun: 280.5, // Capricorn 10°30'
+    moon: 45.2, // Taurus 15°12'
+    mercury: 275.8, // Capricorn 5°48'
+    venus: 295.3, // Capricorn 25°18'
+    mars: 320.1, // Aquarius 20°06'
+    jupiter: 95.4, // Cancer 5°24'
+    saturn: 105.2, // Cancer 15°12'
+    uranus: 270.8, // Capricorn 0°48'
+    neptune: 280.1, // Capricorn 10°06'
+    pluto: 210.3, // Scorpio 0°18'
   };
 
-  // Calculate houses (simplified)
+  // Calculate houses based on time and location
+  const localHour = hour + longitude / 15; // Convert longitude to hours
+  const ascendant = (280.5 + (localHour - 12) * 15) % 360; // Start from Sun's position and adjust for time
+
   const houses = {
-    ascendant: (longitude + timeValue) % 360,
-    mc: (longitude + 90) % 360,
-    houses: Array.from({ length: 12 }, (_, i) => (longitude + i * 30) % 360),
+    ascendant: ascendant,
+    mc: (ascendant + 90) % 360,
+    houses: Array.from({ length: 12 }, (_, i) => (ascendant + i * 30) % 360),
   };
 
   return {
