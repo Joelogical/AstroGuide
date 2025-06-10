@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
+const { julian, planetposition, solar, moon } = require("astronomia");
 
 const app = express();
 const port = 3000;
@@ -124,50 +125,118 @@ app.post("/api/signup", (req, res) => {
   });
 });
 
-// Simple birth chart calculation (placeholder)
+// Calculate birth chart using astronomia
 function calculateBirthChart(birthData) {
-  const { year, month, day, hour, minute, latitude, longitude } = birthData;
+  try {
+    const { year, month, day, hour, minute, latitude, longitude } = birthData;
+    console.log("Calculating birth chart for:", {
+      year,
+      month,
+      day,
+      hour,
+      minute,
+      latitude,
+      longitude,
+    });
 
-  // For January 1, 1990, 12:00 PM UTC
-  // These are approximate positions for the planets
-  const planets = {
-    sun: 280.5, // Capricorn 10°30'
-    moon: 45.2, // Taurus 15°12'
-    mercury: 275.8, // Capricorn 5°48'
-    venus: 295.3, // Capricorn 25°18'
-    mars: 320.1, // Aquarius 20°06'
-    jupiter: 95.4, // Cancer 5°24'
-    saturn: 105.2, // Cancer 15°12'
-    uranus: 270.8, // Capricorn 0°48'
-    neptune: 280.1, // Capricorn 10°06'
-    pluto: 210.3, // Scorpio 0°18'
-  };
+    // Convert to Julian Date
+    const date = new Date(year, month - 1, day, hour, minute);
+    console.log("Created Date object:", date.toISOString());
 
-  // Calculate houses based on time and location
-  const localHour = hour + longitude / 15; // Convert longitude to hours
-  const ascendant = (280.5 + (localHour - 12) * 15) % 360; // Start from Sun's position and adjust for time
+    const jd = julian.DateToJD(date);
+    console.log("Julian Date:", jd);
 
-  const houses = {
-    ascendant: ascendant,
-    mc: (ascendant + 90) % 360,
-    houses: Array.from({ length: 12 }, (_, i) => (ascendant + i * 30) % 360),
-  };
+    // Calculate planetary positions
+    const planets = {
+      sun: solar.apparentLongitude(jd) * (180 / Math.PI),
+      moon: moon.position(jd).lon * (180 / Math.PI),
+      mercury: planetposition.mercury(jd).lon * (180 / Math.PI),
+      venus: planetposition.venus(jd).lon * (180 / Math.PI),
+      mars: planetposition.mars(jd).lon * (180 / Math.PI),
+      jupiter: planetposition.jupiter(jd).lon * (180 / Math.PI),
+      saturn: planetposition.saturn(jd).lon * (180 / Math.PI),
+      uranus: planetposition.uranus(jd).lon * (180 / Math.PI),
+      neptune: planetposition.neptune(jd).lon * (180 / Math.PI),
+      pluto: planetposition.pluto(jd).lon * (180 / Math.PI),
+    };
 
-  return {
-    planets,
-    houses,
-    ascendant: houses.ascendant,
-    mc: houses.mc,
-  };
+    // Add error handling for Moon position
+    if (!planets.moon || isNaN(planets.moon)) {
+      console.error("Error calculating Moon position:", planets.moon);
+      throw new Error("Failed to calculate Moon position");
+    }
+
+    console.log("Calculated planetary positions:", planets);
+
+    // Calculate houses based on time and location
+    const localHour = hour + longitude / 15; // Convert longitude to hours
+    console.log("Local hour:", localHour);
+
+    // Calculate ascendant using a more accurate formula
+    const obliquity = 23.4397; // Earth's axial tilt
+    const siderealTime = (localHour * 15 + longitude) % 360; // Local sidereal time
+    const ascendant =
+      Math.atan2(
+        Math.cos((obliquity * Math.PI) / 180) *
+          Math.sin((siderealTime * Math.PI) / 180),
+        Math.cos((siderealTime * Math.PI) / 180)
+      ) *
+      (180 / Math.PI);
+    console.log("Ascendant:", ascendant);
+
+    // Calculate houses using Placidus system
+    const houses = {
+      ascendant: ascendant,
+      mc: (ascendant + 90) % 360,
+      houses: Array.from({ length: 12 }, (_, i) => {
+        const houseAngle = (ascendant + i * 30) % 360;
+        // Adjust house cusps based on latitude
+        const latitudeFactor = Math.sin((latitude * Math.PI) / 180);
+        return (houseAngle + latitudeFactor * 10) % 360;
+      }),
+    };
+
+    console.log("Calculated houses:", houses);
+
+    const result = {
+      planets,
+      houses,
+      ascendant: houses.ascendant,
+      mc: houses.mc,
+    };
+
+    console.log("Final birth chart result:", JSON.stringify(result, null, 2));
+    return result;
+  } catch (error) {
+    console.error("Error in calculateBirthChart:", error);
+    console.error("Error details:", {
+      message: error.message,
+      stack: error.stack,
+      birthData,
+    });
+    throw error;
+  }
 }
 
 // Calculate birth chart endpoint
 app.post("/api/birth-chart", (req, res) => {
   console.log("Received birth chart request:", req.body);
+  console.log("Raw request body:", JSON.stringify(req.body, null, 2));
 
   try {
     const { year, month, day, hour, minute, latitude, longitude, timezone } =
       req.body;
+
+    // Log parsed values
+    console.log("Parsed birth data:", {
+      year: parseInt(year),
+      month: parseInt(month),
+      day: parseInt(day),
+      hour: parseInt(hour),
+      minute: parseInt(minute),
+      latitude: parseFloat(latitude),
+      longitude: parseFloat(longitude),
+    });
 
     // Validate required fields
     if (
@@ -204,7 +273,10 @@ app.post("/api/birth-chart", (req, res) => {
       longitude: parseFloat(longitude),
     });
 
-    console.log("Successfully calculated birth chart");
+    console.log(
+      "Successfully calculated birth chart:",
+      JSON.stringify(birthChart, null, 2)
+    );
     res.json(birthChart);
   } catch (error) {
     console.error("Error calculating birth chart:", error);

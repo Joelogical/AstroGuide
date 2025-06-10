@@ -67,11 +67,40 @@
             return;
           }
 
-          console.log("Sending birth data:", userData);
+          console.log("Sending birth data to server:", userData);
+          console.log("Original user data:", userData);
 
-          // Parse birth date and time
-          const birthDate = new Date(userData.birthDate);
+          // Parse birth date and time directly from strings
+          const [year, month, day] = userData.birthDate.split("-").map(Number);
           const [hours, minutes] = userData.birthTime.split(":").map(Number);
+
+          console.log("Parsed date components:", {
+            year,
+            month,
+            day,
+            hours,
+            minutes,
+          });
+
+          // Parse birth place coordinates
+          const birthPlace = userData.birthPlace || "New York, USA";
+          const [latitude, longitude] = birthPlace
+            .split(",")
+            .map((coord) => parseFloat(coord.trim()));
+
+          const requestData = {
+            year: year,
+            month: month,
+            day: day,
+            hour: hours,
+            minute: minutes,
+            latitude: latitude || 40.7128, // Default to New York if coordinates not found
+            longitude: longitude || -74.006,
+            timezone: "America/New_York",
+          };
+
+          console.log("Sending birth data to server:", requestData);
+          console.log("Original user data:", userData);
 
           // Make API call to backend
           fetch("http://localhost:3000/api/birth-chart", {
@@ -79,16 +108,7 @@
             headers: {
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({
-              year: birthDate.getFullYear(),
-              month: birthDate.getMonth() + 1, // JavaScript months are 0-based
-              day: birthDate.getDate(),
-              hour: hours,
-              minute: minutes,
-              latitude: 40.7128, // Default to New York coordinates
-              longitude: -74.006,
-              timezone: "America/New_York",
-            }),
+            body: JSON.stringify(requestData),
           })
             .then((response) => {
               if (!response.ok) {
