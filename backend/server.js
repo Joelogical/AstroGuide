@@ -1,10 +1,46 @@
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
-const astronomia = require("astronomia");
+const axios = require("axios");
 
 const app = express();
 const port = 3000;
+
+// Prokerala API credentials
+const CLIENT_ID = "1189e38e-fc89-4960-ba84-ff3106f00da0";
+const CLIENT_SECRET = "JMtUTh2PiUYCAFcrEWEfhFTzeKAYEiA0MsARPiZ5";
+let accessToken = null;
+let tokenExpiry = null;
+
+// Function to get access token
+async function getAccessToken() {
+  try {
+    // Check if we have a valid token
+    if (accessToken && tokenExpiry && Date.now() < tokenExpiry) {
+      return accessToken;
+    }
+
+    // Get new token
+    const response = await axios.post(
+      "https://api.prokerala.com/token",
+      `grant_type=client_credentials&client_id=${CLIENT_ID}&client_secret=${CLIENT_SECRET}`,
+      {
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+      }
+    );
+
+    accessToken = response.data.access_token;
+    // Set token expiry to 50 minutes (giving 10-minute buffer)
+    tokenExpiry = Date.now() + (response.data.expires_in - 600) * 1000;
+
+    return accessToken;
+  } catch (error) {
+    console.error("Error getting access token:", error);
+    throw error;
+  }
+}
 
 // Middleware
 app.use(cors());
@@ -35,8 +71,6 @@ users.set("jmsmith.coding@gmail.com", {
 // Login endpoint
 app.post("/api/login", (req, res) => {
   console.log("Login request received:", req.body);
-  // Log all users
-  console.log("Current users:", Array.from(users.entries()));
   const { email, password } = req.body;
 
   if (!email || !password) {
@@ -46,16 +80,8 @@ app.post("/api/login", (req, res) => {
     });
   }
 
-  // Check if user exists
   const user = users.get(email);
-  console.log("User found:", user);
   if (!user || user.password !== password) {
-    console.log(
-      "Password provided:",
-      password,
-      "Expected:",
-      user ? user.password : undefined
-    );
     return res.status(401).json({
       success: false,
       error: "Invalid email or password",
@@ -63,7 +89,6 @@ app.post("/api/login", (req, res) => {
     });
   }
 
-  // Return success response
   res.json({
     success: true,
     token: "demo-token-" + Date.now(),
@@ -82,7 +107,6 @@ app.post("/api/signup", (req, res) => {
   console.log("Signup request received:", req.body);
   const { email, password, name, birthDate, birthTime, birthPlace } = req.body;
 
-  // Validate required fields
   if (!email || !password || !name || !birthDate || !birthTime || !birthPlace) {
     return res.status(400).json({
       success: false,
@@ -90,7 +114,6 @@ app.post("/api/signup", (req, res) => {
     });
   }
 
-  // Check if user already exists
   if (users.has(email)) {
     return res.status(409).json({
       success: false,
@@ -98,20 +121,17 @@ app.post("/api/signup", (req, res) => {
     });
   }
 
-  // Create new user
   const user = {
     email,
-    password, // In production, hash the password!
+    password,
     name,
     birthDate,
     birthTime,
     birthPlace,
   };
 
-  // Store user
   users.set(email, user);
 
-  // Return success response
   res.json({
     success: true,
     token: "demo-token-" + Date.now(),
@@ -125,142 +145,13 @@ app.post("/api/signup", (req, res) => {
   });
 });
 
-// Calculate birth chart using astronomia
-function calculateBirthChart(birthData) {
-  try {
-    const { year, month, day, hour, minute, latitude, longitude } = birthData;
-    console.log("Calculating birth chart for:", {
-      year,
-      month,
-      day,
-      hour,
-      minute,
-      latitude,
-      longitude,
-    });
-
-    // Convert to Julian Date
-    const date = new Date(year, month - 1, day, hour, minute);
-    console.log("Created Date object:", date.toISOString());
-
-    const jd = astronomia.julian.DateToJD(date);
-    console.log("Julian Date:", jd);
-
-    // Calculate planetary positions
-    try {
-      // Calculate Sun's position
-      const sunLon = astronomia.solar.apparentLongitude(jd) * (180 / Math.PI);
-
-      // Calculate Moon's position using moonphase
-      const moonLon = (astronomia.moonphase.phase(jd) * 360) % 360;
-
-      // Calculate other planetary positions
-      const planets = {
-        sun: sunLon,
-        moon: moonLon,
-        mercury:
-          ((astronomia.planetposition.mercury(jd).lon * 180) / Math.PI) % 360,
-        venus:
-          ((astronomia.planetposition.venus(jd).lon * 180) / Math.PI) % 360,
-        mars: ((astronomia.planetposition.mars(jd).lon * 180) / Math.PI) % 360,
-        jupiter:
-          ((astronomia.planetposition.jupiter(jd).lon * 180) / Math.PI) % 360,
-        saturn:
-          ((astronomia.planetposition.saturn(jd).lon * 180) / Math.PI) % 360,
-        uranus:
-          ((astronomia.planetposition.uranus(jd).lon * 180) / Math.PI) % 360,
-        neptune:
-          ((astronomia.planetposition.neptune(jd).lon * 180) / Math.PI) % 360,
-        pluto:
-          ((astronomia.planetposition.pluto(jd).lon * 180) / Math.PI) % 360,
-      };
-
-      // Add error handling for Moon position
-      if (!planets.moon || isNaN(planets.moon)) {
-        console.error("Error calculating Moon position:", planets.moon);
-        throw new Error("Failed to calculate Moon position");
-      }
-
-      console.log("Calculated planetary positions:", planets);
-
-      // Calculate houses based on time and location
-      const localHour = hour + longitude / 15; // Convert longitude to hours
-      console.log("Local hour:", localHour);
-
-      // Calculate ascendant using a more accurate formula
-      const obliquity = 23.4397; // Earth's axial tilt
-      const siderealTime = (localHour * 15 + longitude) % 360;
-      const ascendant =
-        Math.atan2(
-          Math.cos((obliquity * Math.PI) / 180) *
-            Math.sin((siderealTime * Math.PI) / 180),
-          Math.cos((siderealTime * Math.PI) / 180)
-        ) *
-        (180 / Math.PI);
-      console.log("Ascendant:", ascendant);
-
-      // Calculate houses using Placidus system
-      const houses = {
-        ascendant: ascendant,
-        mc: (ascendant + 90) % 360,
-        houses: Array.from({ length: 12 }, (_, i) => {
-          const houseAngle = (ascendant + i * 30) % 360;
-          // Adjust house cusps based on latitude
-          const latitudeFactor = Math.sin((latitude * Math.PI) / 180);
-          return (houseAngle + latitudeFactor * 10) % 360;
-        }),
-      };
-
-      console.log("Calculated houses:", houses);
-
-      const result = {
-        planets,
-        houses,
-        ascendant: houses.ascendant,
-        mc: houses.mc,
-      };
-
-      console.log("Final birth chart result:", JSON.stringify(result, null, 2));
-      return result;
-    } catch (error) {
-      console.error("Error in calculateBirthChart:", error);
-      console.error("Error details:", {
-        message: error.message,
-        stack: error.stack,
-        birthData,
-      });
-      throw new Error(`Failed to calculate birth chart: ${error.message}`);
-    }
-  } catch (error) {
-    console.error("Error in calculateBirthChart:", error);
-    console.error("Error details:", {
-      message: error.message,
-      stack: error.stack,
-      birthData,
-    });
-    throw error;
-  }
-}
-
-// Calculate birth chart endpoint
-app.post("/api/birth-chart", (req, res) => {
+// Calculate birth chart endpoint using API
+app.post("/api/birth-chart", async (req, res) => {
   console.log("Received birth chart request:", req.body);
-  console.log("Raw request body:", JSON.stringify(req.body, null, 2));
 
   try {
     const { year, month, day, hour, minute, latitude, longitude, timezone } =
       req.body;
-
-    // Log parsed values
-    console.log("Parsed birth data:", {
-      year: parseInt(year),
-      month: parseInt(month),
-      day: parseInt(day),
-      hour: parseInt(hour),
-      minute: parseInt(minute),
-      latitude: parseFloat(latitude),
-      longitude: parseFloat(longitude),
-    });
 
     // Validate required fields
     if (
@@ -272,35 +163,63 @@ app.post("/api/birth-chart", (req, res) => {
       !latitude ||
       !longitude
     ) {
-      console.error("Missing required fields:", {
-        year,
-        month,
-        day,
-        hour,
-        minute,
-        latitude,
-        longitude,
-      });
       return res.status(400).json({
         error: "Missing required fields",
         details: "Please provide all required birth data",
       });
     }
 
-    const birthChart = calculateBirthChart({
-      year: parseInt(year),
-      month: parseInt(month),
-      day: parseInt(day),
-      hour: parseInt(hour),
-      minute: parseInt(minute),
-      latitude: parseFloat(latitude),
-      longitude: parseFloat(longitude),
-    });
+    // Get access token
+    const token = await getAccessToken();
 
-    console.log(
-      "Successfully calculated birth chart:",
-      JSON.stringify(birthChart, null, 2)
+    // Format datetime for API
+    const datetime = `${year}-${month.toString().padStart(2, "0")}-${day
+      .toString()
+      .padStart(2, "0")}T${hour.toString().padStart(2, "0")}:${minute
+      .toString()
+      .padStart(2, "0")}:00${timezone ? `+${timezone}` : "+00:00"}`;
+    const coordinates = `${latitude},${longitude}`;
+
+    // Call the astrological API
+    const response = await axios.get(
+      "https://api.prokerala.com/v2/astrology/kundli",
+      {
+        params: {
+          ayanamsa: 1, // Lahiri ayanamsa
+          coordinates: coordinates,
+          datetime: datetime,
+        },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      }
     );
+
+    // Transform the API response to match our expected format
+    const birthChart = {
+      planets: {
+        sun: response.data.planets.sun.longitude,
+        moon: response.data.planets.moon.longitude,
+        mercury: response.data.planets.mercury.longitude,
+        venus: response.data.planets.venus.longitude,
+        mars: response.data.planets.mars.longitude,
+        jupiter: response.data.planets.jupiter.longitude,
+        saturn: response.data.planets.saturn.longitude,
+        uranus: response.data.planets.uranus.longitude,
+        neptune: response.data.planets.neptune.longitude,
+        pluto: response.data.planets.pluto.longitude,
+      },
+      houses: {
+        ascendant: response.data.houses.ascendant,
+        mc: response.data.houses.mc,
+        houses: response.data.houses.cusps,
+      },
+      ascendant: response.data.houses.ascendant,
+      mc: response.data.houses.mc,
+    };
+
+    // Process and return the API response
     res.json(birthChart);
   } catch (error) {
     console.error("Error calculating birth chart:", error);

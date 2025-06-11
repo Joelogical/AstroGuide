@@ -11,6 +11,7 @@
   "license": "ISC",
   "dependencies": {
     "astronomia": "^4.1.1",
+    "axios": "^1.9.0",
     "cors": "^2.8.5",
     "express": "^5.1.0"
   }
