@@ -1,7 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
-const { julian, planetposition, solar, moon } = require("astronomia");
+const astronomia = require("astronomia");
 
 const app = express();
 const port = 3000;
@@ -143,70 +143,94 @@ function calculateBirthChart(birthData) {
     const date = new Date(year, month - 1, day, hour, minute);
     console.log("Created Date object:", date.toISOString());
 
-    const jd = julian.DateToJD(date);
+    const jd = astronomia.julian.DateToJD(date);
     console.log("Julian Date:", jd);
 
     // Calculate planetary positions
-    const planets = {
-      sun: solar.apparentLongitude(jd) * (180 / Math.PI),
-      moon: moon.position(jd).lon * (180 / Math.PI),
-      mercury: planetposition.mercury(jd).lon * (180 / Math.PI),
-      venus: planetposition.venus(jd).lon * (180 / Math.PI),
-      mars: planetposition.mars(jd).lon * (180 / Math.PI),
-      jupiter: planetposition.jupiter(jd).lon * (180 / Math.PI),
-      saturn: planetposition.saturn(jd).lon * (180 / Math.PI),
-      uranus: planetposition.uranus(jd).lon * (180 / Math.PI),
-      neptune: planetposition.neptune(jd).lon * (180 / Math.PI),
-      pluto: planetposition.pluto(jd).lon * (180 / Math.PI),
-    };
+    try {
+      // Calculate Sun's position
+      const sunLon = astronomia.solar.apparentLongitude(jd) * (180 / Math.PI);
 
-    // Add error handling for Moon position
-    if (!planets.moon || isNaN(planets.moon)) {
-      console.error("Error calculating Moon position:", planets.moon);
-      throw new Error("Failed to calculate Moon position");
+      // Calculate Moon's position using moonphase
+      const moonLon = (astronomia.moonphase.phase(jd) * 360) % 360;
+
+      // Calculate other planetary positions
+      const planets = {
+        sun: sunLon,
+        moon: moonLon,
+        mercury:
+          ((astronomia.planetposition.mercury(jd).lon * 180) / Math.PI) % 360,
+        venus:
+          ((astronomia.planetposition.venus(jd).lon * 180) / Math.PI) % 360,
+        mars: ((astronomia.planetposition.mars(jd).lon * 180) / Math.PI) % 360,
+        jupiter:
+          ((astronomia.planetposition.jupiter(jd).lon * 180) / Math.PI) % 360,
+        saturn:
+          ((astronomia.planetposition.saturn(jd).lon * 180) / Math.PI) % 360,
+        uranus:
+          ((astronomia.planetposition.uranus(jd).lon * 180) / Math.PI) % 360,
+        neptune:
+          ((astronomia.planetposition.neptune(jd).lon * 180) / Math.PI) % 360,
+        pluto:
+          ((astronomia.planetposition.pluto(jd).lon * 180) / Math.PI) % 360,
+      };
+
+      // Add error handling for Moon position
+      if (!planets.moon || isNaN(planets.moon)) {
+        console.error("Error calculating Moon position:", planets.moon);
+        throw new Error("Failed to calculate Moon position");
+      }
+
+      console.log("Calculated planetary positions:", planets);
+
+      // Calculate houses based on time and location
+      const localHour = hour + longitude / 15; // Convert longitude to hours
+      console.log("Local hour:", localHour);
+
+      // Calculate ascendant using a more accurate formula
+      const obliquity = 23.4397; // Earth's axial tilt
+      const siderealTime = (localHour * 15 + longitude) % 360;
+      const ascendant =
+        Math.atan2(
+          Math.cos((obliquity * Math.PI) / 180) *
+            Math.sin((siderealTime * Math.PI) / 180),
+          Math.cos((siderealTime * Math.PI) / 180)
+        ) *
+        (180 / Math.PI);
+      console.log("Ascendant:", ascendant);
+
+      // Calculate houses using Placidus system
+      const houses = {
+        ascendant: ascendant,
+        mc: (ascendant + 90) % 360,
+        houses: Array.from({ length: 12 }, (_, i) => {
+          const houseAngle = (ascendant + i * 30) % 360;
+          // Adjust house cusps based on latitude
+          const latitudeFactor = Math.sin((latitude * Math.PI) / 180);
+          return (houseAngle + latitudeFactor * 10) % 360;
+        }),
+      };
+
+      console.log("Calculated houses:", houses);
+
+      const result = {
+        planets,
+        houses,
+        ascendant: houses.ascendant,
+        mc: houses.mc,
+      };
+
+      console.log("Final birth chart result:", JSON.stringify(result, null, 2));
+      return result;
+    } catch (error) {
+      console.error("Error in calculateBirthChart:", error);
+      console.error("Error details:", {
+        message: error.message,
+        stack: error.stack,
+        birthData,
+      });
+      throw new Error(`Failed to calculate birth chart: ${error.message}`);
     }
-
-    console.log("Calculated planetary positions:", planets);
-
-    // Calculate houses based on time and location
-    const localHour = hour + longitude / 15; // Convert longitude to hours
-    console.log("Local hour:", localHour);
-
-    // Calculate ascendant using a more accurate formula
-    const obliquity = 23.4397; // Earth's axial tilt
-    const siderealTime = (localHour * 15 + longitude) % 360; // Local sidereal time
-    const ascendant =
-      Math.atan2(
-        Math.cos((obliquity * Math.PI) / 180) *
-          Math.sin((siderealTime * Math.PI) / 180),
-        Math.cos((siderealTime * Math.PI) / 180)
-      ) *
-      (180 / Math.PI);
-    console.log("Ascendant:", ascendant);
-
-    // Calculate houses using Placidus system
-    const houses = {
-      ascendant: ascendant,
-      mc: (ascendant + 90) % 360,
-      houses: Array.from({ length: 12 }, (_, i) => {
-        const houseAngle = (ascendant + i * 30) % 360;
-        // Adjust house cusps based on latitude
-        const latitudeFactor = Math.sin((latitude * Math.PI) / 180);
-        return (houseAngle + latitudeFactor * 10) % 360;
-      }),
-    };
-
-    console.log("Calculated houses:", houses);
-
-    const result = {
-      planets,
-      houses,
-      ascendant: houses.ascendant,
-      mc: houses.mc,
-    };
-
-    console.log("Final birth chart result:", JSON.stringify(result, null, 2));
-    return result;
   } catch (error) {
     console.error("Error in calculateBirthChart:", error);
     console.error("Error details:", {
