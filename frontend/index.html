@@ -153,152 +153,8 @@
               .then((data) => {
                 console.log("Received birth chart data:", data);
 
-                // Function to convert degrees to zodiac sign
-                function getZodiacSign(degrees) {
-                  const signs = [
-                    { name: "Aries", element: "Fire", start: 0, end: 30 },
-                    { name: "Taurus", element: "Earth", start: 30, end: 60 },
-                    { name: "Gemini", element: "Air", start: 60, end: 90 },
-                    { name: "Cancer", element: "Water", start: 90, end: 120 },
-                    { name: "Leo", element: "Fire", start: 120, end: 150 },
-                    { name: "Virgo", element: "Earth", start: 150, end: 180 },
-                    { name: "Libra", element: "Air", start: 180, end: 210 },
-                    { name: "Scorpio", element: "Water", start: 210, end: 240 },
-                    {
-                      name: "Sagittarius",
-                      element: "Fire",
-                      start: 240,
-                      end: 270,
-                    },
-                    {
-                      name: "Capricorn",
-                      element: "Earth",
-                      start: 270,
-                      end: 300,
-                    },
-                    { name: "Aquarius", element: "Air", start: 300, end: 330 },
-                    { name: "Pisces", element: "Water", start: 330, end: 360 },
-                  ];
-
-                  // Handle undefined or null degrees
-                  if (degrees === undefined || degrees === null) {
-                    console.error("Invalid degrees value:", degrees);
-                    return {
-                      sign: "Unknown",
-                      element: "Unknown",
-                      degree: "0.00",
-                    };
-                  }
-
-                  // Normalize degrees to 0-360 range
-                  const normalizedDegrees = ((degrees % 360) + 360) % 360;
-
-                  // Find the sign that contains these degrees
-                  const sign = signs.find(
-                    (s) =>
-                      normalizedDegrees >= s.start && normalizedDegrees < s.end
-                  );
-
-                  // If no sign is found (shouldn't happen with normalized degrees), return the last sign
-                  if (!sign) {
-                    console.error(
-                      "No sign found for degrees:",
-                      normalizedDegrees
-                    );
-                    return { sign: "Pisces", element: "Water", degree: "0.00" };
-                  }
-
-                  const degreeInSign = normalizedDegrees - sign.start;
-                  return {
-                    sign: sign.name,
-                    element: sign.element,
-                    degree: degreeInSign.toFixed(2),
-                  };
-                }
-
-                // Function to get house number
-                function getHouseNumber(degrees, ascendant) {
-                  if (degrees === undefined || ascendant === undefined) {
-                    console.error("Invalid degrees or ascendant:", {
-                      degrees,
-                      ascendant,
-                    });
-                    return 1;
-                  }
-                  const houseSize = 30; // Each house is 30 degrees
-                  const normalizedDegrees = (degrees - ascendant + 360) % 360;
-                  return Math.floor(normalizedDegrees / houseSize) + 1;
-                }
-
-                // Format planetary positions with zodiac signs
-                const formatPlanetPosition = (planet, degrees) => {
-                  if (degrees === undefined) {
-                    console.error("Invalid degrees for planet:", planet);
-                    return `${planet}: Unknown position`;
-                  }
-                  const position = getZodiacSign(degrees);
-                  return `${planet}: ${position.degree}° ${position.sign} (${position.element})`;
-                };
-
-                // Get ascendant sign
-                const ascendantSign = getZodiacSign(data.ascendant);
-
                 // Format the birth chart information
-                const birthChartInfo = `
-Birth Chart Details:
-Ascendant: ${ascendantSign.degree}° ${ascendantSign.sign} (${
-                  ascendantSign.element
-                })
-Midheaven: ${getZodiacSign(data.mc).degree}° ${getZodiacSign(data.mc).sign}
-
-Planetary Positions:
-${Object.entries(data.planets)
-  .map(([planet, position]) => {
-    const planetNames = {
-      sun: "Sun",
-      moon: "Moon",
-      mars: "Mars",
-      mercury: "Mercury",
-      jupiter: "Jupiter",
-      venus: "Venus",
-      saturn: "Saturn",
-      uranus: "Uranus",
-      neptune: "Neptune",
-      pluto: "Pluto",
-    };
-    return formatPlanetPosition(planetNames[planet], position);
-  })
-  .join("\n")}
-
-Houses:
-${data.houses.houses
-  .map((house, index) => {
-    const houseSign = getZodiacSign(house);
-    return `House ${index + 1}: ${houseSign.degree}° ${houseSign.sign}`;
-  })
-  .join("\n")}
-
-Aspects:
-${data.aspects
-  .map((aspect) => {
-    const planetNames = {
-      sun: "Sun",
-      moon: "Moon",
-      mars: "Mars",
-      mercury: "Mercury",
-      jupiter: "Jupiter",
-      venus: "Venus",
-      saturn: "Saturn",
-      uranus: "Uranus",
-      neptune: "Neptune",
-      pluto: "Pluto",
-    };
-    return `${planetNames[aspect.planet1]} ${aspect.aspect} ${
-      planetNames[aspect.planet2]
-    } (${aspect.orb.toFixed(1)}° orb)`;
-  })
-  .join("\n")}
-`;
+                const birthChartInfo = formatBirthChartInfo(data);
                 addMessage(birthChartInfo);
               })
               .catch((error) => {
@@ -353,6 +209,135 @@ ${data.aspects
           handleSendMessage();
         }
       });
+
+      function formatBirthChartInfo(birthChart) {
+        let info = "";
+
+        // Only show the interpretation if available
+        if (birthChart.interpretation) {
+          info += birthChart.interpretation;
+        } else if (birthChart.interpretationError) {
+          info += `Error getting interpretation: ${birthChart.interpretationError}`;
+        }
+
+        // Add a button to view raw chart data
+        info += '<div class="chart-data-container">';
+        info +=
+          '<button onclick="toggleRawChartData(this)" class="view-data-btn" data-chart=\'' +
+          JSON.stringify(birthChart) +
+          "'>View Raw Chart Data</button>";
+        info += "</div>";
+        return info;
+      }
+
+      // Add function to toggle raw chart data visibility
+      function toggleRawChartData(button) {
+        const container = button.parentElement;
+        let rawDataDiv = container.querySelector(".raw-chart-data");
+
+        if (!rawDataDiv) {
+          // Create raw data div if it doesn't exist
+          rawDataDiv = document.createElement("div");
+          rawDataDiv.className = "raw-chart-data";
+          rawDataDiv.style.display = "none";
+
+          const birthChart = JSON.parse(button.dataset.chart);
+          let rawData = "";
+
+          // Birth Data
+          rawData += "Birth Data:\n";
+          rawData += `Date: ${birthChart.birthData.date}\n`;
+          rawData += `Time: ${birthChart.birthData.time}\n`;
+          rawData += `Location: ${birthChart.birthData.location.latitude}°N, ${birthChart.birthData.location.longitude}°E (UTC${birthChart.birthData.location.timezone})\n\n`;
+
+          // Angular Points
+          rawData += "Angular Points:\n";
+          rawData += `Ascendant: ${birthChart.angles.ascendant.degree.toFixed(
+            2
+          )}° ${birthChart.angles.ascendant.sign} (${
+            birthChart.angles.ascendant.element
+          })\n`;
+          rawData += `Midheaven: ${birthChart.angles.midheaven.degree.toFixed(
+            2
+          )}° ${birthChart.angles.midheaven.sign} (${
+            birthChart.angles.midheaven.element
+          })\n\n`;
+
+          // Planetary Positions
+          rawData += "Planetary Positions:\n";
+          for (const [planet, data] of Object.entries(birthChart.planets)) {
+            rawData += `${
+              planet.charAt(0).toUpperCase() + planet.slice(1)
+            }: ${data.degree.toFixed(2)}° ${data.sign} (${data.element})`;
+            if (data.isRetrograde) rawData += " ℞";
+            rawData += ` - House ${data.house}\n`;
+          }
+          rawData += "\n";
+
+          // Houses
+          rawData += "Houses:\n";
+          birthChart.houses.forEach((house) => {
+            rawData += `House ${house.number}: ${house.degree.toFixed(2)}° ${
+              house.sign
+            } (${house.element})\n`;
+          });
+          rawData += "\n";
+
+          // Aspects
+          rawData += "Aspects:\n";
+          birthChart.aspects.forEach((aspect) => {
+            rawData += `${
+              aspect.planet1.charAt(0).toUpperCase() + aspect.planet1.slice(1)
+            } ${aspect.aspect} ${
+              aspect.planet2.charAt(0).toUpperCase() + aspect.planet2.slice(1)
+            } (${aspect.orb.toFixed(2)}° orb)\n`;
+          });
+
+          rawDataDiv.textContent = rawData;
+          container.appendChild(rawDataDiv);
+        }
+
+        if (rawDataDiv.style.display === "none") {
+          rawDataDiv.style.display = "block";
+          button.textContent = "Hide Raw Chart Data";
+        } else {
+          rawDataDiv.style.display = "none";
+          button.textContent = "View Raw Chart Data";
+        }
+      }
+
+      // Add CSS for the button and container
+      const style = document.createElement("style");
+      style.textContent = `
+        .chart-data-container {
+          margin-top: 15px;
+        }
+        .view-data-btn {
+          background-color: #4CAF50;
+          border: none;
+          color: white;
+          padding: 10px 20px;
+          text-align: center;
+          text-decoration: none;
+          display: inline-block;
+          font-size: 16px;
+          margin: 4px 2px;
+          cursor: pointer;
+          border-radius: 4px;
+        }
+        .view-data-btn:hover {
+          background-color: #45a049;
+        }
+        .raw-chart-data {
+          background-color: #f8f9fa;
+          padding: 15px;
+          border-radius: 4px;
+          margin-top: 10px;
+          white-space: pre-wrap;
+          font-family: monospace;
+        }
+      `;
+      document.head.appendChild(style);
     </script>
   </body>
 </html>

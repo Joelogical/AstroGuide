@@ -3,6 +3,7 @@ const cors = require("cors");
 const path = require("path");
 const axios = require("axios");
 require("dotenv").config();
+const { getBirthChartInterpretation } = require("./chatgpt_service");
 
 // Debug logging for environment variables
 console.log("Environment variables loaded:");
@@ -299,47 +300,73 @@ app.post("/api/birth-chart", async (req, res) => {
 
       // Transform the API responses to match our expected format
       const birthChart = {
-        planets: {
-          sun:
-            planetsResponse.data.find((p) => p.name === "Sun")?.fullDegree || 0,
-          moon:
-            planetsResponse.data.find((p) => p.name === "Moon")?.fullDegree ||
-            0,
-          mercury:
-            planetsResponse.data.find((p) => p.name === "Mercury")
-              ?.fullDegree || 0,
-          venus:
-            planetsResponse.data.find((p) => p.name === "Venus")?.fullDegree ||
-            0,
-          mars:
-            planetsResponse.data.find((p) => p.name === "Mars")?.fullDegree ||
-            0,
-          jupiter:
-            planetsResponse.data.find((p) => p.name === "Jupiter")
-              ?.fullDegree || 0,
-          saturn:
-            planetsResponse.data.find((p) => p.name === "Saturn")?.fullDegree ||
-            0,
-          uranus:
-            planetsResponse.data.find((p) => p.name === "Uranus")?.fullDegree ||
-            0,
-          neptune:
-            planetsResponse.data.find((p) => p.name === "Neptune")
-              ?.fullDegree || 0,
-          pluto:
-            planetsResponse.data.find((p) => p.name === "Pluto")?.fullDegree ||
-            0,
+        // Basic birth data
+        birthData: {
+          date: `${year}-${month}-${day}`,
+          time: `${hour}:${minute}`,
+          location: {
+            latitude,
+            longitude,
+            timezone,
+          },
         },
-        houses: {
-          ascendant: housesResponse.data.ascendant || 0,
-          mc: housesResponse.data.midheaven || 0,
-          houses:
-            housesResponse.data.houses.map((h) => h.degree) ||
-            Array(12).fill(0),
+        // Angular points
+        angles: {
+          ascendant: {
+            degree: housesResponse.data.ascendant || 0,
+            sign:
+              planetsResponse.data.find((p) => p.name === "Ascendant")?.sign ||
+              "Unknown",
+            element: getElementFromSign(
+              planetsResponse.data.find((p) => p.name === "Ascendant")?.sign
+            ),
+          },
+          midheaven: {
+            degree: housesResponse.data.midheaven || 0,
+            sign: getSignFromDegree(housesResponse.data.midheaven),
+            element: getElementFromSign(
+              getSignFromDegree(housesResponse.data.midheaven)
+            ),
+          },
         },
-        ascendant: housesResponse.data.ascendant || 0,
-        mc: housesResponse.data.midheaven || 0,
-        house_system: "placidus",
+        // Planetary positions with additional data
+        planets: Object.fromEntries(
+          [
+            "Sun",
+            "Moon",
+            "Mercury",
+            "Venus",
+            "Mars",
+            "Jupiter",
+            "Saturn",
+            "Uranus",
+            "Neptune",
+            "Pluto",
+          ].map((planet) => {
+            const planetData = planetsResponse.data.find(
+              (p) => p.name === planet
+            );
+            return [
+              planet.toLowerCase(),
+              {
+                degree: planetData?.fullDegree || 0,
+                sign: planetData?.sign || "Unknown",
+                element: getElementFromSign(planetData?.sign),
+                house: planetData?.house || 0,
+                isRetrograde: planetData?.isRetro === "true",
+                speed: planetData?.speed || 0,
+              },
+            ];
+          })
+        ),
+        // House cusps with signs and elements
+        houses: housesResponse.data.houses.map((house, index) => ({
+          number: index + 1,
+          degree: house.degree,
+          sign: house.sign,
+          element: getElementFromSign(house.sign),
+        })),
+        // Aspects with additional data
         aspects: calculateAspects({
           sun:
             planetsResponse.data.find((p) => p.name === "Sun")?.fullDegree || 0,
@@ -370,8 +397,76 @@ app.post("/api/birth-chart", async (req, res) => {
           pluto:
             planetsResponse.data.find((p) => p.name === "Pluto")?.fullDegree ||
             0,
-        }),
+        }).map((aspect) => ({
+          ...aspect,
+          planet1Sign: planetsResponse.data.find(
+            (p) =>
+              p.name ===
+              aspect.planet1.charAt(0).toUpperCase() + aspect.planet1.slice(1)
+          )?.sign,
+          planet2Sign: planetsResponse.data.find(
+            (p) =>
+              p.name ===
+              aspect.planet2.charAt(0).toUpperCase() + aspect.planet2.slice(1)
+          )?.sign,
+          planet1Element: getElementFromSign(
+            planetsResponse.data.find(
+              (p) =>
+                p.name ===
+                aspect.planet1.charAt(0).toUpperCase() + aspect.planet1.slice(1)
+            )?.sign
+          ),
+          planet2Element: getElementFromSign(
+            planetsResponse.data.find(
+              (p) =>
+                p.name ===
+                aspect.planet2.charAt(0).toUpperCase() + aspect.planet2.slice(1)
+            )?.sign
+          ),
+        })),
       };
+
+      // Helper function to get element from sign
+      function getElementFromSign(sign) {
+        const elements = {
+          Aries: "Fire",
+          Leo: "Fire",
+          Sagittarius: "Fire",
+          Taurus: "Earth",
+          Virgo: "Earth",
+          Capricorn: "Earth",
+          Gemini: "Air",
+          Libra: "Air",
+          Aquarius: "Air",
+          Cancer: "Water",
+          Scorpio: "Water",
+          Pisces: "Water",
+        };
+        return elements[sign] || "Unknown";
+      }
+
+      // Helper function to get sign from degree
+      function getSignFromDegree(degree) {
+        const signs = [
+          { name: "Aries", start: 0, end: 30 },
+          { name: "Taurus", start: 30, end: 60 },
+          { name: "Gemini", start: 60, end: 90 },
+          { name: "Cancer", start: 90, end: 120 },
+          { name: "Leo", start: 120, end: 150 },
+          { name: "Virgo", start: 150, end: 180 },
+          { name: "Libra", start: 180, end: 210 },
+          { name: "Scorpio", start: 210, end: 240 },
+          { name: "Sagittarius", start: 240, end: 270 },
+          { name: "Capricorn", start: 270, end: 300 },
+          { name: "Aquarius", start: 300, end: 330 },
+          { name: "Pisces", start: 330, end: 360 },
+        ];
+        const normalizedDegree = ((degree % 360) + 360) % 360;
+        const sign = signs.find(
+          (s) => normalizedDegree >= s.start && normalizedDegree < s.end
+        );
+        return sign ? sign.name : "Unknown";
+      }
 
       // Log the raw API responses for debugging
       console.log("Raw Planets Response:", planetsResponse.data);
@@ -381,8 +476,22 @@ app.post("/api/birth-chart", async (req, res) => {
         JSON.stringify(birthChart, null, 2)
       );
 
+      // Get ChatGPT interpretation
+      const interpretation = await getBirthChartInterpretation(birthChart);
+
+      // Add interpretation to the response
+      const response = {
+        ...birthChart,
+        interpretation: interpretation.success
+          ? interpretation.interpretation
+          : null,
+        interpretationError: !interpretation.success
+          ? interpretation.error
+          : null,
+      };
+
       // Return the transformed API response
-      return res.json(birthChart);
+      return res.json(response);
     } catch (apiError) {
       // Log the full error details
       console.error("Full API Error:", apiError);
