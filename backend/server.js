@@ -2,52 +2,32 @@ const express = require("express");
 const cors = require("cors");
 const path = require("path");
 const axios = require("axios");
+require("dotenv").config();
+
+// Debug logging for environment variables
+console.log("Environment variables loaded:");
+console.log(
+  "ASTROLOGY_API_USER_ID:",
+  process.env.ASTROLOGY_API_USER_ID ? "Present" : "Missing"
+);
+console.log(
+  "ASTROLOGY_API_KEY:",
+  process.env.ASTROLOGY_API_KEY ? "Present" : "Missing"
+);
 
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
 
-// Prokerala API credentials
-const CLIENT_ID = "1189e38e-fc89-4960-ba84-ff3106f00da0";
-const CLIENT_SECRET = "JMtUTh2PiUYCAFcrEWEfhFTzeKAYEiA0MsARPiZ5";
-let accessToken = null;
-let tokenExpiry = null;
-
-// Function to get access token
-async function getAccessToken() {
-  try {
-    // Check if we have a valid token
-    if (accessToken && tokenExpiry && Date.now() < tokenExpiry) {
-      return accessToken;
-    }
-
-    // Get new token
-    const response = await axios.post(
-      "https://api.prokerala.com/token",
-      `grant_type=client_credentials&client_id=${CLIENT_ID}&client_secret=${CLIENT_SECRET}`,
-      {
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-      }
-    );
-
-    accessToken = response.data.access_token;
-    // Set token expiry to 50 minutes (giving 10-minute buffer)
-    tokenExpiry = Date.now() + (response.data.expires_in - 600) * 1000;
-
-    return accessToken;
-  } catch (error) {
-    console.error("Error getting access token:", error);
-    throw error;
-  }
-}
+// AstrologyAPI.com credentials
+const USER_ID = process.env.ASTROLOGY_API_USER_ID;
+const API_KEY = process.env.ASTROLOGY_API_KEY;
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 
-// Serve static files from the root directory
-app.use(express.static(path.join(__dirname, "..")));
+// Serve static files from the frontend directory
+app.use(express.static(path.join(__dirname, "../frontend")));
 
 // Add request logging middleware
 app.use((req, res, next) => {
@@ -59,8 +39,8 @@ app.use((req, res, next) => {
 const users = new Map();
 
 // Add a test user
-users.set("jmsmith.coding@gmail.com", {
-  email: "jmsmith.coding@gmail.com",
+users.set("test@example.com", {
+  email: "test@example.com",
   password: "test123", // In production, this would be hashed
   name: "Test User",
   birthDate: "1990-01-01",
@@ -145,7 +125,33 @@ app.post("/api/signup", (req, res) => {
   });
 });
 
-// Calculate birth chart endpoint using API
+// Function to generate AstrologyAPI.com authentication
+function generateAuth() {
+  const timestamp = Math.floor(Date.now() / 1000);
+  const hash = require("crypto")
+    .createHash("sha256")
+    .update(`${USER_ID}${timestamp}${API_KEY}`)
+    .digest("hex");
+
+  const authHeader = `Basic ${Buffer.from(`${USER_ID}:${hash}`).toString(
+    "base64"
+  )}`;
+
+  // Debug logging for authentication
+  console.log("Generated Auth Header:", {
+    timestamp,
+    userId: USER_ID,
+    hashLength: hash.length,
+    authHeaderLength: authHeader.length,
+  });
+
+  return {
+    Authorization: authHeader,
+    "Content-Type": "application/json",
+  };
+}
+
+// Calculate birth chart endpoint using AstrologyAPI.com
 app.post("/api/birth-chart", async (req, res) => {
   console.log(
     "Received birth chart request body:",
@@ -195,144 +201,57 @@ app.post("/api/birth-chart", async (req, res) => {
       });
     }
 
-    // Get access token
-    console.log("Getting access token...");
-    const token = await getAccessToken();
-    console.log("Got access token:", token.substring(0, 20) + "...");
-
-    // Format datetime for API
-    const timezoneOffset = timezone
-      ? `${timezone >= 0 ? "+" : "-"}${Math.abs(timezone)
-          .toString()
-          .padStart(2, "0")}:00`
-      : "+00:00";
-    const datetime = `${year}-${month.toString().padStart(2, "0")}-${day
+    // Format date and time for AstrologyAPI.com
+    const date = `${year}-${month.toString().padStart(2, "0")}-${day
       .toString()
-      .padStart(2, "0")}T${hour.toString().padStart(2, "0")}:${minute
+      .padStart(2, "0")}`;
+    const time = `${hour.toString().padStart(2, "0")}:${minute
       .toString()
-      .padStart(2, "0")}:00${timezoneOffset}`;
-    const coordinates = `${latitude},${longitude}`;
+      .padStart(2, "0")}`;
 
-    // First, make a test request with hardcoded values to verify API connectivity
-    console.log("Making test API request...");
+    // Make API request to AstrologyAPI.com
+    console.log("Making API request to AstrologyAPI.com...");
     try {
-      const testResponse = await axios.get(
-        "https://api.prokerala.com/v2/astrology/chart",
+      const response = await axios.post(
+        "https://json.astrologyapi.com/v1/planets",
         {
-          params: {
-            coordinates: "40.7128,-74.0060", // New York coordinates
-            datetime: "1990-01-01T12:00:00-05:00",
-            system: "western",
-            house_system: "placidus",
-            include_planets: true,
-            include_houses: true,
-            include_aspects: false,
-          },
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      console.log(
-        "Test API Response:",
-        JSON.stringify(testResponse.data, null, 2)
-      );
-    } catch (testError) {
-      console.error(
-        "Test API Error:",
-        testError.response?.data || testError.message
-      );
-      return res.status(500).json({
-        error: "Failed to connect to astrology API",
-        details:
-          testError.response?.data?.errors?.[0]?.detail || testError.message,
-        request: {
-          url: "https://api.prokerala.com/v2/astrology/chart",
-          params: {
-            coordinates: "40.7128,-74.0060",
-            datetime: "1990-01-01T12:00:00-05:00",
-            system: "western",
-            house_system: "placidus",
-          },
+          day: day,
+          month: month,
+          year: year,
+          hour: hour,
+          min: minute,
+          lat: latitude,
+          lon: longitude,
+          tzone: timezone || 0,
         },
-      });
-    }
-
-    // Now make the actual request with user data
-    console.log(
-      "Making API request to:",
-      "https://api.prokerala.com/v2/astrology/chart"
-    );
-    console.log("Request params:", {
-      coordinates: coordinates,
-      datetime: datetime,
-      system: "western",
-      house_system: "placidus",
-      include_planets: true,
-      include_houses: true,
-      include_aspects: false,
-    });
-
-    try {
-      const response = await axios.get(
-        "https://api.prokerala.com/v2/astrology/chart",
         {
-          params: {
-            coordinates: coordinates,
-            datetime: datetime,
-            system: "western",
-            house_system: "placidus",
-            include_planets: true,
-            include_houses: true,
-            include_aspects: false,
-          },
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
+          headers: generateAuth(),
         }
       );
 
       console.log("API Response:", JSON.stringify(response.data, null, 2));
 
-      // Check if we have a valid response
-      if (!response.data) {
-        console.error("No data in API response");
-        return res.status(500).json({
-          error: "No data in API response",
-          details: "The API returned an empty response",
-          request: {
-            datetime,
-            coordinates,
-            system: "western",
-            house_system: "placidus",
-          },
-        });
-      }
-
       // Transform the API response to match our expected format
       const birthChart = {
         planets: {
-          sun: response.data.planets?.sun?.longitude || 0,
-          moon: response.data.planets?.moon?.longitude || 0,
-          mercury: response.data.planets?.mercury?.longitude || 0,
-          venus: response.data.planets?.venus?.longitude || 0,
-          mars: response.data.planets?.mars?.longitude || 0,
-          jupiter: response.data.planets?.jupiter?.longitude || 0,
-          saturn: response.data.planets?.saturn?.longitude || 0,
-          uranus: response.data.planets?.uranus?.longitude || 0,
-          neptune: response.data.planets?.neptune?.longitude || 0,
-          pluto: response.data.planets?.pluto?.longitude || 0,
+          sun: response.data.sun?.longitude || 0,
+          moon: response.data.moon?.longitude || 0,
+          mercury: response.data.mercury?.longitude || 0,
+          venus: response.data.venus?.longitude || 0,
+          mars: response.data.mars?.longitude || 0,
+          jupiter: response.data.jupiter?.longitude || 0,
+          saturn: response.data.saturn?.longitude || 0,
+          uranus: response.data.uranus?.longitude || 0,
+          neptune: response.data.neptune?.longitude || 0,
+          pluto: response.data.pluto?.longitude || 0,
         },
         houses: {
-          ascendant: response.data.houses?.ascendant || 0,
-          mc: response.data.houses?.mc || 0,
-          houses: response.data.houses?.cusps || Array(12).fill(0),
+          ascendant: response.data.ascendant || 0,
+          mc: response.data.mc || 0,
+          houses: response.data.houses || Array(12).fill(0),
         },
-        ascendant: response.data.houses?.ascendant || 0,
-        mc: response.data.houses?.mc || 0,
+        ascendant: response.data.ascendant || 0,
+        mc: response.data.mc || 0,
         house_system: "placidus",
       };
 
@@ -350,28 +269,29 @@ app.post("/api/birth-chart", async (req, res) => {
       console.error("API Error Status:", apiError.response?.status);
       console.error("API Error Headers:", apiError.response?.headers);
       console.error("API Request Details:", {
-        url: "https://api.prokerala.com/v2/astrology/chart",
+        url: "https://json.astrologyapi.com/v1/planets",
         params: {
-          coordinates: coordinates,
-          datetime: datetime,
-          system: "western",
-          house_system: "placidus",
-          include_planets: true,
-          include_houses: true,
-          include_aspects: false,
+          day,
+          month,
+          year,
+          hour,
+          min: minute,
+          lat: latitude,
+          lon: longitude,
+          tzone: timezone || 0,
         },
       });
 
       // Return a more detailed error response
       return res.status(500).json({
         error: "Failed to calculate birth chart",
-        details:
-          apiError.response?.data?.errors?.[0]?.detail || apiError.message,
+        details: apiError.response?.data?.message || apiError.message,
         request: {
-          datetime,
-          coordinates,
-          system: "western",
-          house_system: "placidus",
+          date,
+          time,
+          latitude,
+          longitude,
+          timezone: timezone || 0,
         },
         apiError: {
           status: apiError.response?.status,

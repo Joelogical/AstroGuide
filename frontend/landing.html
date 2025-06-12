@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AstroGuide - Welcome</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="landing-container">
+      <div class="auth-container">
+        <h1>AstroGuide</h1>
+        <p>Your personal Western astrology guide</p>
+
+        <div class="auth-tabs">
+          <button class="tab-btn active" data-tab="login">Login</button>
+          <button class="tab-btn" data-tab="signup">Sign Up</button>
+        </div>
+
+        <div class="auth-form" id="login-form">
+          <h2>Login</h2>
+          <form id="login">
+            <div class="form-group">
+              <label for="login-email">Email</label>
+              <input type="email" id="login-email" required />
+            </div>
+            <div class="form-group">
+              <label for="login-password">Password</label>
+              <input type="password" id="login-password" required />
+            </div>
+            <button type="submit">Login</button>
+          </form>
+        </div>
+
+        <div class="auth-form hidden" id="signup-form">
+          <h2>Sign Up</h2>
+          <form id="signup">
+            <div class="form-group">
+              <label for="signup-name">Name</label>
+              <input type="text" id="signup-name" required />
+            </div>
+            <div class="form-group">
+              <label for="signup-email">Email</label>
+              <input type="email" id="signup-email" required />
+            </div>
+            <div class="form-group">
+              <label for="signup-password">Password</label>
+              <input type="password" id="signup-password" required />
+            </div>
+            <div class="form-group">
+              <label for="signup-birth-date">Birth Date</label>
+              <input type="date" id="signup-birth-date" required />
+            </div>
+            <div class="form-group">
+              <label for="signup-birth-time">Birth Time</label>
+              <input type="time" id="signup-birth-time" required />
+            </div>
+            <div class="form-group">
+              <label for="signup-birth-place">Birth Place</label>
+              <input
+                type="text"
+                id="signup-birth-place"
+                placeholder="City, Country"
+                required
+              />
+            </div>
+            <button type="submit">Sign Up</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Tab switching
+      const tabBtns = document.querySelectorAll(".tab-btn");
+      const forms = document.querySelectorAll(".auth-form");
+
+      tabBtns.forEach((btn) => {
+        btn.addEventListener("click", () => {
+          // Remove active class from all buttons and forms
+          tabBtns.forEach((b) => b.classList.remove("active"));
+          forms.forEach((f) => f.classList.add("hidden"));
+
+          // Add active class to clicked button and corresponding form
+          btn.classList.add("active");
+          document
+            .getElementById(`${btn.dataset.tab}-form`)
+            .classList.remove("hidden");
+        });
+      });
+
+      // Login form submission
+      document.getElementById("login").addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        const email = document.getElementById("login-email").value;
+        const password = document.getElementById("login-password").value;
+
+        try {
+          const response = await fetch("http://localhost:3000/api/login", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ email, password }),
+          });
+
+          const data = await response.json();
+
+          if (data.success) {
+            // Store user data and token
+            localStorage.setItem("userData", JSON.stringify(data.user));
+            localStorage.setItem("token", data.token);
+
+            // Redirect to main page
+            window.location.href = "index.html";
+          } else {
+            alert(data.error || "Login failed");
+          }
+        } catch (error) {
+          console.error("Login error:", error);
+          alert("An error occurred during login");
+        }
+      });
+
+      // Signup form submission
+      document
+        .getElementById("signup")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+
+          const name = document.getElementById("signup-name").value;
+          const email = document.getElementById("signup-email").value;
+          const password = document.getElementById("signup-password").value;
+          const birthDate = document.getElementById("signup-birth-date").value;
+          const birthTime = document.getElementById("signup-birth-time").value;
+          const birthPlace =
+            document.getElementById("signup-birth-place").value;
+
+          try {
+            const response = await fetch("http://localhost:3000/api/signup", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                name,
+                email,
+                password,
+                birthDate,
+                birthTime,
+                birthPlace,
+              }),
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+              // Store user data and token
+              localStorage.setItem("userData", JSON.stringify(data.user));
+              localStorage.setItem("token", data.token);
+
+              // Redirect to main page
+              window.location.href = "index.html";
+            } else {
+              alert(data.error || "Signup failed");
+            }
+          } catch (error) {
+            console.error("Signup error:", error);
+            alert("An error occurred during signup");
+          }
+        });
+    </script>
+  </body>
+</html>
