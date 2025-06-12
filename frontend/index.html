@@ -277,6 +277,27 @@ ${data.houses.houses
     return `House ${index + 1}: ${houseSign.degree}° ${houseSign.sign}`;
   })
   .join("\n")}
+
+Aspects:
+${data.aspects
+  .map((aspect) => {
+    const planetNames = {
+      sun: "Sun",
+      moon: "Moon",
+      mars: "Mars",
+      mercury: "Mercury",
+      jupiter: "Jupiter",
+      venus: "Venus",
+      saturn: "Saturn",
+      uranus: "Uranus",
+      neptune: "Neptune",
+      pluto: "Pluto",
+    };
+    return `${planetNames[aspect.planet1]} ${aspect.aspect} ${
+      planetNames[aspect.planet2]
+    } (${aspect.orb.toFixed(1)}° orb)`;
+  })
+  .join("\n")}
 `;
                 addMessage(birthChartInfo);
               })

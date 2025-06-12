@@ -142,6 +142,63 @@ function generateAuth() {
   };
 }
 
+// Function to calculate aspects between planets
+function calculateAspects(planets) {
+  const aspects = [];
+  const aspectOrbs = {
+    conjunction: 8, // 0° ± 8°
+    sextile: 6, // 60° ± 6°
+    square: 8, // 90° ± 8°
+    trine: 8, // 120° ± 8°
+    opposition: 8, // 180° ± 8°
+  };
+
+  const planetNames = Object.keys(planets);
+
+  for (let i = 0; i < planetNames.length; i++) {
+    for (let j = i + 1; j < planetNames.length; j++) {
+      const planet1 = planetNames[i];
+      const planet2 = planetNames[j];
+      const angle1 = planets[planet1];
+      const angle2 = planets[planet2];
+
+      // Calculate the angle between planets
+      let angle = Math.abs(angle1 - angle2);
+      if (angle > 180) {
+        angle = 360 - angle;
+      }
+
+      // Check for each aspect type
+      for (const [aspect, orb] of Object.entries(aspectOrbs)) {
+        const targetAngle =
+          aspect === "conjunction"
+            ? 0
+            : aspect === "sextile"
+            ? 60
+            : aspect === "square"
+            ? 90
+            : aspect === "trine"
+            ? 120
+            : aspect === "opposition"
+            ? 180
+            : 0;
+
+        if (Math.abs(angle - targetAngle) <= orb) {
+          aspects.push({
+            planet1,
+            planet2,
+            aspect,
+            angle: Math.abs(angle1 - angle2),
+            orb: Math.abs(angle - targetAngle),
+          });
+        }
+      }
+    }
+  }
+
+  return aspects;
+}
+
 // Calculate birth chart endpoint using AstrologyAPI.com
 app.post("/api/birth-chart", async (req, res) => {
   console.log(
@@ -283,6 +340,37 @@ app.post("/api/birth-chart", async (req, res) => {
         ascendant: housesResponse.data.ascendant || 0,
         mc: housesResponse.data.midheaven || 0,
         house_system: "placidus",
+        aspects: calculateAspects({
+          sun:
+            planetsResponse.data.find((p) => p.name === "Sun")?.fullDegree || 0,
+          moon:
+            planetsResponse.data.find((p) => p.name === "Moon")?.fullDegree ||
+            0,
+          mercury:
+            planetsResponse.data.find((p) => p.name === "Mercury")
+              ?.fullDegree || 0,
+          venus:
+            planetsResponse.data.find((p) => p.name === "Venus")?.fullDegree ||
+            0,
+          mars:
+            planetsResponse.data.find((p) => p.name === "Mars")?.fullDegree ||
+            0,
+          jupiter:
+            planetsResponse.data.find((p) => p.name === "Jupiter")
+              ?.fullDegree || 0,
+          saturn:
+            planetsResponse.data.find((p) => p.name === "Saturn")?.fullDegree ||
+            0,
+          uranus:
+            planetsResponse.data.find((p) => p.name === "Uranus")?.fullDegree ||
+            0,
+          neptune:
+            planetsResponse.data.find((p) => p.name === "Neptune")
+              ?.fullDegree || 0,
+          pluto:
+            planetsResponse.data.find((p) => p.name === "Pluto")?.fullDegree ||
+            0,
+        }),
       };
 
       // Log the raw API responses for debugging
