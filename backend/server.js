@@ -213,23 +213,58 @@ app.post("/api/birth-chart", async (req, res) => {
       .padStart(2, "0")}:00${timezoneOffset}`;
     const coordinates = `${latitude},${longitude}`;
 
+    // First, make a test request with hardcoded values to verify API connectivity
+    console.log("Making test API request...");
+    const testResponse = await axios.get(
+      "https://api.prokerala.com/v2/astrology/chart",
+      {
+        params: {
+          coordinates: "40.7128,-74.0060", // New York coordinates
+          datetime: "1990-01-01T12:00:00-05:00",
+          system: "western",
+          house_system: "placidus",
+          include_planets: true,
+          include_houses: true,
+          include_aspects: false,
+        },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    console.log(
+      "Test API Response:",
+      JSON.stringify(testResponse.data, null, 2)
+    );
+
+    // Now make the actual request with user data
     console.log(
       "Making API request to:",
-      "https://api.prokerala.com/v2/astrology/western-chart"
+      "https://api.prokerala.com/v2/astrology/chart"
     );
     console.log("Request params:", {
       coordinates: coordinates,
       datetime: datetime,
+      system: "western",
       house_system: "placidus",
+      include_planets: true,
+      include_houses: true,
+      include_aspects: false,
     });
 
     const response = await axios.get(
-      "https://api.prokerala.com/v2/astrology/western-chart",
+      "https://api.prokerala.com/v2/astrology/chart",
       {
         params: {
           coordinates: coordinates,
           datetime: datetime,
+          system: "western",
           house_system: "placidus",
+          include_planets: true,
+          include_houses: true,
+          include_aspects: false,
         },
         headers: {
           Authorization: `Bearer ${token}`,
@@ -245,19 +280,6 @@ app.post("/api/birth-chart", async (req, res) => {
       console.error("No data in API response");
       throw new Error("No data in API response");
     }
-
-    // Log the structure of the response
-    console.log("Response structure:", {
-      hasData: !!response.data,
-      keys: Object.keys(response.data),
-      hasPlanets: !!response.data.planets,
-      hasHouses: !!response.data.houses,
-      planetKeys: response.data.planets
-        ? Object.keys(response.data.planets)
-        : [],
-      houseKeys: response.data.houses ? Object.keys(response.data.houses) : [],
-      houseSystem: response.data.house_system,
-    });
 
     // Transform the API response to match our expected format
     const birthChart = {
@@ -280,7 +302,7 @@ app.post("/api/birth-chart", async (req, res) => {
       },
       ascendant: response.data.houses?.ascendant || 0,
       mc: response.data.houses?.mc || 0,
-      house_system: response.data.house_system || "placidus",
+      house_system: "placidus",
     };
 
     console.log(
@@ -297,11 +319,15 @@ app.post("/api/birth-chart", async (req, res) => {
     console.error("API Error Status:", apiError.response?.status);
     console.error("API Error Headers:", apiError.response?.headers);
     console.error("API Request Details:", {
-      url: "https://api.prokerala.com/v2/astrology/western-chart",
+      url: "https://api.prokerala.com/v2/astrology/chart",
       params: {
         coordinates: coordinates,
         datetime: datetime,
+        system: "western",
         house_system: "placidus",
+        include_planets: true,
+        include_houses: true,
+        include_aspects: false,
       },
     });
 
@@ -312,6 +338,7 @@ app.post("/api/birth-chart", async (req, res) => {
       request: {
         datetime,
         coordinates,
+        system: "western",
         house_system: "placidus",
       },
     });
