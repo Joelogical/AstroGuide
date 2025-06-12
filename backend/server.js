@@ -147,11 +147,27 @@ app.post("/api/signup", (req, res) => {
 
 // Calculate birth chart endpoint using API
 app.post("/api/birth-chart", async (req, res) => {
-  console.log("Received birth chart request:", req.body);
+  console.log(
+    "Received birth chart request body:",
+    JSON.stringify(req.body, null, 2)
+  );
 
   try {
     const { year, month, day, hour, minute, latitude, longitude, timezone } =
       req.body;
+
+    // Log parsed values
+    console.log("Parsed values:", {
+      year: typeof year === "string" ? parseInt(year) : year,
+      month: typeof month === "string" ? parseInt(month) : month,
+      day: typeof day === "string" ? parseInt(day) : day,
+      hour: typeof hour === "string" ? parseInt(hour) : hour,
+      minute: typeof minute === "string" ? parseInt(minute) : minute,
+      latitude: typeof latitude === "string" ? parseFloat(latitude) : latitude,
+      longitude:
+        typeof longitude === "string" ? parseFloat(longitude) : longitude,
+      timezone: timezone,
+    });
 
     // Validate required fields
     if (
@@ -163,31 +179,57 @@ app.post("/api/birth-chart", async (req, res) => {
       !latitude ||
       !longitude
     ) {
+      console.log("Missing or invalid fields:", {
+        year: !year,
+        month: !month,
+        day: !day,
+        hour: hour === undefined,
+        minute: minute === undefined,
+        latitude: !latitude,
+        longitude: !longitude,
+      });
       return res.status(400).json({
         error: "Missing required fields",
         details: "Please provide all required birth data",
+        received: req.body,
       });
     }
 
     // Get access token
+    console.log("Getting access token...");
     const token = await getAccessToken();
+    console.log("Got access token:", token.substring(0, 20) + "...");
 
     // Format datetime for API
+    const timezoneOffset = timezone
+      ? `${timezone >= 0 ? "+" : "-"}${Math.abs(timezone)
+          .toString()
+          .padStart(2, "0")}:00`
+      : "+00:00";
     const datetime = `${year}-${month.toString().padStart(2, "0")}-${day
       .toString()
       .padStart(2, "0")}T${hour.toString().padStart(2, "0")}:${minute
       .toString()
-      .padStart(2, "0")}:00${timezone ? `+${timezone}` : "+00:00"}`;
+      .padStart(2, "0")}:00${timezoneOffset}`;
     const coordinates = `${latitude},${longitude}`;
 
-    // Call the astrological API
+    console.log(
+      "Making API request to:",
+      "https://api.prokerala.com/v2/astrology/western-chart"
+    );
+    console.log("Request params:", {
+      coordinates: coordinates,
+      datetime: datetime,
+      house_system: "placidus",
+    });
+
     const response = await axios.get(
-      "https://api.prokerala.com/v2/astrology/kundli",
+      "https://api.prokerala.com/v2/astrology/western-chart",
       {
         params: {
-          ayanamsa: 1, // Lahiri ayanamsa
           coordinates: coordinates,
           datetime: datetime,
+          house_system: "placidus",
         },
         headers: {
           Authorization: `Bearer ${token}`,
@@ -196,36 +238,82 @@ app.post("/api/birth-chart", async (req, res) => {
       }
     );
 
+    console.log("API Response:", JSON.stringify(response.data, null, 2));
+
+    // Check if we have a valid response
+    if (!response.data) {
+      console.error("No data in API response");
+      throw new Error("No data in API response");
+    }
+
+    // Log the structure of the response
+    console.log("Response structure:", {
+      hasData: !!response.data,
+      keys: Object.keys(response.data),
+      hasPlanets: !!response.data.planets,
+      hasHouses: !!response.data.houses,
+      planetKeys: response.data.planets
+        ? Object.keys(response.data.planets)
+        : [],
+      houseKeys: response.data.houses ? Object.keys(response.data.houses) : [],
+      houseSystem: response.data.house_system,
+    });
+
     // Transform the API response to match our expected format
     const birthChart = {
       planets: {
-        sun: response.data.planets.sun.longitude,
-        moon: response.data.planets.moon.longitude,
-        mercury: response.data.planets.mercury.longitude,
-        venus: response.data.planets.venus.longitude,
-        mars: response.data.planets.mars.longitude,
-        jupiter: response.data.planets.jupiter.longitude,
-        saturn: response.data.planets.saturn.longitude,
-        uranus: response.data.planets.uranus.longitude,
-        neptune: response.data.planets.neptune.longitude,
-        pluto: response.data.planets.pluto.longitude,
+        sun: response.data.planets?.sun?.longitude || 0,
+        moon: response.data.planets?.moon?.longitude || 0,
+        mercury: response.data.planets?.mercury?.longitude || 0,
+        venus: response.data.planets?.venus?.longitude || 0,
+        mars: response.data.planets?.mars?.longitude || 0,
+        jupiter: response.data.planets?.jupiter?.longitude || 0,
+        saturn: response.data.planets?.saturn?.longitude || 0,
+        uranus: response.data.planets?.uranus?.longitude || 0,
+        neptune: response.data.planets?.neptune?.longitude || 0,
+        pluto: response.data.planets?.pluto?.longitude || 0,
       },
       houses: {
-        ascendant: response.data.houses.ascendant,
-        mc: response.data.houses.mc,
-        houses: response.data.houses.cusps,
+        ascendant: response.data.houses?.ascendant || 0,
+        mc: response.data.houses?.mc || 0,
+        houses: response.data.houses?.cusps || Array(12).fill(0),
       },
-      ascendant: response.data.houses.ascendant,
-      mc: response.data.houses.mc,
+      ascendant: response.data.houses?.ascendant || 0,
+      mc: response.data.houses?.mc || 0,
+      house_system: response.data.house_system || "placidus",
     };
 
-    // Process and return the API response
-    res.json(birthChart);
-  } catch (error) {
-    console.error("Error calculating birth chart:", error);
-    res.status(500).json({
-      error: "Error calculating birth chart",
-      details: error.message,
+    console.log(
+      "Transformed birth chart:",
+      JSON.stringify(birthChart, null, 2)
+    );
+
+    // Return the transformed API response
+    return res.json(birthChart);
+  } catch (apiError) {
+    // Log the full error details
+    console.error("Full API Error:", apiError);
+    console.error("API Error Response:", apiError.response?.data);
+    console.error("API Error Status:", apiError.response?.status);
+    console.error("API Error Headers:", apiError.response?.headers);
+    console.error("API Request Details:", {
+      url: "https://api.prokerala.com/v2/astrology/western-chart",
+      params: {
+        coordinates: coordinates,
+        datetime: datetime,
+        house_system: "placidus",
+      },
+    });
+
+    // Return a more detailed error response
+    return res.status(500).json({
+      error: "Failed to calculate birth chart",
+      details: apiError.response?.data || apiError.message,
+      request: {
+        datetime,
+        coordinates,
+        house_system: "placidus",
+      },
     });
   }
 });
