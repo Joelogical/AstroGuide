@@ -127,26 +127,17 @@ app.post("/api/signup", (req, res) => {
 
 // Function to generate AstrologyAPI.com authentication
 function generateAuth() {
-  const timestamp = Math.floor(Date.now() / 1000);
-  const hash = require("crypto")
-    .createHash("sha256")
-    .update(`${USER_ID}${timestamp}${API_KEY}`)
-    .digest("hex");
-
-  const authHeader = `Basic ${Buffer.from(`${USER_ID}:${hash}`).toString(
-    "base64"
-  )}`;
+  // Create base64 encoded credentials
+  const credentials = Buffer.from(`${USER_ID}:${API_KEY}`).toString("base64");
 
   // Debug logging for authentication
   console.log("Generated Auth Header:", {
-    timestamp,
     userId: USER_ID,
-    hashLength: hash.length,
-    authHeaderLength: authHeader.length,
+    credentialsLength: credentials.length,
   });
 
   return {
-    Authorization: authHeader,
+    Authorization: `Basic ${credentials}`,
     "Content-Type": "application/json",
   };
 }
@@ -201,60 +192,102 @@ app.post("/api/birth-chart", async (req, res) => {
       });
     }
 
-    // Format date and time for AstrologyAPI.com
-    const date = `${year}-${month.toString().padStart(2, "0")}-${day
-      .toString()
-      .padStart(2, "0")}`;
-    const time = `${hour.toString().padStart(2, "0")}:${minute
-      .toString()
-      .padStart(2, "0")}`;
-
     // Make API request to AstrologyAPI.com
     console.log("Making API request to AstrologyAPI.com...");
     try {
-      const response = await axios.post(
-        "https://json.astrologyapi.com/v1/planets",
+      // First, get planetary positions using the tropical endpoint
+      const planetsResponse = await axios.post(
+        "https://json.astrologyapi.com/v1/planets/tropical",
         {
-          day: day,
-          month: month,
-          year: year,
-          hour: hour,
-          min: minute,
-          lat: latitude,
-          lon: longitude,
-          tzone: timezone || 0,
+          day: parseInt(day),
+          month: parseInt(month),
+          year: parseInt(year),
+          hour: parseInt(hour),
+          min: parseInt(minute),
+          lat: parseFloat(latitude),
+          lon: parseFloat(longitude),
+          tzone: parseFloat(timezone || 0),
         },
         {
           headers: generateAuth(),
         }
       );
 
-      console.log("API Response:", JSON.stringify(response.data, null, 2));
+      // Then, get house positions using the tropical endpoint
+      const housesResponse = await axios.post(
+        "https://json.astrologyapi.com/v1/house_cusps/tropical",
+        {
+          day: parseInt(day),
+          month: parseInt(month),
+          year: parseInt(year),
+          hour: parseInt(hour),
+          min: parseInt(minute),
+          lat: parseFloat(latitude),
+          lon: parseFloat(longitude),
+          tzone: parseFloat(timezone || 0),
+        },
+        {
+          headers: generateAuth(),
+        }
+      );
 
-      // Transform the API response to match our expected format
+      console.log(
+        "Planets API Response:",
+        JSON.stringify(planetsResponse.data, null, 2)
+      );
+      console.log(
+        "Houses API Response:",
+        JSON.stringify(housesResponse.data, null, 2)
+      );
+
+      // Transform the API responses to match our expected format
       const birthChart = {
         planets: {
-          sun: response.data.sun?.longitude || 0,
-          moon: response.data.moon?.longitude || 0,
-          mercury: response.data.mercury?.longitude || 0,
-          venus: response.data.venus?.longitude || 0,
-          mars: response.data.mars?.longitude || 0,
-          jupiter: response.data.jupiter?.longitude || 0,
-          saturn: response.data.saturn?.longitude || 0,
-          uranus: response.data.uranus?.longitude || 0,
-          neptune: response.data.neptune?.longitude || 0,
-          pluto: response.data.pluto?.longitude || 0,
+          sun:
+            planetsResponse.data.find((p) => p.name === "Sun")?.fullDegree || 0,
+          moon:
+            planetsResponse.data.find((p) => p.name === "Moon")?.fullDegree ||
+            0,
+          mercury:
+            planetsResponse.data.find((p) => p.name === "Mercury")
+              ?.fullDegree || 0,
+          venus:
+            planetsResponse.data.find((p) => p.name === "Venus")?.fullDegree ||
+            0,
+          mars:
+            planetsResponse.data.find((p) => p.name === "Mars")?.fullDegree ||
+            0,
+          jupiter:
+            planetsResponse.data.find((p) => p.name === "Jupiter")
+              ?.fullDegree || 0,
+          saturn:
+            planetsResponse.data.find((p) => p.name === "Saturn")?.fullDegree ||
+            0,
+          uranus:
+            planetsResponse.data.find((p) => p.name === "Uranus")?.fullDegree ||
+            0,
+          neptune:
+            planetsResponse.data.find((p) => p.name === "Neptune")
+              ?.fullDegree || 0,
+          pluto:
+            planetsResponse.data.find((p) => p.name === "Pluto")?.fullDegree ||
+            0,
         },
         houses: {
-          ascendant: response.data.ascendant || 0,
-          mc: response.data.mc || 0,
-          houses: response.data.houses || Array(12).fill(0),
+          ascendant: housesResponse.data.ascendant || 0,
+          mc: housesResponse.data.midheaven || 0,
+          houses:
+            housesResponse.data.houses.map((h) => h.degree) ||
+            Array(12).fill(0),
         },
-        ascendant: response.data.ascendant || 0,
-        mc: response.data.mc || 0,
+        ascendant: housesResponse.data.ascendant || 0,
+        mc: housesResponse.data.midheaven || 0,
         house_system: "placidus",
       };
 
+      // Log the raw API responses for debugging
+      console.log("Raw Planets Response:", planetsResponse.data);
+      console.log("Raw Houses Response:", housesResponse.data);
       console.log(
         "Transformed birth chart:",
         JSON.stringify(birthChart, null, 2)
@@ -269,16 +302,16 @@ app.post("/api/birth-chart", async (req, res) => {
       console.error("API Error Status:", apiError.response?.status);
       console.error("API Error Headers:", apiError.response?.headers);
       console.error("API Request Details:", {
-        url: "https://json.astrologyapi.com/v1/planets",
-        params: {
-          day,
-          month,
-          year,
-          hour,
-          min: minute,
-          lat: latitude,
-          lon: longitude,
-          tzone: timezone || 0,
+        url: "https://json.astrologyapi.com/v1/planets/tropical",
+        body: {
+          day: parseInt(day),
+          month: parseInt(month),
+          year: parseInt(year),
+          hour: parseInt(hour),
+          min: parseInt(minute),
+          lat: parseFloat(latitude),
+          lon: parseFloat(longitude),
+          tzone: parseFloat(timezone || 0),
         },
       });
 
@@ -287,8 +320,8 @@ app.post("/api/birth-chart", async (req, res) => {
         error: "Failed to calculate birth chart",
         details: apiError.response?.data?.message || apiError.message,
         request: {
-          date,
-          time,
+          date: `${year}-${month}-${day}`,
+          time: `${hour}:${minute}`,
           latitude,
           longitude,
           timezone: timezone || 0,
