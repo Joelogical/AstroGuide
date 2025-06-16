@@ -4,6 +4,11 @@ const path = require("path");
 const axios = require("axios");
 require("dotenv").config();
 const { getBirthChartInterpretation } = require("./chatgpt_service");
+const {
+  formatBirthChartForChatGPT,
+  generateSystemPrompt,
+} = require("./chatgpt_template");
+const openai = require("./openai_service");
 
 // Debug logging for environment variables
 console.log("Environment variables loaded:");
@@ -14,6 +19,10 @@ console.log(
 console.log(
   "ASTROLOGY_API_KEY:",
   process.env.ASTROLOGY_API_KEY ? "Present" : "Missing"
+);
+console.log(
+  "OPENAI_API_KEY:",
+  process.env.OPENAI_API_KEY ? "Present" : "Missing"
 );
 
 const app = express();
@@ -540,6 +549,63 @@ app.post("/api/birth-chart", async (req, res) => {
   }
 });
 
+// Chat endpoint for follow-up questions
+app.post("/api/chat", async (req, res) => {
+  try {
+    const { message, birthChart, conversationHistory } = req.body;
+
+    if (!message || !birthChart) {
+      return res.status(400).json({
+        error: "Missing required fields",
+        details: "Please provide both a message and birth chart data",
+      });
+    }
+
+    // Format the birth chart data for ChatGPT
+    const formattedData = formatBirthChartForChatGPT(birthChart);
+
+    // Create the messages array for the chat completion
+    const messages = [
+      {
+        role: "system",
+        content: generateSystemPrompt(formattedData),
+      },
+    ];
+
+    // Add conversation history if available
+    if (conversationHistory && conversationHistory.length > 0) {
+      messages.push(...conversationHistory);
+    }
+
+    // Add the current message
+    messages.push({
+      role: "user",
+      content: message,
+    });
+
+    // Make the API call to OpenAI
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: messages,
+      temperature: 0.7,
+      max_tokens: 1000,
+      presence_penalty: 0.6,
+      frequency_penalty: 0.3,
+    });
+
+    // Return the response
+    return res.json({
+      response: completion.choices[0].message.content,
+    });
+  } catch (error) {
+    console.error("Error in chat endpoint:", error);
+    return res.status(500).json({
+      error: "Failed to process chat message",
+      details: error.message,
+    });
+  }
+});
+
 // Add a test endpoint
 app.get("/api/test", (req, res) => {
   res.json({ message: "Backend server is running" });
@@ -552,5 +618,6 @@ app.listen(port, () => {
   console.log("- POST /api/login");
   console.log("- POST /api/signup");
   console.log("- POST /api/birth-chart");
+  console.log("- POST /api/chat");
   console.log("- GET /api/test");
 });

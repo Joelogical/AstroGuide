@@ -19,6 +19,7 @@
       <div class="chat-header">
         <h1>AstroGuide</h1>
         <button id="logout-button" class="logout-button">Logout</button>
+        <button id="clear-button" class="clear-button">Clear Chat</button>
       </div>
       <div class="chat-messages" id="chat-messages">
         <div class="message bot-message">
@@ -35,33 +36,257 @@
       </div>
     </div>
 
+    <style>
+      body {
+        background: #23243a;
+        color: #f5f6fa;
+      }
+      .chat-container {
+        background: #18192b;
+        border-radius: 12px;
+        box-shadow: 0 2px 16px rgba(0, 0, 0, 0.3);
+        padding: 24px;
+      }
+      .chat-header h1 {
+        color: #fff;
+      }
+      .message {
+        margin: 10px;
+        padding: 12px 16px;
+        border-radius: 8px;
+        max-width: 80%;
+        word-wrap: break-word;
+        font-size: 1.08em;
+      }
+      .bot-message {
+        background-color: #2d2e48;
+        color: #f5f6fa;
+        margin-right: auto;
+        border: 1px solid #35365a;
+      }
+      .user-message {
+        background-color: #3b82f6;
+        color: #fff;
+        margin-left: auto;
+        border: 1px solid #2563eb;
+      }
+      .input-container {
+        display: flex;
+        margin-top: 16px;
+      }
+      #message-input {
+        flex: 1;
+        padding: 10px 14px;
+        border-radius: 6px;
+        border: none;
+        background: #23243a;
+        color: #f5f6fa;
+        font-size: 1em;
+        margin-right: 8px;
+      }
+      #message-input::placeholder {
+        color: #888ca3;
+      }
+      #send-button {
+        background: #3b82f6;
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        padding: 10px 18px;
+        font-size: 1em;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      #send-button:hover {
+        background: #2563eb;
+      }
+      .logout-button {
+        background: #e74c3c;
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        padding: 8px 16px;
+        margin-left: 10px;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      .logout-button:hover {
+        background: #c0392b;
+      }
+      .clear-button {
+        padding: 8px 16px;
+        background: #6366f1;
+        border: none;
+        border-radius: 6px;
+        color: #fff;
+        cursor: pointer;
+        transition: background 0.3s ease;
+        margin-left: 10px;
+      }
+      .clear-button:hover {
+        background: #4338ca;
+      }
+      .spinner-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 10px;
+        min-height: 50px;
+        position: relative;
+      }
+      .spinner {
+        width: 30px;
+        height: 30px;
+        margin: 10px;
+        border: 3px solid #35365a;
+        border-top: 3px solid #3b82f6;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        display: block;
+      }
+      .typing-indicator {
+        display: inline-block;
+        padding: 10px;
+        color: #b3b6d4;
+        font-style: italic;
+        min-width: 150px;
+        text-align: left;
+      }
+      .typing-indicator::after {
+        content: "...";
+        display: inline-block;
+        width: 24px;
+        text-align: left;
+        animation: typing 1.5s infinite;
+      }
+      @keyframes typing {
+        0% {
+          content: ".";
+        }
+        33% {
+          content: "..";
+        }
+        66% {
+          content: "...";
+        }
+      }
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+      .typing {
+        /* border-right: 2px solid #fff; */
+        /* animation: blink 0.75s step-end infinite; */
+      }
+    </style>
+
     <script>
       const messageInput = document.getElementById("message-input");
       const sendButton = document.getElementById("send-button");
       const chatMessages = document.getElementById("chat-messages");
       const logoutButton = document.getElementById("logout-button");
+      const clearButton = document.getElementById("clear-button");
 
-      function addMessage(message, isUser = false) {
-        const messageDiv = document.createElement("div");
-        messageDiv.className = `message ${
-          isUser ? "user-message" : "bot-message"
-        }`;
-        messageDiv.textContent = message;
-        chatMessages.appendChild(messageDiv);
-        chatMessages.scrollTop = chatMessages.scrollHeight;
+      // Message queue for bot messages
+      const botMessageQueue = [];
+      let isTyping = false;
+
+      // Queue-based addMessage for bot messages
+      function queueBotMessage(message) {
+        console.log("[QUEUE] Adding bot message to queue:", message);
+        return new Promise((resolve) => {
+          botMessageQueue.push({ message, resolve });
+          // Always try to process the queue, even if already typing
+          setTimeout(processBotQueue, 0);
+        });
+      }
+
+      async function processBotQueue() {
+        if (isTyping || botMessageQueue.length === 0) return;
+        isTyping = true;
+        const { message, resolve } = botMessageQueue.shift();
+        console.log("[QUEUE] Processing bot message:", message);
+        await addMessage(message, false, true); // true = from queue
+        isTyping = false;
+        resolve();
+        // Always try to process the queue again in case new messages were added
+        setTimeout(processBotQueue, 0);
+      }
+
+      // Modified addMessage to support queue
+      function addMessage(message, isUser = false, fromQueue = false) {
+        return new Promise((resolve) => {
+          const messageDiv = document.createElement("div");
+          messageDiv.className = `message ${
+            isUser ? "user-message" : "bot-message"
+          }`;
+
+          if (isUser) {
+            console.log("[MESSAGE] Adding user message:", message);
+            messageDiv.textContent = message;
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            resolve();
+          } else {
+            // For bot messages, use typewriter effect only if from queue
+            hideSpinner();
+            messageDiv.classList.add("typing");
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            if (fromQueue) {
+              console.log(
+                "[TYPEWRITER] Starting typewriter for bot message:",
+                message
+              );
+              typeMessage(messageDiv, message, 30, () => {
+                console.log(
+                  "[TYPEWRITER] Finished typing bot message:",
+                  message
+                );
+                resolve();
+              });
+            } else {
+              // If not from queue, type instantly (for compatibility)
+              messageDiv.textContent = message;
+              messageDiv.classList.remove("typing");
+              resolve();
+            }
+          }
+        });
+      }
+
+      // Updated typeMessage to accept a callback for when typing is done
+      function typeMessage(element, message, speed = 30, done) {
+        let i = 0;
+        const typeNextChar = () => {
+          if (i < message.length) {
+            element.textContent = message.substring(0, i + 1);
+            i++;
+            setTimeout(typeNextChar, speed);
+          } else {
+            element.classList.remove("typing");
+            if (done) done();
+          }
+        };
+        typeNextChar();
       }
 
       async function handleSendMessage() {
         const message = messageInput.value.trim();
         if (message) {
-          addMessage(message, true);
+          console.log("[HANDLE] User sent message:", message);
+          await addMessage(message, true);
           messageInput.value = "";
 
           // Get user data from localStorage
           const userData = JSON.parse(localStorage.getItem("userData"));
 
           if (!userData) {
-            addMessage(
+            await queueBotMessage(
               "Error: No user data found. Please log in or create an account first."
             );
             return;
@@ -69,21 +294,16 @@
 
           // If message is "test", fetch birth chart
           if (message.toLowerCase() === "test") {
-            addMessage("Fetching your birth chart...");
+            const testMessage = "Let me take a look at your birth chart...";
+            await queueBotMessage(testMessage);
+            console.log("[SPINNER] Showing spinner after test message");
+            showSpinner();
 
             // Parse birth date and time directly from strings
             const [year, month, day] = userData.birthDate
               .split("-")
               .map(Number);
             const [hours, minutes] = userData.birthTime.split(":").map(Number);
-
-            console.log("Parsed date components:", {
-              year,
-              month,
-              day,
-              hours,
-              minutes,
-            });
 
             // Function to get coordinates from city name
             async function getCoordinates(cityName) {
@@ -115,7 +335,6 @@
             // Get coordinates from birth place
             const birthPlace = userData.birthPlace || "New York, USA";
             const coordinates = await getCoordinates(birthPlace);
-            console.log("Resolved coordinates:", coordinates);
 
             const requestData = {
               year: year,
@@ -128,56 +347,159 @@
               timezone: -5, // Default to EST, we can make this dynamic based on coordinates later
             };
 
-            console.log("Sending birth data to server:", requestData);
-
-            // Make API call to backend
-            fetch("http://localhost:3000/api/birth-chart", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify(requestData),
-            })
-              .then((response) => {
-                if (!response.ok) {
-                  return response.json().then((err) => {
-                    throw new Error(
-                      err.details ||
-                        err.error ||
-                        "Failed to calculate birth chart"
-                    );
-                  });
+            try {
+              // Make API call to backend
+              console.log("[API] Requesting birth chart:", requestData);
+              const response = await fetch(
+                "http://localhost:3000/api/birth-chart",
+                {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify(requestData),
                 }
-                return response.json();
-              })
-              .then((data) => {
-                console.log("Received birth chart data:", data);
+              );
+              console.log("[API] Fetch to /api/birth-chart sent");
 
-                // Format the birth chart information
-                const birthChartInfo = formatBirthChartInfo(data);
-                addMessage(birthChartInfo);
-              })
-              .catch((error) => {
-                console.error("Error details:", error);
-                let errorMessage =
-                  "An error occurred while calculating your birth chart.";
+              if (!response.ok) {
+                const err = await response.json();
+                console.error(
+                  "[API] Error response from /api/birth-chart:",
+                  err
+                );
+                throw new Error(
+                  err.details || err.error || "Failed to calculate birth chart"
+                );
+              }
 
-                if (error.message) {
-                  errorMessage = error.message;
-                } else if (error.details) {
-                  errorMessage = error.details;
-                }
+              const data = await response.json();
+              console.log("[API] Received birth chart data:", data);
 
-                addMessage(`Error: ${errorMessage}`);
-              });
+              // Store the birth chart data in localStorage for follow-up questions
+              localStorage.setItem("birthChartData", JSON.stringify(data));
+
+              // Format the birth chart information
+              const birthChartInfo = formatBirthChartInfo(data);
+              console.log(
+                "[DISPLAY] About to display birth chart info:",
+                birthChartInfo
+              );
+              await queueBotMessage(birthChartInfo);
+
+              // Add a follow-up message
+              const followUpMsg =
+                "I'd love to help you explore your birth chart! Feel free to ask me anything about your chart, your personality, relationships, career, or any other aspect you're curious about. What would you like to know more about?";
+              console.log(
+                "[DISPLAY] About to display follow-up message:",
+                followUpMsg
+              );
+              await queueBotMessage(followUpMsg);
+            } catch (error) {
+              console.error(
+                "[ERROR] Exception in /api/birth-chart flow:",
+                error
+              );
+              let errorMessage =
+                "I'm having trouble calculating your birth chart right now.";
+
+              if (error.message) {
+                errorMessage = error.message;
+              } else if (error.details) {
+                errorMessage = error.details;
+              }
+
+              await queueBotMessage(`Error: ${errorMessage}`);
+            } finally {
+              console.log("[SPINNER] Hiding spinner after test flow");
+              hideSpinner();
+            }
             return;
           }
 
-          // Handle other messages here
-          addMessage(
-            "I'm not sure how to help with that yet. Try typing 'test' to see your birth chart!"
+          // Handle follow-up questions about the birth chart
+          const birthChartData = JSON.parse(
+            localStorage.getItem("birthChartData")
           );
+          if (birthChartData) {
+            console.log("[SPINNER] Showing spinner for chat follow-up");
+            showSpinner();
+            // Get conversation history from localStorage
+            let conversationHistory = JSON.parse(
+              localStorage.getItem("conversationHistory") || "[]"
+            );
+
+            // Add the user's message to the conversation history
+            conversationHistory.push({
+              role: "user",
+              content: message,
+            });
+
+            try {
+              // Send the question along with the birth chart data and conversation history to the backend
+              console.log("[API] Sending chat follow-up:", {
+                message,
+                birthChart: birthChartData,
+                conversationHistory,
+              });
+              const response = await fetch("http://localhost:3000/api/chat", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  message: message,
+                  birthChart: birthChartData,
+                  conversationHistory: conversationHistory,
+                }),
+              });
+
+              const data = await response.json();
+              console.log("[API] Received chat response:", data);
+
+              // Add the bot's response to the conversation history
+              conversationHistory.push({
+                role: "assistant",
+                content: data.response,
+              });
+
+              // Keep only the last 10 messages to maintain context without overwhelming
+              if (conversationHistory.length > 10) {
+                conversationHistory = conversationHistory.slice(-10);
+              }
+
+              // Save the updated conversation history
+              localStorage.setItem(
+                "conversationHistory",
+                JSON.stringify(conversationHistory)
+              );
+
+              // Display the response with typewriter effect
+              await queueBotMessage(data.response);
+            } catch (error) {
+              console.error("Error:", error);
+              await queueBotMessage(
+                "I'm having trouble processing your question right now. Could you try rephrasing it?"
+              );
+            } finally {
+              console.log("[SPINNER] Hiding spinner after chat follow-up");
+              hideSpinner();
+            }
+          } else {
+            // If no birth chart data is available
+            await queueBotMessage(
+              "I'd love to help you explore your birth chart! Type 'test' to get started."
+            );
+          }
         }
+      }
+
+      // Add a function to clear conversation history
+      function clearConversationHistory() {
+        localStorage.removeItem("conversationHistory");
+        addMessage(
+          "Conversation history cleared. Feel free to start a new conversation!"
+        );
       }
 
       // Add a function to test the backend connection
@@ -220,13 +542,6 @@
           info += `Error getting interpretation: ${birthChart.interpretationError}`;
         }
 
-        // Add a button to view raw chart data
-        info += '<div class="chart-data-container">';
-        info +=
-          '<button onclick="toggleRawChartData(this)" class="view-data-btn" data-chart=\'' +
-          JSON.stringify(birthChart) +
-          "'>View Raw Chart Data</button>";
-        info += "</div>";
         return info;
       }
 
@@ -306,38 +621,29 @@
         }
       }
 
-      // Add CSS for the button and container
-      const style = document.createElement("style");
-      style.textContent = `
-        .chart-data-container {
-          margin-top: 15px;
+      function showSpinner() {
+        const spinnerContainer = document.createElement("div");
+        spinnerContainer.className = "spinner-container";
+
+        const spinner = document.createElement("div");
+        spinner.className = "spinner";
+
+        const typingIndicator = document.createElement("div");
+        typingIndicator.className = "typing-indicator";
+        typingIndicator.textContent = "AstroGuide is thinking";
+
+        spinnerContainer.appendChild(spinner);
+        spinnerContainer.appendChild(typingIndicator);
+        chatMessages.appendChild(spinnerContainer);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      }
+
+      function hideSpinner() {
+        const spinnerContainer = document.querySelector(".spinner-container");
+        if (spinnerContainer) {
+          spinnerContainer.remove();
         }
-        .view-data-btn {
-          background-color: #4CAF50;
-          border: none;
-          color: white;
-          padding: 10px 20px;
-          text-align: center;
-          text-decoration: none;
-          display: inline-block;
-          font-size: 16px;
-          margin: 4px 2px;
-          cursor: pointer;
-          border-radius: 4px;
-        }
-        .view-data-btn:hover {
-          background-color: #45a049;
-        }
-        .raw-chart-data {
-          background-color: #f8f9fa;
-          padding: 15px;
-          border-radius: 4px;
-          margin-top: 10px;
-          white-space: pre-wrap;
-          font-family: monospace;
-        }
-      `;
-      document.head.appendChild(style);
+      }
     </script>
   </body>
 </html>
