@@ -609,6 +609,582 @@ app.post("/api/birth-chart", async (req, res) => {
   }
 });
 
+/**
+ * Generate contextually relevant follow-up question based on user's message and response
+ * @param {string} userMessage - The user's original message
+ * @param {string} aiResponse - The AI's response
+ * @param {object} birthChart - The birth chart data
+ * @returns {string|null} Follow-up question (null if not needed)
+ */
+function generateFollowUpQuestion(userMessage, aiResponse, birthChart) {
+  const message = userMessage.toLowerCase();
+  const response = aiResponse.toLowerCase();
+
+  console.log("[FOLLOWUP] Generating follow-up for:", {
+    userMessage: userMessage.substring(0, 50),
+    responseLength: aiResponse.length,
+    messageLength: message.length,
+  });
+
+  // Don't generate follow-up for very short responses or simple acknowledgments
+  // But be more lenient - if it's a substantial question, always provide a follow-up
+  const isSubstantialQuestion =
+    message.length > 20 &&
+    (message.includes("tell me") ||
+      message.includes("what") ||
+      message.includes("how") ||
+      message.includes("why") ||
+      message.includes("explain") ||
+      message.includes("describe") ||
+      message.includes("about") ||
+      message.includes("myself") ||
+      message.includes("about me"));
+
+  console.log("[FOLLOWUP] Is substantial question:", isSubstantialQuestion);
+
+  // For substantial questions, always provide a follow-up (be more lenient)
+  // NEVER return null early for substantial questions - let the safety nets handle it
+  if (!isSubstantialQuestion && aiResponse.length < 100) {
+    // For non-substantial questions, require longer responses
+    console.log("[FOLLOWUP] Skipping - response too short and not substantial");
+    return null;
+  }
+
+  // For substantial questions, continue even if response is short (safety nets will handle it)
+  if (isSubstantialQuestion && aiResponse.length < 30) {
+    console.log(
+      "[FOLLOWUP] Warning - substantial question but response extremely short, will use safety net"
+    );
+    // Don't return null - let the safety nets generate a question
+  }
+
+  // Don't generate follow-up if user's message was very short (like "thanks" or "ok")
+  if (message.length < 10) {
+    return null;
+  }
+
+  // Don't generate follow-up for simple yes/no responses or acknowledgments
+  const shortResponses = [
+    "thanks",
+    "thank you",
+    "ok",
+    "okay",
+    "got it",
+    "i see",
+    "cool",
+    "nice",
+  ];
+  if (
+    shortResponses.some(
+      (short) => message === short || message.startsWith(short + " ")
+    )
+  ) {
+    return null;
+  }
+
+  // Extract topic keywords from user message with more specific patterns
+  const topicKeywords = {
+    sun: [
+      "sun",
+      "identity",
+      "ego",
+      "self",
+      "who am i",
+      "personality",
+      "tell me about myself",
+      "about me",
+      "who i am",
+    ],
+    moon: ["moon", "emotion", "feeling", "mood", "nurturing", "mother"],
+    mercury: [
+      "mercury",
+      "communication",
+      "thinking",
+      "mind",
+      "intellect",
+      "learning",
+    ],
+    venus: [
+      "venus",
+      "love",
+      "relationship",
+      "romance",
+      "beauty",
+      "values",
+      "attraction",
+    ],
+    mars: ["mars", "action", "drive", "passion", "anger", "aggression", "sex"],
+    jupiter: [
+      "jupiter",
+      "luck",
+      "expansion",
+      "philosophy",
+      "growth",
+      "optimism",
+    ],
+    saturn: [
+      "saturn",
+      "discipline",
+      "responsibility",
+      "challenge",
+      "limitation",
+      "structure",
+    ],
+    uranus: [
+      "uranus",
+      "change",
+      "innovation",
+      "rebellion",
+      "freedom",
+      "unpredictable",
+    ],
+    neptune: [
+      "neptune",
+      "dream",
+      "illusion",
+      "spirituality",
+      "creativity",
+      "confusion",
+    ],
+    pluto: [
+      "pluto",
+      "transformation",
+      "power",
+      "intensity",
+      "control",
+      "obsession",
+    ],
+    ascendant: [
+      "ascendant",
+      "rising",
+      "appearance",
+      "first impression",
+      "outer self",
+    ],
+    midheaven: [
+      "midheaven",
+      "career",
+      "public",
+      "reputation",
+      "vocation",
+      "10th house",
+    ],
+    aspects: [
+      "aspect",
+      "square",
+      "trine",
+      "opposition",
+      "conjunction",
+      "sextile",
+    ],
+    houses: [
+      "house",
+      "1st",
+      "2nd",
+      "3rd",
+      "4th",
+      "5th",
+      "6th",
+      "7th",
+      "8th",
+      "9th",
+      "10th",
+      "11th",
+      "12th",
+    ],
+    relationships: [
+      "relationship",
+      "partner",
+      "marriage",
+      "compatibility",
+      "love life",
+      "dating",
+      "romance",
+      "boyfriend",
+      "girlfriend",
+      "spouse",
+      "attraction",
+      "what i want in a partner",
+      "my ideal partner",
+    ],
+    career: [
+      "career",
+      "work",
+      "job",
+      "profession",
+      "vocation",
+      "success",
+      "workplace",
+      "colleagues",
+      "boss",
+      "employment",
+    ],
+    challenges: [
+      "challenge",
+      "difficulty",
+      "problem",
+      "struggle",
+      "weakness",
+      "negative",
+      "issue",
+      "trouble",
+    ],
+    strengths: ["strength", "talent", "gift", "positive", "good", "strong"],
+    family: [
+      "family",
+      "parents",
+      "mother",
+      "father",
+      "siblings",
+      "children",
+      "home",
+    ],
+    friends: ["friends", "friendship", "social", "group", "community"],
+    money: [
+      "money",
+      "financial",
+      "finances",
+      "wealth",
+      "income",
+      "savings",
+      "budget",
+    ],
+    health: ["health", "wellness", "physical", "body", "illness", "healing"],
+  };
+
+  // Determine primary topic - check for multiple matches and prioritize
+  let primaryTopic = null;
+  let topicName = null;
+  let matchedKeywords = [];
+
+  for (const [topic, keywords] of Object.entries(topicKeywords)) {
+    const matches = keywords.filter((keyword) => message.includes(keyword));
+    if (matches.length > 0) {
+      matchedKeywords.push({ topic, matches, count: matches.length });
+    }
+  }
+
+  // Sort by number of matches and select the most relevant topic
+  if (matchedKeywords.length > 0) {
+    matchedKeywords.sort((a, b) => b.count - a.count);
+    primaryTopic = matchedKeywords[0].topic;
+    topicName = primaryTopic.charAt(0).toUpperCase() + primaryTopic.slice(1);
+  }
+
+  // Generate follow-up questions based on topic - make them more specific and actionable
+  const followUpQuestions = {
+    sun: [
+      "Would you like me to elaborate on anything specific about your identity or self-expression?",
+      "Should I explain how your Sun sign affects your relationships or career?",
+      "Do you have questions about how your core personality manifests in your life?",
+      "Is there anything else about your identity you'd like to explore?",
+    ],
+    moon: [
+      "Would you like me to elaborate on anything specific about your emotional nature?",
+      "Should I explain more about how your Moon affects your relationships or reactions?",
+      "Do you have questions about managing your emotional needs or patterns?",
+      "Is there anything else about your feelings or emotional responses you'd like to explore?",
+    ],
+    mercury: [
+      "Would you like me to elaborate on anything specific about your communication or thinking?",
+      "Should I explain more about how your mental processes affect your relationships or work?",
+      "Do you have questions about your learning style or how you process information?",
+      "Is there anything else about your communication patterns you'd like to explore?",
+    ],
+    venus: [
+      "Would you like me to elaborate on anything specific about your love life?",
+      "Should I explain more about what you need in relationships?",
+      "Do you have questions about your attraction patterns or relationship values?",
+      "Is there anything else about your approach to love and partnerships you'd like to explore?",
+      "Would you like to know more about how your chart affects your romantic connections?",
+    ],
+    mars: [
+      "Would you like me to elaborate on anything specific about your drive or motivation?",
+      "Should I explain more about how you handle conflict or assert yourself?",
+      "Do you have questions about managing your energy, passion, or anger?",
+      "Is there anything else about your action style or assertiveness you'd like to explore?",
+    ],
+    jupiter: [
+      "Would you like me to elaborate on anything specific about your growth or opportunities?",
+      "Should I explain more about your philosophical outlook or where you find expansion?",
+      "Do you have questions about your beliefs or where luck appears in your life?",
+      "Is there anything else about your optimistic nature you'd like to explore?",
+    ],
+    saturn: [
+      "Would you like me to elaborate on anything specific about your challenges or responsibilities?",
+      "Should I explain more about the lessons your Saturn brings or how to work with them?",
+      "Do you have questions about your discipline, structure, or areas of limitation?",
+      "Is there anything else about your growth through challenges you'd like to explore?",
+    ],
+    uranus: [
+      "Would you like me to elaborate on anything specific about your need for freedom or change?",
+      "Should I explain more about how you handle innovation or unpredictability?",
+      "Do you have questions about your rebellious side or unconventional approach?",
+      "Is there anything else about your unique expression or independence you'd like to explore?",
+    ],
+    neptune: [
+      "Would you like me to elaborate on anything specific about your intuition or spirituality?",
+      "Should I explain more about how you navigate between dreams and reality?",
+      "Do you have questions about your creative side or spiritual connection?",
+      "Is there anything else about your imagination or sensitivity you'd like to explore?",
+    ],
+    pluto: [
+      "Would you like me to elaborate on anything specific about your transformation or intensity?",
+      "Should I explain more about how you handle power, control, or deep change?",
+      "Do you have questions about your emotional depth or regenerative capacity?",
+      "Is there anything else about your transformative nature you'd like to explore?",
+    ],
+    ascendant: [
+      "Would you like me to elaborate on anything specific about your outer personality?",
+      "Should I explain more about how your Ascendant affects first impressions or appearance?",
+      "Do you have questions about how others perceive you versus your inner self?",
+      "Is there anything else about your public persona you'd like to explore?",
+    ],
+    midheaven: [
+      "Would you like me to elaborate on anything specific about your career or public image?",
+      "Should I explain more about your professional calling or life direction?",
+      "Do you have questions about your reputation or how you're seen professionally?",
+      "Is there anything else about your career path you'd like to explore?",
+    ],
+    aspects: [
+      "Would you like me to elaborate on anything specific about how your planets interact?",
+      "Should I explain more about working with these aspects or aspect patterns?",
+      "Do you have questions about how these aspects manifest in your life?",
+      "Is there anything else about the relationships between your planets you'd like to explore?",
+    ],
+    houses: [
+      "Would you like me to elaborate on anything specific about this life area?",
+      "Should I explain more about how this house placement affects your daily life?",
+      "Do you have questions about the themes or experiences in this house?",
+      "Is there anything else about this area of your life you'd like to explore?",
+    ],
+    relationships: [
+      "Would you like me to elaborate on your relationship patterns?",
+      "Should I explain what you need in a partner?",
+      "Do you have questions about compatibility with specific signs?",
+      "Is there anything else about your approach to relationships you'd like to know?",
+    ],
+    career: [
+      "Would you like me to elaborate on anything specific about your career?",
+      "Should I explain more about your work style or professional strengths?",
+      "Do you have questions about career paths that might suit you?",
+      "Is there anything else about your professional life you'd like to explore?",
+      "Would you like to know more about how your chart influences your work?",
+    ],
+    challenges: [
+      "Would you like me to elaborate on anything specific about these challenges?",
+      "Should I explain more about how to work with or transform these difficulties?",
+      "Do you have questions about the growth opportunities in these challenges?",
+      "Is there anything else about navigating these patterns you'd like to explore?",
+    ],
+    strengths: [
+      "Would you like me to elaborate on anything specific about these strengths?",
+      "Should I explain more about how these talents manifest in your life?",
+      "Do you have questions about developing or maximizing these gifts?",
+      "Is there anything else about your natural abilities you'd like to explore?",
+    ],
+    family: [
+      "Would you like me to elaborate on anything specific about your family dynamics?",
+      "Should I explain more about your relationship with family members?",
+      "Do you have questions about your home life or family patterns?",
+      "Is there anything else about your family relationships you'd like to explore?",
+    ],
+    friends: [
+      "Would you like me to elaborate on anything specific about your friendships?",
+      "Should I explain more about your social patterns or group connections?",
+      "Do you have questions about your friendships or community involvement?",
+      "Is there anything else about your social life you'd like to explore?",
+    ],
+    money: [
+      "Would you like me to elaborate on anything specific about your finances?",
+      "Should I explain more about your relationship with money or resources?",
+      "Do you have questions about your financial patterns or values?",
+      "Is there anything else about your material security you'd like to explore?",
+    ],
+    health: [
+      "Would you like me to elaborate on anything specific about your health?",
+      "Should I explain more about your physical well-being or body awareness?",
+      "Do you have questions about health patterns in your chart?",
+      "Is there anything else about your wellness you'd like to explore?",
+    ],
+  };
+
+  // Select appropriate follow-up question - make it more specific to the user's question
+  let question;
+
+  // PRIORITY: Check for "about me" type questions first, regardless of primaryTopic
+  if (
+    message.includes("about me") ||
+    message.includes("tell me about") ||
+    message.includes("myself") ||
+    (message.includes("tell me") && message.includes("about"))
+  ) {
+    const generalQuestions = [
+      "Would you like me to elaborate on anything specific about your personality or chart?",
+      "Do you have questions about your relationships, career, or personal growth?",
+      "Is there a particular area of your life you'd like to explore deeper?",
+      "Would you like to know more about your strengths, challenges, or how your planets interact?",
+    ];
+    question =
+      generalQuestions[Math.floor(Math.random() * generalQuestions.length)];
+    console.log("[FOLLOWUP] Using 'about me' question (priority)");
+  } else if (primaryTopic && followUpQuestions[primaryTopic]) {
+    // Select from topic-specific questions - use the first one as it's most relevant
+    const questions = followUpQuestions[primaryTopic];
+    question = questions[Math.floor(Math.random() * questions.length)];
+    console.log("[FOLLOWUP] Using topic-specific question for:", primaryTopic);
+  } else {
+    // Only use generic questions if we truly can't determine the topic
+    // And make them more specific based on response content
+    if (
+      response.includes("relationship") ||
+      response.includes("love") ||
+      response.includes("partner")
+    ) {
+      question =
+        "Would you like me to elaborate on anything specific about your relationships?";
+    } else if (
+      response.includes("career") ||
+      response.includes("work") ||
+      response.includes("professional")
+    ) {
+      question =
+        "Would you like me to elaborate on anything specific about your career?";
+    } else if (
+      response.includes("challenge") ||
+      response.includes("difficulty") ||
+      response.includes("struggle")
+    ) {
+      question =
+        "Would you like me to elaborate on anything specific about these challenges?";
+    } else if (
+      response.includes("strength") ||
+      response.includes("talent") ||
+      response.includes("gift")
+    ) {
+      question =
+        "Would you like me to elaborate on anything specific about these strengths?";
+    } else {
+      // Truly generic fallback - but make it more engaging
+      // For "about me" or general questions, provide more specific options
+      if (
+        message.includes("about me") ||
+        message.includes("tell me about") ||
+        message.includes("myself")
+      ) {
+        const generalQuestions = [
+          "Would you like me to elaborate on anything specific about your personality or chart?",
+          "Do you have questions about your relationships, career, or personal growth?",
+          "Is there a particular area of your life you'd like to explore deeper?",
+          "Would you like to know more about your strengths, challenges, or how your planets interact?",
+        ];
+        question =
+          generalQuestions[Math.floor(Math.random() * generalQuestions.length)];
+      } else {
+        const genericQuestions = [
+          "Would you like me to elaborate on anything specific about this?",
+          "Do you have questions about any particular aspect of this?",
+          "Is there anything else about this topic you'd like to explore?",
+        ];
+        question =
+          genericQuestions[Math.floor(Math.random() * genericQuestions.length)];
+      }
+    }
+  }
+
+  // For substantial questions, ALWAYS provide a follow-up (this should have been handled above, but double-check)
+  if (!question && isSubstantialQuestion) {
+    // Check if it's an "about me" type question
+    if (
+      message.includes("about me") ||
+      message.includes("tell me about") ||
+      message.includes("myself") ||
+      (message.includes("tell me") && message.includes("about"))
+    ) {
+      const generalQuestions = [
+        "Would you like me to elaborate on anything specific about your personality or chart?",
+        "Do you have questions about your relationships, career, or personal growth?",
+        "Is there a particular area of your life you'd like to explore deeper?",
+        "Would you like to know more about your strengths, challenges, or how your planets interact?",
+      ];
+      question =
+        generalQuestions[Math.floor(Math.random() * generalQuestions.length)];
+      console.log("[FOLLOWUP] Using 'about me' fallback question (safety net)");
+    } else {
+      question =
+        "Would you like me to elaborate on anything specific about this?";
+      console.log(
+        "[FOLLOWUP] Using generic fallback for substantial question (safety net)"
+      );
+    }
+  }
+
+  // Ensure we always return a question for substantial responses (backup)
+  if (!question && aiResponse.length >= 100) {
+    question =
+      "Would you like me to elaborate on anything specific about this?";
+    console.log("[FOLLOWUP] Using length-based fallback");
+  }
+
+  console.log("[FOLLOWUP] Final question before final check:", question);
+
+  // ABSOLUTE FINAL SAFETY: if we have a substantial question and no follow-up yet, create one
+  // This should NEVER happen if the above logic works, but just in case...
+  if (!question && isSubstantialQuestion) {
+    if (
+      message.includes("about me") ||
+      message.includes("tell me about") ||
+      message.includes("myself") ||
+      (message.includes("tell me") && message.includes("about"))
+    ) {
+      question =
+        "Would you like me to elaborate on anything specific about your personality or chart?";
+      console.log(
+        "[FOLLOWUP] ABSOLUTE FINAL SAFETY: Using 'about me' question"
+      );
+    } else {
+      question =
+        "Would you like me to elaborate on anything specific about this?";
+      console.log("[FOLLOWUP] ABSOLUTE FINAL SAFETY: Using generic question");
+    }
+  }
+
+  // If STILL no question and response is substantial, create a generic one
+  if (!question && aiResponse.length >= 50) {
+    question =
+      "Would you like me to elaborate on anything specific about this?";
+    console.log(
+      "[FOLLOWUP] FINAL FALLBACK: Using generic question based on response length"
+    );
+  }
+
+  console.log("[FOLLOWUP] Final question:", question);
+  console.log("[FOLLOWUP] Returning:", question ? "QUESTION" : "NULL");
+  console.log("[FOLLOWUP] isSubstantialQuestion:", isSubstantialQuestion);
+  console.log("[FOLLOWUP] aiResponse.length:", aiResponse.length);
+
+  // ABSOLUTE GUARANTEE: For substantial questions, NEVER return null
+  if (!question && isSubstantialQuestion) {
+    console.log(
+      "[FOLLOWUP] ERROR: Substantial question but no follow-up generated! Creating emergency fallback."
+    );
+    question =
+      "Would you like me to elaborate on anything specific about this?";
+  }
+
+  // Final check - if we somehow still don't have a question for a substantial response, create one
+  if (!question && aiResponse.length >= 30) {
+    console.log(
+      "[FOLLOWUP] ERROR: No question generated but response is substantial! Creating emergency fallback."
+    );
+    question =
+      "Would you like me to elaborate on anything specific about this?";
+  }
+
+  console.log("[FOLLOWUP] Final return value:", question);
+  return question || null;
+}
+
 // Chat endpoint for follow-up questions
 app.post("/api/chat", async (req, res) => {
   try {
@@ -626,9 +1202,15 @@ app.post("/api/chat", async (req, res) => {
       const factualAnswer = answerFactualQuestion(message, birthChart);
       if (factualAnswer) {
         console.log("[FACTUAL] Answered factual question deterministically");
+        const followUpQuestion = generateFollowUpQuestion(
+          message,
+          factualAnswer,
+          birthChart
+        );
         return res.json({
           response: factualAnswer,
           isFactual: true,
+          followUpQuestion: followUpQuestion,
         });
       }
       // If it matched a pattern but couldn't answer, fall through to AI
@@ -686,10 +1268,54 @@ app.post("/api/chat", async (req, res) => {
       frequency_penalty: 0.0, // No penalty to allow full expression
     });
 
-    // Return the response
-    return res.json({
-      response: completion.choices[0].message.content,
+    // Generate contextually relevant follow-up question
+    let followUpQuestion;
+    try {
+      followUpQuestion = generateFollowUpQuestion(
+        message,
+        completion.choices[0].message.content,
+        birthChart
+      );
+    } catch (error) {
+      console.error("[CHAT] Error generating follow-up question:", error);
+      // Fallback: if there's an error, still try to generate a basic follow-up
+      if (
+        message.toLowerCase().includes("tell me") ||
+        message.toLowerCase().includes("about")
+      ) {
+        followUpQuestion =
+          "Would you like me to elaborate on anything specific about this?";
+      }
+    }
+
+    // Ensure followUpQuestion is always a string or null, never undefined
+    const finalFollowUp = followUpQuestion || null;
+
+    console.log("[CHAT] Sending response with follow-up:", {
+      responseLength: completion.choices[0].message.content.length,
+      hasFollowUp: !!finalFollowUp,
+      followUpQuestion: finalFollowUp?.substring(0, 50),
+      followUpQuestionType: typeof finalFollowUp,
+      followUpQuestionValue: finalFollowUp,
+      messagePreview: message.substring(0, 50),
     });
+
+    // Return the response with follow-up question
+    // ALWAYS include followUpQuestion field, even if null
+    const responseObj = {
+      response: completion.choices[0].message.content,
+      followUpQuestion: finalFollowUp,
+    };
+
+    console.log(
+      "[CHAT] Response object:",
+      JSON.stringify({
+        ...responseObj,
+        response: responseObj.response.substring(0, 50) + "...",
+      })
+    );
+
+    return res.json(responseObj);
   } catch (error) {
     console.error("Error in chat endpoint:", error);
     return res.status(500).json({
