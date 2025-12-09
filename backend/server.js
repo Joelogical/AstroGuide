@@ -546,7 +546,8 @@ app.post("/api/birth-chart", async (req, res) => {
       const deterministicInterpretation =
         generateChartInterpretation(birthChart);
       const interpretationTemplate = formatInterpretationForAI(
-        deterministicInterpretation
+        deterministicInterpretation,
+        birthChart
       );
 
       // Add deterministic interpretation to the response
@@ -641,14 +642,16 @@ app.post("/api/chat", async (req, res) => {
     } else if (birthChart.deterministicInterpretation) {
       // Format existing deterministic interpretation
       interpretationTemplate = formatInterpretationForAI(
-        birthChart.deterministicInterpretation
+        birthChart.deterministicInterpretation,
+        birthChart
       );
     } else {
       // Generate new deterministic interpretation from raw chart data
       const deterministicInterpretation =
         generateChartInterpretation(birthChart);
       interpretationTemplate = formatInterpretationForAI(
-        deterministicInterpretation
+        deterministicInterpretation,
+        birthChart
       );
     }
 

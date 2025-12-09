@@ -7,6 +7,8 @@ const {
   getHouseMeaning,
   getPlanetSignInterpretation,
   getAspectPolarity,
+  getAspectStyle,
+  calculatePlanetSignificance,
 } = require("./astrology_rules");
 
 /**
@@ -29,6 +31,7 @@ function generateChartInterpretation(birthChart) {
         sign: birthChart.angles.ascendant.sign,
         element: birthChart.angles.ascendant.element,
         degree: birthChart.angles.ascendant.degree,
+        ruler: getChartRuler(birthChart.angles.ascendant.sign),
         positive:
           getSignMeaning(birthChart.angles.ascendant.sign, "positive")?.core ||
           "",
@@ -52,6 +55,20 @@ function generateChartInterpretation(birthChart) {
     // Planetary interpretations
     planets: {},
 
+    // Planet significance scores
+    planetSignificance: {},
+
+    // Aspect groupings by theme
+    aspectGroups: {
+      identityEmotions: [], // Sun, Moon, Ascendant, chart ruler
+      mindCommunication: [], // Mercury aspects
+      loveSex: [], // Venus, Mars aspects
+      growthChallenges: [], // Jupiter, Saturn, outer planets
+    },
+
+    // Core personality synthesis
+    coreSynthesis: null,
+
     // Elemental balance
     elementalBalance: calculateElementalBalance(birthChart),
 
@@ -61,6 +78,31 @@ function generateChartInterpretation(birthChart) {
     // Summary of key themes
     keyThemes: [],
   };
+
+  // Calculate planet significance scores
+  const allAspects = birthChart.aspects || [];
+  for (const planetName of Object.keys(birthChart.planets)) {
+    interpretation.planetSignificance[planetName] = calculatePlanetSignificance(
+      planetName,
+      allAspects,
+      {
+        angles: interpretation.angles,
+        planets: birthChart.planets,
+      }
+    );
+  }
+
+  // Group aspects by theme
+  interpretation.aspectGroups = groupAspectsByTheme(
+    allAspects,
+    interpretation.angles.ascendant.ruler
+  );
+
+  // Generate core personality synthesis
+  interpretation.coreSynthesis = generateCoreSynthesis(
+    birthChart,
+    interpretation
+  );
 
   // Process each planet
   for (const [planetName, planetData] of Object.entries(birthChart.planets)) {
@@ -287,59 +329,200 @@ function extractKeyThemes(interpretation) {
 /**
  * Format the interpretation template for AI consumption
  * @param {object} interpretation - The chart interpretation object
+ * @param {object} birthChart - The birth chart data
  * @returns {string} Formatted text template
  */
-function formatInterpretationForAI(interpretation) {
+function formatInterpretationForAI(interpretation, birthChart) {
   let template = `BIRTH CHART INTERPRETATION TEMPLATE\n`;
   template += `=====================================\n\n`;
-  template += `⚠️ CRITICAL: This template includes BOTH positive and negative qualities for each placement.\n`;
-  template += `You MUST use BOTH in your interpretation—never only positive traits.\n`;
-  template += `Every placement has both strengths and challenges—address both.\n\n`;
+  template += `⚠️ CRITICAL INSTRUCTIONS FOR HOLISTIC INTERPRETATION:\n`;
+  template += `1. Start with the CORE PERSONALITY SYNTHESIS - this is the foundation.\n`;
+  template += `2. Use ASPECT-DRIVEN narrative - combine placements that aspect each other.\n`;
+  template += `3. Avoid repeating isolated placement descriptions when aspects already cover them.\n`;
+  template += `4. Group aspects by theme (Identity/Emotions, Mind/Communication, Love/Sex, Growth/Challenges).\n`;
+  template += `5. Use planet significance scores to emphasize heavily aspected planets.\n`;
+  template += `6. Include BOTH positive and negative qualities throughout.\n`;
+  template += `7. Show relationships between chart pieces, not just isolated descriptions.\n\n`;
 
   template += `CHART INFORMATION:\n`;
   template += `Date: ${interpretation.chartInfo.date}\n`;
   template += `Time: ${interpretation.chartInfo.time}\n`;
   template += `Location: ${interpretation.chartInfo.location.latitude}°N, ${interpretation.chartInfo.location.longitude}°E\n\n`;
 
-  template += `ANGULAR POINTS:\n`;
-  template += `Ascendant (${interpretation.angles.ascendant.sign}):\n`;
-  template += `  Positive: ${interpretation.angles.ascendant.positive}\n`;
-  template += `  Negative: ${interpretation.angles.ascendant.negative}\n`;
-  template += `Midheaven (${interpretation.angles.midheaven.sign}):\n`;
-  template += `  Positive: ${interpretation.angles.midheaven.positive}\n`;
-  template += `  Negative: ${interpretation.angles.midheaven.negative}\n\n`;
+  // CORE PERSONALITY SYNTHESIS
+  if (interpretation.coreSynthesis) {
+    const synth = interpretation.coreSynthesis;
+    template += `═══════════════════════════════════════════════════════════\n`;
+    template += `CORE PERSONALITY SYNTHESIS (Luminaries + Chart Ruler)\n`;
+    template += `═══════════════════════════════════════════════════════════\n\n`;
 
-  template += `PLANETARY INTERPRETATIONS:\n`;
-  template += `---------------------------\n`;
+    template += `FOUNDATION:\n`;
+    template += `- Sun in ${synth.sun.sign} (House ${synth.sun.house}): Core identity expression\n`;
+    template += `- Moon in ${synth.moon.sign} (House ${synth.moon.house}): Emotional nature\n`;
+    template += `- Ascendant in ${synth.ascendant.sign}: Outer personality and first impressions\n`;
+    if (synth.chartRuler) {
+      template += `- Chart Ruler: ${synth.chartRuler.planet.toUpperCase()} in ${
+        synth.chartRuler.sign
+      } (House ${synth.chartRuler.house}): How identity is expressed\n\n`;
+    } else {
+      template += `- Chart Ruler: Not available\n\n`;
+    }
 
-  for (const [planetKey, planet] of Object.entries(interpretation.planets)) {
-    template += `\n${planet.name} in ${planet.sign} (House ${planet.house})`;
+    // Sun-Moon relationship
+    if (synth.sunMoonAspect) {
+      const aspectStyle = getAspectStyle(synth.sunMoonAspect.aspect);
+      template += `IDENTITY & EMOTIONS (Sun-Moon ${synth.sunMoonAspect.aspect.toUpperCase()}):\n`;
+      template += `Aspect Style: ${aspectStyle.polarity}, Tension: ${aspectStyle.tension}, Strength: ${aspectStyle.strength}\n`;
+      template += `${generateCombinedAspectInterpretation(
+        synth.sunMoonAspect,
+        birthChart
+      )}\n\n`;
+    } else {
+      template += `IDENTITY & EMOTIONS (Sun-Moon):\n`;
+      template += `Your ${synth.sun.sign} Sun makes you ${
+        getSignMeaning(synth.sun.sign, "positive")?.core || ""
+      }, while your ${synth.moon.sign} Moon needs ${
+        getSignMeaning(synth.moon.sign, "positive")?.core || ""
+      }. `;
+      template += `Without a major aspect between them, these energies operate somewhat independently, creating a dynamic where your identity and emotional needs may not always align.\n\n`;
+    }
+
+    // Sun-Chart Ruler relationship
+    if (synth.sunRulerAspect) {
+      template += `IDENTITY & EXPRESSION (Sun-${synth.chartRuler.planet.toUpperCase()} ${synth.sunRulerAspect.aspect.toUpperCase()}):\n`;
+      template += `${generateCombinedAspectInterpretation(
+        synth.sunRulerAspect,
+        birthChart
+      )}\n\n`;
+    }
+
+    // Moon-Chart Ruler relationship
+    if (synth.moonRulerAspect) {
+      template += `EMOTIONS & EXPRESSION (Moon-${synth.chartRuler.planet.toUpperCase()} ${synth.moonRulerAspect.aspect.toUpperCase()}):\n`;
+      template += `${generateCombinedAspectInterpretation(
+        synth.moonRulerAspect,
+        birthChart
+      )}\n\n`;
+    }
+
+    template += `STRESS RESPONSE:\n`;
+    template += `When under stress, your ${
+      synth.ascendant.sign
+    } Ascendant may show ${
+      getSignMeaning(synth.ascendant.sign, "negative")?.core ||
+      "defensive patterns"
+    }, `;
+    template += `while your ${synth.moon.sign} Moon reacts with ${
+      getSignMeaning(synth.moon.sign, "negative")?.core || "emotional patterns"
+    }. `;
+    if (synth.chartRuler) {
+      template += `Your chart ruler ${synth.chartRuler.planet.toUpperCase()} in ${
+        synth.chartRuler.sign
+      } influences how you ${
+        getPlanetMeaning(synth.chartRuler.planet, "negative")?.core ||
+        "respond to challenges"
+      }.\n\n`;
+    } else {
+      template += `\n\n`;
+    }
+  }
+
+  template += `═══════════════════════════════════════════════════════════\n`;
+  template += `ASPECT-DRIVEN INTERPRETATIONS (Grouped by Theme)\n`;
+  template += `═══════════════════════════════════════════════════════════\n\n`;
+
+  // IDENTITY & EMOTIONS
+  if (interpretation.aspectGroups.identityEmotions.length > 0) {
+    template += `IDENTITY & EMOTIONS (Sun, Moon, Ascendant, Chart Ruler aspects):\n`;
+    template += `─────────────────────────────────────────────────────────────\n`;
+    interpretation.aspectGroups.identityEmotions.forEach((aspect) => {
+      template += `\n${aspect.planet1.toUpperCase()} ${aspect.aspect.toUpperCase()} ${aspect.planet2.toUpperCase()}:\n`;
+      template += `${generateCombinedAspectInterpretation(
+        aspect,
+        birthChart
+      )}\n`;
+    });
+    template += `\n`;
+  }
+
+  // MIND & COMMUNICATION
+  if (interpretation.aspectGroups.mindCommunication.length > 0) {
+    template += `MIND & COMMUNICATION (Mercury aspects):\n`;
+    template += `─────────────────────────────────────────────────────────────\n`;
+    interpretation.aspectGroups.mindCommunication.forEach((aspect) => {
+      template += `\n${aspect.planet1.toUpperCase()} ${aspect.aspect.toUpperCase()} ${aspect.planet2.toUpperCase()}:\n`;
+      template += `${generateCombinedAspectInterpretation(
+        aspect,
+        birthChart
+      )}\n`;
+    });
+    template += `\n`;
+  }
+
+  // LOVE & SEX
+  if (interpretation.aspectGroups.loveSex.length > 0) {
+    template += `LOVE & SEX (Venus, Mars aspects):\n`;
+    template += `─────────────────────────────────────────────────────────────\n`;
+    interpretation.aspectGroups.loveSex.forEach((aspect) => {
+      template += `\n${aspect.planet1.toUpperCase()} ${aspect.aspect.toUpperCase()} ${aspect.planet2.toUpperCase()}:\n`;
+      template += `${generateCombinedAspectInterpretation(
+        aspect,
+        birthChart
+      )}\n`;
+    });
+    template += `\n`;
+  }
+
+  // GROWTH & CHALLENGES
+  if (interpretation.aspectGroups.growthChallenges.length > 0) {
+    template += `GROWTH & CHALLENGES (Jupiter, Saturn, Outer Planets aspects):\n`;
+    template += `─────────────────────────────────────────────────────────────\n`;
+    interpretation.aspectGroups.growthChallenges.forEach((aspect) => {
+      template += `\n${aspect.planet1.toUpperCase()} ${aspect.aspect.toUpperCase()} ${aspect.planet2.toUpperCase()}:\n`;
+      template += `${generateCombinedAspectInterpretation(
+        aspect,
+        birthChart
+      )}\n`;
+    });
+    template += `\n`;
+  }
+
+  template += `═══════════════════════════════════════════════════════════\n`;
+  template += `PLANET SIGNIFICANCE SCORES (Higher = More Important)\n`;
+  template += `═══════════════════════════════════════════════════════════\n`;
+  const sortedPlanets = Object.entries(interpretation.planetSignificance)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
+  sortedPlanets.forEach(([planet, score]) => {
+    template += `${planet.toUpperCase()}: ${score.toFixed(2)} (${
+      score >= 0.7 ? "HIGH" : score >= 0.5 ? "MEDIUM" : "LOW"
+    } significance)\n`;
+  });
+  template += `\n`;
+
+  template += `═══════════════════════════════════════════════════════════\n`;
+  template += `PLACEMENT DETAILS (Technical Reference)\n`;
+  template += `═══════════════════════════════════════════════════════════\n\n`;
+
+  // Sort planets by significance for emphasis
+  const planetEntries = Object.entries(interpretation.planets).sort((a, b) => {
+    const scoreA = interpretation.planetSignificance[a[0]] || 0;
+    const scoreB = interpretation.planetSignificance[b[0]] || 0;
+    return scoreB - scoreA;
+  });
+
+  for (const [planetKey, planet] of planetEntries) {
+    template += `${planet.name} in ${planet.sign} (House ${planet.house})`;
     if (planet.isRetrograde) {
       template += ` [Retrograde]`;
     }
-    template += ` [Aspect Polarity: ${planet.aspectPolarity}]:\n`;
+    template += ` [Significance: ${(
+      interpretation.planetSignificance[planetKey] || 0
+    ).toFixed(2)}]\n`;
 
-    template += `POSITIVE QUALITIES:\n`;
-    template += `  Planet: ${planet.positive.planetCore}\n`;
-    template += `  Sign: ${planet.positive.signCore}\n`;
-    template += `  House: ${planet.positive.houseCore}\n`;
-    template += `  Interpretation: ${planet.positive.interpretation}\n`;
-    template += `  Themes: ${planet.positive.planetThemes.join(
-      ", "
-    )} + ${planet.positive.signThemes.join(
-      ", "
-    )} + ${planet.positive.houseThemes.join(", ")}\n`;
-
-    template += `NEGATIVE QUALITIES:\n`;
-    template += `  Planet: ${planet.negative.planetCore}\n`;
-    template += `  Sign: ${planet.negative.signCore}\n`;
-    template += `  House: ${planet.negative.houseCore}\n`;
-    template += `  Interpretation: ${planet.negative.interpretation}\n`;
-    template += `  Themes: ${planet.negative.planetThemes.join(
-      ", "
-    )} + ${planet.negative.signThemes.join(
-      ", "
-    )} + ${planet.negative.houseThemes.join(", ")}\n`;
+    template += `  Planet Energy: ${planet.positive.planetCore}\n`;
+    template += `  Sign Expression: ${planet.positive.signCore}\n`;
+    template += `  House Context: ${planet.positive.houseCore}\n`;
 
     if (planet.aspects && planet.aspects.length > 0) {
       template += `  Aspects: ${planet.aspects
@@ -351,30 +534,307 @@ function formatInterpretationForAI(interpretation) {
         )
         .join(", ")}\n`;
     }
+    template += `\n`;
   }
 
-  template += `\n\nELEMENTAL BALANCE:\n`;
+  template += `ELEMENTAL BALANCE:\n`;
   template += `Dominant Element: ${interpretation.elementalBalance.dominant}\n`;
-  template += `Lacking Element: ${interpretation.elementalBalance.lacking}\n`;
-  template += `Distribution: ${JSON.stringify(
-    interpretation.elementalBalance.distribution
-  )}\n\n`;
+  template += `Lacking Element: ${interpretation.elementalBalance.lacking}\n\n`;
 
   template += `MODAL BALANCE:\n`;
-  template += `Dominant Modality: ${interpretation.modalBalance.dominant}\n`;
-  template += `Distribution: ${JSON.stringify(
-    interpretation.modalBalance.distribution
-  )}\n\n`;
-
-  template += `KEY THEMES:\n`;
-  interpretation.keyThemes.forEach((theme) => {
-    template += `- ${theme}\n`;
-  });
-
-  template += `\n\nASPECTS:\n`;
-  // Aspects will be added when we process them
+  template += `Dominant Modality: ${interpretation.modalBalance.dominant}\n\n`;
 
   return template;
+}
+
+/**
+ * Get chart ruler based on ascendant sign
+ * @param {string} ascendantSign - Ascendant sign
+ * @returns {string} Chart ruler planet name
+ */
+function getChartRuler(ascendantSign) {
+  const rulers = {
+    Aries: "mars",
+    Taurus: "venus",
+    Gemini: "mercury",
+    Cancer: "moon",
+    Leo: "sun",
+    Virgo: "mercury",
+    Libra: "venus",
+    Scorpio: "mars", // Traditional: Mars, Modern: Pluto
+    Sagittarius: "jupiter",
+    Capricorn: "saturn",
+    Aquarius: "saturn", // Traditional: Saturn, Modern: Uranus
+    Pisces: "jupiter", // Traditional: Jupiter, Modern: Neptune
+  };
+  return rulers[ascendantSign] || "sun";
+}
+
+/**
+ * Group aspects by thematic category
+ * @param {array} aspects - All aspects in chart
+ * @param {string} chartRuler - Chart ruler planet
+ * @returns {object} Grouped aspects
+ */
+function groupAspectsByTheme(aspects, chartRuler) {
+  const groups = {
+    identityEmotions: [],
+    mindCommunication: [],
+    loveSex: [],
+    growthChallenges: [],
+  };
+
+  const identityPlanets = ["sun", "moon", "ascendant", chartRuler];
+  const mindPlanets = ["mercury"];
+  const lovePlanets = ["venus", "mars"];
+  const growthPlanets = ["jupiter", "saturn", "uranus", "neptune", "pluto"];
+
+  aspects.forEach((aspect) => {
+    const p1 = aspect.planet1.toLowerCase();
+    const p2 = aspect.planet2.toLowerCase();
+
+    // Identity and emotions
+    if (
+      identityPlanets.includes(p1) ||
+      identityPlanets.includes(p2) ||
+      identityPlanets.some((p) => p1.includes(p) || p2.includes(p))
+    ) {
+      groups.identityEmotions.push(aspect);
+    }
+
+    // Mind and communication
+    if (mindPlanets.includes(p1) || mindPlanets.includes(p2)) {
+      groups.mindCommunication.push(aspect);
+    }
+
+    // Love and sex
+    if (lovePlanets.includes(p1) || lovePlanets.includes(p2)) {
+      groups.loveSex.push(aspect);
+    }
+
+    // Growth and challenges
+    if (growthPlanets.includes(p1) || growthPlanets.includes(p2)) {
+      groups.growthChallenges.push(aspect);
+    }
+  });
+
+  return groups;
+}
+
+/**
+ * Generate core personality synthesis from luminaries and chart ruler
+ * @param {object} birthChart - Birth chart data
+ * @param {object} interpretation - Current interpretation object
+ * @returns {object} Core synthesis data
+ */
+function generateCoreSynthesis(birthChart, interpretation) {
+  const sun = birthChart.planets?.sun;
+  const moon = birthChart.planets?.moon;
+  const ascendant = interpretation.angles.ascendant;
+  const chartRulerName = ascendant.ruler;
+  const chartRuler = birthChart.planets?.[chartRulerName];
+
+  if (!sun || !moon) {
+    return null;
+  }
+
+  // Chart ruler might not exist if it's a non-standard ruler
+  if (!chartRuler) {
+    console.warn(`Chart ruler ${chartRulerName} not found in planets`);
+  }
+
+  // Get aspects involving these key points
+  const allAspects = birthChart.aspects || [];
+  const keyAspects = allAspects.filter((a) => {
+    const p1 = a.planet1.toLowerCase();
+    const p2 = a.planet2.toLowerCase();
+    return (
+      p1 === "sun" ||
+      p2 === "sun" ||
+      p1 === "moon" ||
+      p2 === "moon" ||
+      p1 === chartRulerName ||
+      p2 === chartRulerName
+    );
+  });
+
+  // Find Sun-Moon aspect
+  const sunMoonAspect = allAspects.find(
+    (a) =>
+      (a.planet1.toLowerCase() === "sun" &&
+        a.planet2.toLowerCase() === "moon") ||
+      (a.planet1.toLowerCase() === "moon" && a.planet2.toLowerCase() === "sun")
+  );
+
+  // Find Sun-Chart Ruler aspect
+  let sunRulerAspect = null;
+  if (chartRuler) {
+    sunRulerAspect = allAspects.find(
+      (a) =>
+        (a.planet1.toLowerCase() === "sun" &&
+          a.planet2.toLowerCase() === chartRulerName) ||
+        (a.planet1.toLowerCase() === chartRulerName &&
+          a.planet2.toLowerCase() === "sun")
+    );
+  }
+
+  // Find Moon-Chart Ruler aspect
+  let moonRulerAspect = null;
+  if (chartRuler) {
+    moonRulerAspect = allAspects.find(
+      (a) =>
+        (a.planet1.toLowerCase() === "moon" &&
+          a.planet2.toLowerCase() === chartRulerName) ||
+        (a.planet1.toLowerCase() === chartRulerName &&
+          a.planet2.toLowerCase() === "moon")
+    );
+  }
+
+  return {
+    sun: {
+      sign: sun.sign,
+      house: sun.house,
+      element: sun.element,
+    },
+    moon: {
+      sign: moon.sign,
+      house: moon.house,
+      element: moon.element,
+    },
+    ascendant: {
+      sign: ascendant.sign,
+      element: ascendant.element,
+    },
+    chartRuler: chartRuler
+      ? {
+          planet: chartRulerName,
+          sign: chartRuler.sign,
+          house: chartRuler.house,
+          element: chartRuler.element,
+        }
+      : null,
+    keyAspects: keyAspects,
+    sunMoonAspect: sunMoonAspect,
+    sunRulerAspect: sunRulerAspect,
+    moonRulerAspect: moonRulerAspect,
+  };
+}
+
+/**
+ * Generate combined aspect interpretation
+ * @param {object} aspect - Aspect data
+ * @param {object} birthChart - Birth chart data
+ * @returns {string} Combined interpretation text
+ */
+function generateCombinedAspectInterpretation(aspect, birthChart) {
+  const p1Key = aspect.planet1.toLowerCase();
+  const p2Key = aspect.planet2.toLowerCase();
+
+  // Handle ascendant as special case
+  let planet1, planet2;
+  if (p1Key === "ascendant") {
+    planet1 = {
+      sign: birthChart.angles?.ascendant?.sign,
+      house: 1,
+      element: birthChart.angles?.ascendant?.element,
+    };
+  } else {
+    planet1 = birthChart.planets?.[p1Key];
+  }
+
+  if (p2Key === "ascendant") {
+    planet2 = {
+      sign: birthChart.angles?.ascendant?.sign,
+      house: 1,
+      element: birthChart.angles?.ascendant?.element,
+    };
+  } else {
+    planet2 = birthChart.planets?.[p2Key];
+  }
+
+  if (!planet1 || !planet2) return "";
+
+  const planet1Name =
+    aspect.planet1.charAt(0).toUpperCase() + aspect.planet1.slice(1);
+  const planet2Name =
+    aspect.planet2.charAt(0).toUpperCase() + aspect.planet2.slice(1);
+  const aspectStyle = getAspectStyle(aspect.aspect);
+
+  const planet1Sign = getSignMeaning(planet1.sign, "positive");
+  const planet2Sign = getSignMeaning(planet2.sign, "positive");
+  const planet1Planet = getPlanetMeaning(p1Key, "positive");
+  const planet2Planet = getPlanetMeaning(p2Key, "positive");
+
+  // Generate interpretation based on aspect type
+  let interpretation = "";
+
+  if (aspectStyle.polarity === "merged") {
+    interpretation = `Your ${planet1Name} in ${planet1.sign} and ${planet2Name} in ${planet2.sign} are merged through a conjunction. `;
+    interpretation += `This creates a unified expression where ${
+      planet1Planet?.core || "the planet's energy"
+    } and ${
+      planet2Planet?.core || "the other planet's energy"
+    } work together as one force. `;
+    interpretation += `The ${
+      planet1.sign
+    } expression of ${planet1Name} blends with the ${
+      planet2.sign
+    } expression of ${planet2Name}, creating a combined energy that is both ${
+      planet1Sign?.core || ""
+    } and ${planet2Sign?.core || ""}.`;
+  } else if (aspectStyle.polarity === "polarized") {
+    interpretation = `Your ${planet1Name} in ${planet1.sign} and ${planet2Name} in ${planet2.sign} are in opposition, creating a polarized dynamic. `;
+    interpretation += `Your ${
+      planet1Planet?.core || "identity"
+    } expressed through ${planet1.sign} seeks ${
+      planet1Sign?.core || "one expression"
+    }, while your ${planet2Planet?.core || "emotions"} expressed through ${
+      planet2.sign
+    } need ${planet2Sign?.core || "another expression"}. `;
+    interpretation += `This creates tension where you may feel pulled between ${
+      planet1Sign?.keywords?.[0] || "one need"
+    } and ${
+      planet2Sign?.keywords?.[0] || "another need"
+    }, requiring you to find balance between these opposing forces.`;
+  } else if (aspectStyle.polarity === "friction") {
+    interpretation = `Your ${planet1Name} in ${planet1.sign} and ${planet2Name} in ${planet2.sign} form a square, creating friction and challenge. `;
+    interpretation += `Your ${planet1Planet?.core || "identity"} wants ${
+      planet1Sign?.core || "one expression"
+    }, while your ${planet2Planet?.core || "emotions"} need ${
+      planet2Sign?.core || "another expression"
+    }. `;
+    interpretation += `This square creates internal conflict where you may vacillate between ${
+      planet1Sign?.keywords?.[0] || "one drive"
+    } and ${
+      planet2Sign?.keywords?.[0] || "another drive"
+    }, pushing you to grow through the tension between these competing needs.`;
+  } else if (aspectStyle.polarity === "flowing") {
+    interpretation = `Your ${planet1Name} in ${planet1.sign} and ${planet2Name} in ${planet2.sign} form a trine, creating flowing harmony. `;
+    interpretation += `Your ${
+      planet1Planet?.core || "identity"
+    } expressed through ${planet1.sign} naturally supports your ${
+      planet2Planet?.core || "emotions"
+    } expressed through ${planet2.sign}. `;
+    interpretation += `This creates ease where ${
+      planet1Sign?.keywords?.[0] || "one quality"
+    } and ${
+      planet2Sign?.keywords?.[0] || "another quality"
+    } work together seamlessly, allowing you to express both energies with natural grace.`;
+  } else if (aspectStyle.polarity === "cooperative") {
+    interpretation = `Your ${planet1Name} in ${planet1.sign} and ${planet2Name} in ${planet2.sign} form a sextile, creating cooperative energy. `;
+    interpretation += `Your ${planet1Planet?.core || "identity"} and ${
+      planet2Planet?.core || "emotions"
+    } can work together harmoniously, with ${
+      planet1.sign
+    } expression supporting ${planet2.sign} expression. `;
+    interpretation += `This creates opportunities where you can integrate ${
+      planet1Sign?.keywords?.[0] || "one quality"
+    } with ${
+      planet2Sign?.keywords?.[0] || "another quality"
+    } through conscious effort and awareness.`;
+  }
+
+  return interpretation;
 }
 
 module.exports = {
@@ -383,4 +843,7 @@ module.exports = {
   calculateElementalBalance,
   calculateModalBalance,
   extractKeyThemes,
+  generateCoreSynthesis,
+  generateCombinedAspectInterpretation,
+  groupAspectsByTheme,
 };

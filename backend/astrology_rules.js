@@ -4532,6 +4532,17 @@ function getPlanetSignInterpretation(planet, sign, polarity = "positive") {
 }
 
 /**
+ * Aspect styles with polarity, tension, and strength
+ */
+const aspectStyles = {
+  conjunction: { polarity: "merged", tension: "neutral", strength: 1.0 },
+  opposition: { polarity: "polarized", tension: "high", strength: 0.9 },
+  square: { polarity: "friction", tension: "high", strength: 0.8 },
+  trine: { polarity: "flowing", tension: "low", strength: 0.7 },
+  sextile: { polarity: "cooperative", tension: "low", strength: 0.5 },
+};
+
+/**
  * Determine polarity based on aspect type
  * @param {string} aspectType - Aspect type (e.g., "conjunction", "opposition", "square", "trine", "sextile")
  * @returns {string} "positive" or "negative"
@@ -4550,14 +4561,79 @@ function getAspectPolarity(aspectType) {
   return "positive";
 }
 
+/**
+ * Get aspect style information
+ * @param {string} aspectType - Aspect type
+ * @returns {object} Aspect style object with polarity, tension, strength
+ */
+function getAspectStyle(aspectType) {
+  const normalized = aspectType?.toLowerCase();
+  return (
+    aspectStyles[normalized] || {
+      polarity: "unknown",
+      tension: "neutral",
+      strength: 0.5,
+    }
+  );
+}
+
+/**
+ * Calculate planet significance score based on aspects
+ * @param {string} planetName - Planet name
+ * @param {array} allAspects - All aspects in the chart
+ * @param {object} chartData - Chart data with planets and angles
+ * @returns {number} Significance score (0-1)
+ */
+function calculatePlanetSignificance(planetName, allAspects, chartData) {
+  const planetAspects = allAspects.filter(
+    (a) => a.planet1 === planetName || a.planet2 === planetName
+  );
+
+  if (planetAspects.length === 0) return 0.3; // Base score for unaspected planets
+
+  let score = 0;
+  const luminaries = ["sun", "moon"];
+  const ascendant = chartData?.angles?.ascendant?.ruler || null;
+
+  planetAspects.forEach((aspect) => {
+    const style = getAspectStyle(aspect.aspect);
+    const otherPlanet =
+      aspect.planet1 === planetName ? aspect.planet2 : aspect.planet1;
+
+    // Base score from aspect strength
+    score += style.strength * 0.2;
+
+    // Bonus for aspects to luminaries
+    if (luminaries.includes(otherPlanet.toLowerCase())) {
+      score += 0.3;
+    }
+
+    // Bonus for aspects to chart ruler
+    if (ascendant && otherPlanet.toLowerCase() === ascendant.toLowerCase()) {
+      score += 0.2;
+    }
+
+    // Bonus for challenging aspects (they create more dynamic energy)
+    if (style.tension === "high") {
+      score += 0.1;
+    }
+  });
+
+  // Normalize to 0-1 range
+  return Math.min(1.0, score);
+}
+
 module.exports = {
   planetMeanings,
   signMeanings,
   houseMeanings,
   planetSignCombinations,
+  aspectStyles,
   getPlanetMeaning,
   getSignMeaning,
   getHouseMeaning,
   getPlanetSignInterpretation,
   getAspectPolarity,
+  getAspectStyle,
+  calculatePlanetSignificance,
 };
