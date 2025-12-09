@@ -9,6 +9,14 @@ const {
   generateSystemPrompt,
 } = require("./chatgpt_template");
 const openai = require("./openai_service");
+const {
+  generateChartInterpretation,
+  formatInterpretationForAI,
+} = require("./chart_interpreter");
+const {
+  isFactualQuestion,
+  answerFactualQuestion,
+} = require("./factual_questions");
 
 // Debug logging for environment variables
 console.log("Environment variables loaded:");
@@ -220,17 +228,63 @@ app.post("/api/birth-chart", async (req, res) => {
     const { year, month, day, hour, minute, latitude, longitude, timezone } =
       req.body;
 
-    // Log parsed values
+    // Log parsed values with validation
+    const parsedYear = typeof year === "string" ? parseInt(year) : year;
+    const parsedMonth = typeof month === "string" ? parseInt(month) : month;
+    const parsedDay = typeof day === "string" ? parseInt(day) : day;
+    const parsedHour = typeof hour === "string" ? parseInt(hour) : hour;
+    const parsedMinute = typeof minute === "string" ? parseInt(minute) : minute;
+    const parsedLat =
+      typeof latitude === "string" ? parseFloat(latitude) : latitude;
+    const parsedLon =
+      typeof longitude === "string" ? parseFloat(longitude) : longitude;
+    const parsedTz =
+      typeof timezone === "string" ? parseFloat(timezone) : timezone;
+
+    console.log("=== BACKEND: Parsed birth chart request ===");
     console.log("Parsed values:", {
-      year: typeof year === "string" ? parseInt(year) : year,
-      month: typeof month === "string" ? parseInt(month) : month,
-      day: typeof day === "string" ? parseInt(day) : day,
-      hour: typeof hour === "string" ? parseInt(hour) : hour,
-      minute: typeof minute === "string" ? parseInt(minute) : minute,
-      latitude: typeof latitude === "string" ? parseFloat(latitude) : latitude,
-      longitude:
-        typeof longitude === "string" ? parseFloat(longitude) : longitude,
-      timezone: timezone,
+      year: parsedYear,
+      month: parsedMonth,
+      day: parsedDay,
+      hour: parsedHour,
+      minute: parsedMinute,
+      latitude: parsedLat,
+      longitude: parsedLon,
+      timezone: parsedTz,
+    });
+    console.log("Sending to AstrologyAPI.com:", {
+      day: parseInt(day),
+      month: parseInt(month),
+      year: parseInt(year),
+      hour: parseInt(hour),
+      min: parseInt(minute),
+      lat: parseFloat(latitude),
+      lon: parseFloat(longitude),
+      tzone: parseFloat(timezone || 0),
+    });
+    console.log("===========================================");
+
+    // Log validation checks
+    console.log("Validation checks:", {
+      dateValid:
+        parsedYear > 1900 &&
+        parsedYear < 2100 &&
+        parsedMonth >= 1 &&
+        parsedMonth <= 12 &&
+        parsedDay >= 1 &&
+        parsedDay <= 31,
+      timeValid:
+        parsedHour >= 0 &&
+        parsedHour < 24 &&
+        parsedMinute >= 0 &&
+        parsedMinute < 60,
+      coordinatesValid:
+        parsedLat >= -90 &&
+        parsedLat <= 90 &&
+        parsedLon >= -180 &&
+        parsedLon <= 180,
+      timezoneValid: parsedTz >= -12 && parsedTz <= 14,
+      houseSystem: "placidus", // Confirmed house system
     });
 
     // Validate required fields
@@ -281,6 +335,8 @@ app.post("/api/birth-chart", async (req, res) => {
       );
 
       // Then, get house positions using the tropical endpoint
+      // Note: AstrologyAPI.com defaults to Placidus house system if not specified
+      // To use a different system, add 'house_system' parameter (e.g., 'placidus', 'koch', 'equal', 'whole_signs')
       const housesResponse = await axios.post(
         "https://json.astrologyapi.com/v1/house_cusps/tropical",
         {
@@ -292,6 +348,7 @@ app.post("/api/birth-chart", async (req, res) => {
           lat: parseFloat(latitude),
           lon: parseFloat(longitude),
           tzone: parseFloat(timezone || 0),
+          house_system: "placidus", // Explicitly specify Placidus (default, but being explicit)
         },
         {
           headers: generateAuth(),
@@ -485,18 +542,20 @@ app.post("/api/birth-chart", async (req, res) => {
         JSON.stringify(birthChart, null, 2)
       );
 
-      // Get ChatGPT interpretation
-      const interpretation = await getBirthChartInterpretation(birthChart);
+      // Generate deterministic interpretation using hardcoded rules
+      const deterministicInterpretation =
+        generateChartInterpretation(birthChart);
+      const interpretationTemplate = formatInterpretationForAI(
+        deterministicInterpretation
+      );
 
-      // Add interpretation to the response
+      // Add deterministic interpretation to the response
       const response = {
         ...birthChart,
-        interpretation: interpretation.success
-          ? interpretation.interpretation
-          : null,
-        interpretationError: !interpretation.success
-          ? interpretation.error
-          : null,
+        deterministicInterpretation: deterministicInterpretation,
+        interpretationTemplate: interpretationTemplate,
+        // Keep raw interpretation field for backward compatibility, but use deterministic template
+        interpretation: interpretationTemplate,
       };
 
       // Return the transformed API response
@@ -561,14 +620,44 @@ app.post("/api/chat", async (req, res) => {
       });
     }
 
-    // Format the birth chart data for ChatGPT
-    const formattedData = formatBirthChartForChatGPT(birthChart);
+    // Check if this is a factual question that can be answered deterministically
+    if (isFactualQuestion(message)) {
+      const factualAnswer = answerFactualQuestion(message, birthChart);
+      if (factualAnswer) {
+        console.log("[FACTUAL] Answered factual question deterministically");
+        return res.json({
+          response: factualAnswer,
+          isFactual: true,
+        });
+      }
+      // If it matched a pattern but couldn't answer, fall through to AI
+    }
+
+    // Generate deterministic interpretation if not already present
+    let interpretationTemplate;
+    if (birthChart.interpretationTemplate) {
+      // Use existing deterministic template
+      interpretationTemplate = birthChart.interpretationTemplate;
+    } else if (birthChart.deterministicInterpretation) {
+      // Format existing deterministic interpretation
+      interpretationTemplate = formatInterpretationForAI(
+        birthChart.deterministicInterpretation
+      );
+    } else {
+      // Generate new deterministic interpretation from raw chart data
+      const deterministicInterpretation =
+        generateChartInterpretation(birthChart);
+      interpretationTemplate = formatInterpretationForAI(
+        deterministicInterpretation
+      );
+    }
 
     // Create the messages array for the chat completion
+    // AI now receives the deterministic template, not raw data
     const messages = [
       {
         role: "system",
-        content: generateSystemPrompt(formattedData),
+        content: generateSystemPrompt(interpretationTemplate),
       },
     ];
 
@@ -584,13 +673,14 @@ app.post("/api/chat", async (req, res) => {
     });
 
     // Make the API call to OpenAI
+    // Adjusted parameters for comprehensive, detailed responses
     const completion = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
       messages: messages,
-      temperature: 0.7,
-      max_tokens: 1000,
-      presence_penalty: 0.6,
-      frequency_penalty: 0.3,
+      temperature: 0.7, // Higher for more varied, detailed responses
+      max_tokens: 1000, // Increased significantly to allow comprehensive responses (400-600 words)
+      presence_penalty: 0.1, // Lower to allow natural flow
+      frequency_penalty: 0.0, // No penalty to allow full expression
     });
 
     // Return the response
