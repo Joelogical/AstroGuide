@@ -349,6 +349,17 @@ function formatInterpretationForAI(interpretation, birthChart) {
   let template = `BIRTH CHART INTERPRETATION TEMPLATE\n`;
   template += `=====================================\n\n`;
   template += `⚠️ CRITICAL INSTRUCTIONS FOR HOLISTIC INTERPRETATION:\n`;
+  template += `\n`;
+  template += `🚫 NEVER DO THIS (PLANET-BY-PLANET BREAKDOWN):\n`;
+  template += `- "Your Sun in Gemini... [paragraph about Sun]"\n`;
+  template += `- "Your Moon in Virgo... [paragraph about Moon]"\n`;
+  template += `- "Your Mercury... [paragraph about Mercury]"\n`;
+  template += `This creates a fragmented, checklist-style response. DO NOT structure your response this way.\n\n`;
+  template += `✅ INSTEAD DO THIS (UNIFIED SYNTHESIS):\n`;
+  template += `- Weave multiple placements together in each paragraph\n`;
+  template += `- Show how Sun, Moon, Mercury, Venus, etc. all interconnect\n`;
+  template += `- Create a unified narrative, not separate paragraphs for each planet\n`;
+  template += `- Each paragraph should integrate 2-3+ chart elements\n\n`;
   holisticInstructions.forEach((instruction, index) => {
     template += `${index + 1}. ${instruction}\n`;
   });
