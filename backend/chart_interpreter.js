@@ -11,6 +11,19 @@ const {
   calculatePlanetSignificance,
 } = require("./astrology_rules");
 
+const {
+  getPlanetThemeGroups,
+  getAspectTemplate,
+  replaceTemplatePlaceholders,
+  holisticInstructions,
+  coreSynthesisConfig,
+  templateSections,
+  significanceThresholds,
+  stressResponseTemplate,
+  rulerInfluenceTemplate,
+  noAspectTemplates,
+} = require("./holistic_config");
+
 /**
  * Process raw birth chart data and generate deterministic interpretations
  * @param {object} birthChart - The processed birth chart object
@@ -336,13 +349,10 @@ function formatInterpretationForAI(interpretation, birthChart) {
   let template = `BIRTH CHART INTERPRETATION TEMPLATE\n`;
   template += `=====================================\n\n`;
   template += `⚠️ CRITICAL INSTRUCTIONS FOR HOLISTIC INTERPRETATION:\n`;
-  template += `1. Start with the CORE PERSONALITY SYNTHESIS - this is the foundation.\n`;
-  template += `2. Use ASPECT-DRIVEN narrative - combine placements that aspect each other.\n`;
-  template += `3. Avoid repeating isolated placement descriptions when aspects already cover them.\n`;
-  template += `4. Group aspects by theme (Identity/Emotions, Mind/Communication, Love/Sex, Growth/Challenges).\n`;
-  template += `5. Use planet significance scores to emphasize heavily aspected planets.\n`;
-  template += `6. Include BOTH positive and negative qualities throughout.\n`;
-  template += `7. Show relationships between chart pieces, not just isolated descriptions.\n\n`;
+  holisticInstructions.forEach((instruction, index) => {
+    template += `${index + 1}. ${instruction}\n`;
+  });
+  template += `\n`;
 
   template += `CHART INFORMATION:\n`;
   template += `Date: ${interpretation.chartInfo.date}\n`;
@@ -353,10 +363,10 @@ function formatInterpretationForAI(interpretation, birthChart) {
   if (interpretation.coreSynthesis) {
     const synth = interpretation.coreSynthesis;
     template += `═══════════════════════════════════════════════════════════\n`;
-    template += `CORE PERSONALITY SYNTHESIS (Luminaries + Chart Ruler)\n`;
+    template += `${coreSynthesisConfig.sectionTitle}\n`;
     template += `═══════════════════════════════════════════════════════════\n\n`;
 
-    template += `FOUNDATION:\n`;
+    template += `${coreSynthesisConfig.foundationLabel}\n`;
     template += `- Sun in ${synth.sun.sign} (House ${synth.sun.house}): Core identity expression\n`;
     template += `- Moon in ${synth.moon.sign} (House ${synth.moon.house}): Emotional nature\n`;
     template += `- Ascendant in ${synth.ascendant.sign}: Outer personality and first impressions\n`;
@@ -371,25 +381,40 @@ function formatInterpretationForAI(interpretation, birthChart) {
     // Sun-Moon relationship
     if (synth.sunMoonAspect) {
       const aspectStyle = getAspectStyle(synth.sunMoonAspect.aspect);
-      template += `IDENTITY & EMOTIONS (Sun-Moon ${synth.sunMoonAspect.aspect.toUpperCase()}):\n`;
+      template +=
+        replaceTemplatePlaceholders(coreSynthesisConfig.identityEmotionsLabel, {
+          aspect: synth.sunMoonAspect.aspect.toUpperCase(),
+        }) + `\n`;
       template += `Aspect Style: ${aspectStyle.polarity}, Tension: ${aspectStyle.tension}, Strength: ${aspectStyle.strength}\n`;
       template += `${generateCombinedAspectInterpretation(
         synth.sunMoonAspect,
         birthChart
       )}\n\n`;
     } else {
-      template += `IDENTITY & EMOTIONS (Sun-Moon):\n`;
-      template += `Your ${synth.sun.sign} Sun makes you ${
-        getSignMeaning(synth.sun.sign, "positive")?.core || ""
-      }, while your ${synth.moon.sign} Moon needs ${
-        getSignMeaning(synth.moon.sign, "positive")?.core || ""
-      }. `;
-      template += `Without a major aspect between them, these energies operate somewhat independently, creating a dynamic where your identity and emotional needs may not always align.\n\n`;
+      template += `${coreSynthesisConfig.identityEmotionsNoAspectLabel}\n`;
+      const sunPositive =
+        getSignMeaning(synth.sun.sign, "positive")?.core || "";
+      const moonPositive =
+        getSignMeaning(synth.moon.sign, "positive")?.core || "";
+      template +=
+        replaceTemplatePlaceholders(noAspectTemplates.sunMoon, {
+          sunSign: synth.sun.sign,
+          sunPositive: sunPositive,
+          moonSign: synth.moon.sign,
+          moonPositive: moonPositive,
+        }) + `\n\n`;
     }
 
     // Sun-Chart Ruler relationship
-    if (synth.sunRulerAspect) {
-      template += `IDENTITY & EXPRESSION (Sun-${synth.chartRuler.planet.toUpperCase()} ${synth.sunRulerAspect.aspect.toUpperCase()}):\n`;
+    if (synth.sunRulerAspect && synth.chartRuler) {
+      template +=
+        replaceTemplatePlaceholders(
+          coreSynthesisConfig.identityExpressionLabel,
+          {
+            ruler: synth.chartRuler.planet.toUpperCase(),
+            aspect: synth.sunRulerAspect.aspect.toUpperCase(),
+          }
+        ) + `\n`;
       template += `${generateCombinedAspectInterpretation(
         synth.sunRulerAspect,
         birthChart
@@ -397,43 +422,62 @@ function formatInterpretationForAI(interpretation, birthChart) {
     }
 
     // Moon-Chart Ruler relationship
-    if (synth.moonRulerAspect) {
-      template += `EMOTIONS & EXPRESSION (Moon-${synth.chartRuler.planet.toUpperCase()} ${synth.moonRulerAspect.aspect.toUpperCase()}):\n`;
+    if (synth.moonRulerAspect && synth.chartRuler) {
+      template +=
+        replaceTemplatePlaceholders(
+          coreSynthesisConfig.emotionsExpressionLabel,
+          {
+            ruler: synth.chartRuler.planet.toUpperCase(),
+            aspect: synth.moonRulerAspect.aspect.toUpperCase(),
+          }
+        ) + `\n`;
       template += `${generateCombinedAspectInterpretation(
         synth.moonRulerAspect,
         birthChart
       )}\n\n`;
     }
 
-    template += `STRESS RESPONSE:\n`;
-    template += `When under stress, your ${
-      synth.ascendant.sign
-    } Ascendant may show ${
+    template += `${coreSynthesisConfig.stressResponseLabel}\n`;
+    const ascendantNegative =
       getSignMeaning(synth.ascendant.sign, "negative")?.core ||
-      "defensive patterns"
-    }, `;
-    template += `while your ${synth.moon.sign} Moon reacts with ${
-      getSignMeaning(synth.moon.sign, "negative")?.core || "emotional patterns"
-    }. `;
+      "defensive patterns";
+    const moonNegative =
+      getSignMeaning(synth.moon.sign, "negative")?.core || "emotional patterns";
+
+    let rulerInfluence = "";
     if (synth.chartRuler) {
-      template += `Your chart ruler ${synth.chartRuler.planet.toUpperCase()} in ${
-        synth.chartRuler.sign
-      } influences how you ${
+      const rulerNegative =
         getPlanetMeaning(synth.chartRuler.planet, "negative")?.core ||
-        "respond to challenges"
-      }.\n\n`;
-    } else {
-      template += `\n\n`;
+        "respond to challenges";
+      rulerInfluence = replaceTemplatePlaceholders(rulerInfluenceTemplate, {
+        rulerPlanet: synth.chartRuler.planet.toUpperCase(),
+        rulerSign: synth.chartRuler.sign,
+        rulerNegative: rulerNegative,
+      });
     }
+
+    template +=
+      replaceTemplatePlaceholders(stressResponseTemplate, {
+        ascendantSign: synth.ascendant.sign,
+        ascendantNegative: ascendantNegative,
+        moonSign: synth.moon.sign,
+        moonNegative: moonNegative,
+        rulerInfluence: rulerInfluence,
+      }) + `\n\n`;
   }
 
   template += `═══════════════════════════════════════════════════════════\n`;
-  template += `ASPECT-DRIVEN INTERPRETATIONS (Grouped by Theme)\n`;
+  template += `${templateSections.aspectDriven}\n`;
   template += `═══════════════════════════════════════════════════════════\n\n`;
+
+  // Get theme groups configuration
+  const themeGroups = getPlanetThemeGroups(
+    interpretation.angles.ascendant.ruler
+  );
 
   // IDENTITY & EMOTIONS
   if (interpretation.aspectGroups.identityEmotions.length > 0) {
-    template += `IDENTITY & EMOTIONS (Sun, Moon, Ascendant, Chart Ruler aspects):\n`;
+    template += `${themeGroups.identityEmotions.label} (${themeGroups.identityEmotions.description}):\n`;
     template += `─────────────────────────────────────────────────────────────\n`;
     interpretation.aspectGroups.identityEmotions.forEach((aspect) => {
       template += `\n${aspect.planet1.toUpperCase()} ${aspect.aspect.toUpperCase()} ${aspect.planet2.toUpperCase()}:\n`;
@@ -447,7 +491,7 @@ function formatInterpretationForAI(interpretation, birthChart) {
 
   // MIND & COMMUNICATION
   if (interpretation.aspectGroups.mindCommunication.length > 0) {
-    template += `MIND & COMMUNICATION (Mercury aspects):\n`;
+    template += `${themeGroups.mindCommunication.label} (${themeGroups.mindCommunication.description}):\n`;
     template += `─────────────────────────────────────────────────────────────\n`;
     interpretation.aspectGroups.mindCommunication.forEach((aspect) => {
       template += `\n${aspect.planet1.toUpperCase()} ${aspect.aspect.toUpperCase()} ${aspect.planet2.toUpperCase()}:\n`;
@@ -461,7 +505,7 @@ function formatInterpretationForAI(interpretation, birthChart) {
 
   // LOVE & SEX
   if (interpretation.aspectGroups.loveSex.length > 0) {
-    template += `LOVE & SEX (Venus, Mars aspects):\n`;
+    template += `${themeGroups.loveSex.label} (${themeGroups.loveSex.description}):\n`;
     template += `─────────────────────────────────────────────────────────────\n`;
     interpretation.aspectGroups.loveSex.forEach((aspect) => {
       template += `\n${aspect.planet1.toUpperCase()} ${aspect.aspect.toUpperCase()} ${aspect.planet2.toUpperCase()}:\n`;
@@ -475,7 +519,7 @@ function formatInterpretationForAI(interpretation, birthChart) {
 
   // GROWTH & CHALLENGES
   if (interpretation.aspectGroups.growthChallenges.length > 0) {
-    template += `GROWTH & CHALLENGES (Jupiter, Saturn, Outer Planets aspects):\n`;
+    template += `${themeGroups.growthChallenges.label} (${themeGroups.growthChallenges.description}):\n`;
     template += `─────────────────────────────────────────────────────────────\n`;
     interpretation.aspectGroups.growthChallenges.forEach((aspect) => {
       template += `\n${aspect.planet1.toUpperCase()} ${aspect.aspect.toUpperCase()} ${aspect.planet2.toUpperCase()}:\n`;
@@ -488,20 +532,26 @@ function formatInterpretationForAI(interpretation, birthChart) {
   }
 
   template += `═══════════════════════════════════════════════════════════\n`;
-  template += `PLANET SIGNIFICANCE SCORES (Higher = More Important)\n`;
+  template += `${templateSections.planetSignificance}\n`;
   template += `═══════════════════════════════════════════════════════════\n`;
   const sortedPlanets = Object.entries(interpretation.planetSignificance)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5);
   sortedPlanets.forEach(([planet, score]) => {
-    template += `${planet.toUpperCase()}: ${score.toFixed(2)} (${
-      score >= 0.7 ? "HIGH" : score >= 0.5 ? "MEDIUM" : "LOW"
-    } significance)\n`;
+    let significanceLevel = "LOW";
+    if (score >= significanceThresholds.high) {
+      significanceLevel = "HIGH";
+    } else if (score >= significanceThresholds.medium) {
+      significanceLevel = "MEDIUM";
+    }
+    template += `${planet.toUpperCase()}: ${score.toFixed(
+      2
+    )} (${significanceLevel} significance)\n`;
   });
   template += `\n`;
 
   template += `═══════════════════════════════════════════════════════════\n`;
-  template += `PLACEMENT DETAILS (Technical Reference)\n`;
+  template += `${templateSections.placementDetails}\n`;
   template += `═══════════════════════════════════════════════════════════\n\n`;
 
   // Sort planets by significance for emphasis
@@ -584,10 +634,8 @@ function groupAspectsByTheme(aspects, chartRuler) {
     growthChallenges: [],
   };
 
-  const identityPlanets = ["sun", "moon", "ascendant", chartRuler];
-  const mindPlanets = ["mercury"];
-  const lovePlanets = ["venus", "mars"];
-  const growthPlanets = ["jupiter", "saturn", "uranus", "neptune", "pluto"];
+  // Get configured theme groups
+  const themeGroups = getPlanetThemeGroups(chartRuler);
 
   aspects.forEach((aspect) => {
     const p1 = aspect.planet1.toLowerCase();
@@ -595,25 +643,36 @@ function groupAspectsByTheme(aspects, chartRuler) {
 
     // Identity and emotions
     if (
-      identityPlanets.includes(p1) ||
-      identityPlanets.includes(p2) ||
-      identityPlanets.some((p) => p1.includes(p) || p2.includes(p))
+      themeGroups.identityEmotions.planets.includes(p1) ||
+      themeGroups.identityEmotions.planets.includes(p2) ||
+      themeGroups.identityEmotions.planets.some(
+        (p) => p1.includes(p) || p2.includes(p)
+      )
     ) {
       groups.identityEmotions.push(aspect);
     }
 
     // Mind and communication
-    if (mindPlanets.includes(p1) || mindPlanets.includes(p2)) {
+    if (
+      themeGroups.mindCommunication.planets.includes(p1) ||
+      themeGroups.mindCommunication.planets.includes(p2)
+    ) {
       groups.mindCommunication.push(aspect);
     }
 
     // Love and sex
-    if (lovePlanets.includes(p1) || lovePlanets.includes(p2)) {
+    if (
+      themeGroups.loveSex.planets.includes(p1) ||
+      themeGroups.loveSex.planets.includes(p2)
+    ) {
       groups.loveSex.push(aspect);
     }
 
     // Growth and challenges
-    if (growthPlanets.includes(p1) || growthPlanets.includes(p2)) {
+    if (
+      themeGroups.growthChallenges.planets.includes(p1) ||
+      themeGroups.growthChallenges.planets.includes(p2)
+    ) {
       groups.growthChallenges.push(aspect);
     }
   });
@@ -765,74 +824,28 @@ function generateCombinedAspectInterpretation(aspect, birthChart) {
   const planet1Planet = getPlanetMeaning(p1Key, "positive");
   const planet2Planet = getPlanetMeaning(p2Key, "positive");
 
-  // Generate interpretation based on aspect type
-  let interpretation = "";
+  // Get template for this aspect polarity
+  const templateObj = getAspectTemplate(aspectStyle.polarity);
 
-  if (aspectStyle.polarity === "merged") {
-    interpretation = `Your ${planet1Name} in ${planet1.sign} and ${planet2Name} in ${planet2.sign} are merged through a conjunction. `;
-    interpretation += `This creates a unified expression where ${
-      planet1Planet?.core || "the planet's energy"
-    } and ${
-      planet2Planet?.core || "the other planet's energy"
-    } work together as one force. `;
-    interpretation += `The ${
-      planet1.sign
-    } expression of ${planet1Name} blends with the ${
-      planet2.sign
-    } expression of ${planet2Name}, creating a combined energy that is both ${
-      planet1Sign?.core || ""
-    } and ${planet2Sign?.core || ""}.`;
-  } else if (aspectStyle.polarity === "polarized") {
-    interpretation = `Your ${planet1Name} in ${planet1.sign} and ${planet2Name} in ${planet2.sign} are in opposition, creating a polarized dynamic. `;
-    interpretation += `Your ${
-      planet1Planet?.core || "identity"
-    } expressed through ${planet1.sign} seeks ${
-      planet1Sign?.core || "one expression"
-    }, while your ${planet2Planet?.core || "emotions"} expressed through ${
-      planet2.sign
-    } need ${planet2Sign?.core || "another expression"}. `;
-    interpretation += `This creates tension where you may feel pulled between ${
-      planet1Sign?.keywords?.[0] || "one need"
-    } and ${
-      planet2Sign?.keywords?.[0] || "another need"
-    }, requiring you to find balance between these opposing forces.`;
-  } else if (aspectStyle.polarity === "friction") {
-    interpretation = `Your ${planet1Name} in ${planet1.sign} and ${planet2Name} in ${planet2.sign} form a square, creating friction and challenge. `;
-    interpretation += `Your ${planet1Planet?.core || "identity"} wants ${
-      planet1Sign?.core || "one expression"
-    }, while your ${planet2Planet?.core || "emotions"} need ${
-      planet2Sign?.core || "another expression"
-    }. `;
-    interpretation += `This square creates internal conflict where you may vacillate between ${
-      planet1Sign?.keywords?.[0] || "one drive"
-    } and ${
-      planet2Sign?.keywords?.[0] || "another drive"
-    }, pushing you to grow through the tension between these competing needs.`;
-  } else if (aspectStyle.polarity === "flowing") {
-    interpretation = `Your ${planet1Name} in ${planet1.sign} and ${planet2Name} in ${planet2.sign} form a trine, creating flowing harmony. `;
-    interpretation += `Your ${
-      planet1Planet?.core || "identity"
-    } expressed through ${planet1.sign} naturally supports your ${
-      planet2Planet?.core || "emotions"
-    } expressed through ${planet2.sign}. `;
-    interpretation += `This creates ease where ${
-      planet1Sign?.keywords?.[0] || "one quality"
-    } and ${
-      planet2Sign?.keywords?.[0] || "another quality"
-    } work together seamlessly, allowing you to express both energies with natural grace.`;
-  } else if (aspectStyle.polarity === "cooperative") {
-    interpretation = `Your ${planet1Name} in ${planet1.sign} and ${planet2Name} in ${planet2.sign} form a sextile, creating cooperative energy. `;
-    interpretation += `Your ${planet1Planet?.core || "identity"} and ${
-      planet2Planet?.core || "emotions"
-    } can work together harmoniously, with ${
-      planet1.sign
-    } expression supporting ${planet2.sign} expression. `;
-    interpretation += `This creates opportunities where you can integrate ${
-      planet1Sign?.keywords?.[0] || "one quality"
-    } with ${
-      planet2Sign?.keywords?.[0] || "another quality"
-    } through conscious effort and awareness.`;
-  }
+  // Prepare values for template replacement
+  const templateValues = {
+    planet1Name: planet1Name,
+    planet2Name: planet2Name,
+    planet1Sign: planet1.sign,
+    planet2Sign: planet2.sign,
+    planet1Core: planet1Planet?.core || "the planet's energy",
+    planet2Core: planet2Planet?.core || "the other planet's energy",
+    planet1SignCore: planet1Sign?.core || "",
+    planet2SignCore: planet2Sign?.core || "",
+    planet1Keyword: planet1Sign?.keywords?.[0] || "one quality",
+    planet2Keyword: planet2Sign?.keywords?.[0] || "another quality",
+  };
+
+  // Replace placeholders in template
+  const interpretation = replaceTemplatePlaceholders(
+    templateObj.template,
+    templateValues
+  );
 
   return interpretation;
 }
