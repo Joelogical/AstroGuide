@@ -3,6 +3,16 @@ const cors = require("cors");
 const path = require("path");
 const axios = require("axios");
 require("dotenv").config();
+
+// Log full stack for unhandled rejections (e.g. "Assignment to constant variable")
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("\n!!! UNHANDLED REJECTION !!!");
+  console.error("Reason:", reason);
+  if (reason && typeof reason === "object" && "stack" in reason) {
+    console.error("Stack:\n", reason.stack);
+  }
+});
+
 const { getBirthChartInterpretation } = require("./chatgpt_service");
 const {
   formatBirthChartForChatGPT,
@@ -17,6 +27,11 @@ const {
   isFactualQuestion,
   answerFactualQuestion,
 } = require("./factual_questions");
+const {
+  getFunctionDefinitions,
+  executeFunction,
+  gatherChartInterpretationsFromWeb,
+} = require("./external_resources");
 
 // Debug logging for environment variables
 console.log("Environment variables loaded:");
@@ -42,7 +57,8 @@ const API_KEY = process.env.ASTROLOGY_API_KEY;
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Serve static files from the frontend directory
 app.use(express.static(path.join(__dirname, "../frontend")));
@@ -68,79 +84,121 @@ users.set("test@example.com", {
 
 // Login endpoint
 app.post("/api/login", (req, res) => {
-  console.log("Login request received:", req.body);
-  const { email, password } = req.body;
+  try {
+    console.log("Login request received:", { email: req.body?.email, hasPassword: !!req.body?.password });
+    const { email, password } = req.body;
 
-  if (!email || !password) {
-    return res.status(400).json({
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        error: "Email and password are required",
+      });
+    }
+
+    // Trim email
+    const trimmedEmail = email.trim().toLowerCase();
+
+    const user = users.get(trimmedEmail);
+    if (!user) {
+      console.log(`Login failed: User not found - ${trimmedEmail}`);
+      return res.status(401).json({
+        success: false,
+        error: "Invalid email or password",
+        token: null,
+      });
+    }
+
+    if (user.password !== password) {
+      console.log(`Login failed: Incorrect password for ${trimmedEmail}`);
+      return res.status(401).json({
+        success: false,
+        error: "Invalid email or password",
+        token: null,
+      });
+    }
+
+    console.log(`Login successful for ${trimmedEmail}`);
+    res.json({
+      success: true,
+      token: "demo-token-" + Date.now(),
+      user: {
+        email: user.email,
+        name: user.name,
+        birthDate: user.birthDate,
+        birthTime: user.birthTime,
+        birthPlace: user.birthPlace,
+      },
+    });
+  } catch (error) {
+    console.error("Login endpoint error:", error);
+    return res.status(500).json({
       success: false,
-      error: "Email and password are required",
+      error: "An internal server error occurred",
     });
   }
-
-  const user = users.get(email);
-  if (!user || user.password !== password) {
-    return res.status(401).json({
-      success: false,
-      error: "Invalid email or password",
-      token: null,
-    });
-  }
-
-  res.json({
-    success: true,
-    token: "demo-token-" + Date.now(),
-    user: {
-      email: user.email,
-      name: user.name,
-      birthDate: user.birthDate,
-      birthTime: user.birthTime,
-      birthPlace: user.birthPlace,
-    },
-  });
 });
 
 // Signup endpoint
 app.post("/api/signup", (req, res) => {
-  console.log("Signup request received:", req.body);
-  const { email, password, name, birthDate, birthTime, birthPlace } = req.body;
+  try {
+    console.log("Signup request received:", { 
+      email: req.body?.email, 
+      name: req.body?.name,
+      hasPassword: !!req.body?.password,
+      hasBirthData: !!(req.body?.birthDate && req.body?.birthTime && req.body?.birthPlace)
+    });
+    const { email, password, name, birthDate, birthTime, birthPlace } = req.body;
 
-  if (!email || !password || !name || !birthDate || !birthTime || !birthPlace) {
-    return res.status(400).json({
+    if (!email || !password || !name || !birthDate || !birthTime || !birthPlace) {
+      return res.status(400).json({
+        success: false,
+        error: "All fields are required",
+      });
+    }
+
+    // Trim and normalize email
+    const trimmedEmail = email.trim().toLowerCase();
+    const trimmedName = name.trim();
+    const trimmedBirthPlace = birthPlace.trim();
+
+    if (users.has(trimmedEmail)) {
+      console.log(`Signup failed: User already exists - ${trimmedEmail}`);
+      return res.status(409).json({
+        success: false,
+        error: "User already exists",
+      });
+    }
+
+    const user = {
+      email: trimmedEmail,
+      password,
+      name: trimmedName,
+      birthDate,
+      birthTime,
+      birthPlace: trimmedBirthPlace,
+    };
+
+    users.set(trimmedEmail, user);
+    console.log(`Signup successful for ${trimmedEmail}`);
+
+    res.json({
+      success: true,
+      token: "demo-token-" + Date.now(),
+      user: {
+        email: user.email,
+        name: user.name,
+        birthDate: user.birthDate,
+        birthTime: user.birthTime,
+        birthPlace: user.birthPlace,
+      },
+    });
+  } catch (error) {
+    console.error("Signup endpoint error:", error);
+    return res.status(500).json({
       success: false,
-      error: "All fields are required",
+      error: "An internal server error occurred",
     });
   }
-
-  if (users.has(email)) {
-    return res.status(409).json({
-      success: false,
-      error: "User already exists",
-    });
-  }
-
-  const user = {
-    email,
-    password,
-    name,
-    birthDate,
-    birthTime,
-    birthPlace,
-  };
-
-  users.set(email, user);
-
-  res.json({
-    success: true,
-    token: "demo-token-" + Date.now(),
-    user: {
-      email: user.email,
-      name: user.name,
-      birthDate: user.birthDate,
-      birthTime: user.birthTime,
-      birthPlace: user.birthPlace,
-    },
-  });
 });
 
 // Function to generate AstrologyAPI.com authentication
@@ -160,16 +218,25 @@ function generateAuth() {
   };
 }
 
-// Function to calculate aspects between planets
+// Function to calculate aspects between planets (major + minor for depth)
 function calculateAspects(planets) {
   const aspects = [];
-  const aspectOrbs = {
-    conjunction: 8, // 0° ± 8°
-    sextile: 6, // 60° ± 6°
-    square: 8, // 90° ± 8°
-    trine: 8, // 120° ± 8°
-    opposition: 8, // 180° ± 8°
+  // Major aspects (wider orbs)
+  const major = {
+    conjunction: { angle: 0, orb: 8 },
+    sextile: { angle: 60, orb: 6 },
+    square: { angle: 90, orb: 8 },
+    trine: { angle: 120, orb: 8 },
+    opposition: { angle: 180, orb: 8 },
   };
+  // Minor aspects (tighter orbs; add nuance, don't overwhelm)
+  const minor = {
+    semisextile: { angle: 30, orb: 2.5 },
+    semisquare: { angle: 45, orb: 2 },
+    sesquiquadrate: { angle: 135, orb: 2 },
+    quincunx: { angle: 150, orb: 2.5 },
+  };
+  const aspectOrbs = { ...major, ...minor };
 
   const planetNames = Object.keys(planets);
 
@@ -180,35 +247,21 @@ function calculateAspects(planets) {
       const angle1 = planets[planet1];
       const angle2 = planets[planet2];
 
-      // Calculate the angle between planets
       let angle = Math.abs(angle1 - angle2);
       if (angle > 180) {
         angle = 360 - angle;
       }
 
-      // Check for each aspect type
-      for (const [aspect, orb] of Object.entries(aspectOrbs)) {
-        const targetAngle =
-          aspect === "conjunction"
-            ? 0
-            : aspect === "sextile"
-            ? 60
-            : aspect === "square"
-            ? 90
-            : aspect === "trine"
-            ? 120
-            : aspect === "opposition"
-            ? 180
-            : 0;
-
+      for (const [aspectName, { angle: targetAngle, orb }] of Object.entries(aspectOrbs)) {
         if (Math.abs(angle - targetAngle) <= orb) {
           aspects.push({
             planet1,
             planet2,
-            aspect,
+            aspect: aspectName,
             angle: Math.abs(angle1 - angle2),
             orb: Math.abs(angle - targetAngle),
           });
+          break; // one aspect per pair (closest match if multiple)
         }
       }
     }
@@ -363,6 +416,27 @@ app.post("/api/birth-chart", async (req, res) => {
         "Houses API Response:",
         JSON.stringify(housesResponse.data, null, 2)
       );
+
+      // Check if API returned an error instead of data
+      if (
+        planetsResponse.data.status === false ||
+        !Array.isArray(planetsResponse.data)
+      ) {
+        throw new Error(
+          `AstrologyAPI.com error: ${
+            planetsResponse.data.msg ||
+            "Invalid API credentials. Please set ASTROLOGY_API_USER_ID and ASTROLOGY_API_KEY in your .env file."
+          }`
+        );
+      }
+
+      if (housesResponse.data.status === false) {
+        throw new Error(
+          `AstrologyAPI.com error: ${
+            housesResponse.data.msg || "Invalid API credentials"
+          }`
+        );
+      }
 
       // Transform the API responses to match our expected format
       const birthChart = {
@@ -871,141 +945,139 @@ function generateFollowUpQuestion(userMessage, aiResponse, birthChart) {
     topicName = primaryTopic.charAt(0).toUpperCase() + primaryTopic.slice(1);
   }
 
-  // Generate follow-up questions based on topic - make them more specific and actionable
+  // Follow-up questions: conversational, short, human—like a natural next turn in chat
   const followUpQuestions = {
     sun: [
-      "Would you like me to elaborate on anything specific about your identity or self-expression?",
-      "Should I explain how your Sun sign affects your relationships or career?",
-      "Do you have questions about how your core personality manifests in your life?",
-      "Is there anything else about your identity you'd like to explore?",
+      "Want to go deeper on how that shows up in relationships or at work?",
+      "Curious about how your core self plays out in day-to-day life?",
+      "Want to explore the shadow side of that placement?",
+      "Anything specific about your identity you'd like to dig into?",
     ],
     moon: [
-      "Would you like me to elaborate on anything specific about your emotional nature?",
-      "Should I explain more about how your Moon affects your relationships or reactions?",
-      "Do you have questions about managing your emotional needs or patterns?",
-      "Is there anything else about your feelings or emotional responses you'd like to explore?",
+      "Want to talk about how that plays out in relationships or at home?",
+      "Curious how your emotional patterns show up when you're stressed?",
+      "Want to explore what you need to feel safe and nurtured?",
+      "Want to go deeper on how you process feelings?",
     ],
     mercury: [
-      "Would you like me to elaborate on anything specific about your communication or thinking?",
-      "Should I explain more about how your mental processes affect your relationships or work?",
-      "Do you have questions about your learning style or how you process information?",
-      "Is there anything else about your communication patterns you'd like to explore?",
+      "Want to explore how that shows up in communication or learning?",
+      "Curious how your mind works under pressure?",
+      "Want to dig into how you think through decisions?",
+      "Anything about the way you communicate you'd like to explore?",
     ],
     venus: [
-      "Would you like me to elaborate on anything specific about your love life?",
-      "Should I explain more about what you need in relationships?",
-      "Do you have questions about your attraction patterns or relationship values?",
-      "Is there anything else about your approach to love and partnerships you'd like to explore?",
-      "Would you like to know more about how your chart affects your romantic connections?",
+      "Want to go deeper on what you need in love and partnership?",
+      "Curious how that shows up in your taste or values?",
+      "Want to explore your attraction patterns or relationship style?",
+      "Want to talk about how this plays out in romance or creativity?",
     ],
     mars: [
-      "Would you like me to elaborate on anything specific about your drive or motivation?",
-      "Should I explain more about how you handle conflict or assert yourself?",
-      "Do you have questions about managing your energy, passion, or anger?",
-      "Is there anything else about your action style or assertiveness you'd like to explore?",
+      "Want to explore how you handle conflict or take action?",
+      "Curious where your drive shows up—or where it gets stuck?",
+      "Want to go deeper on motivation or anger?",
+      "Anything about how you assert yourself you'd like to dig into?",
     ],
     jupiter: [
-      "Would you like me to elaborate on anything specific about your growth or opportunities?",
-      "Should I explain more about your philosophical outlook or where you find expansion?",
-      "Do you have questions about your beliefs or where luck appears in your life?",
-      "Is there anything else about your optimistic nature you'd like to explore?",
+      "Want to explore where you find luck or expansion?",
+      "Curious how your beliefs or philosophy shape your choices?",
+      "Want to go deeper on growth or opportunity in your chart?",
+      "Anything about your optimistic side—or overdoing it—you'd like to explore?",
     ],
     saturn: [
-      "Would you like me to elaborate on anything specific about your challenges or responsibilities?",
-      "Should I explain more about the lessons your Saturn brings or how to work with them?",
-      "Do you have questions about your discipline, structure, or areas of limitation?",
-      "Is there anything else about your growth through challenges you'd like to explore?",
+      "Want to talk about how to work with those challenges rather than against them?",
+      "Curious where structure or discipline helps you—or holds you back?",
+      "Want to explore the lessons your Saturn is asking you to learn?",
+      "Anything about responsibility or limitation you'd like to dig into?",
     ],
     uranus: [
-      "Would you like me to elaborate on anything specific about your need for freedom or change?",
-      "Should I explain more about how you handle innovation or unpredictability?",
-      "Do you have questions about your rebellious side or unconventional approach?",
-      "Is there anything else about your unique expression or independence you'd like to explore?",
+      "Want to explore your need for freedom or change?",
+      "Curious how your rebellious or unconventional side shows up?",
+      "Want to go deeper on innovation or unpredictability in your life?",
+      "Anything about where you break the mold you'd like to explore?",
     ],
     neptune: [
-      "Would you like me to elaborate on anything specific about your intuition or spirituality?",
-      "Should I explain more about how you navigate between dreams and reality?",
-      "Do you have questions about your creative side or spiritual connection?",
-      "Is there anything else about your imagination or sensitivity you'd like to explore?",
+      "Want to explore your intuition or creative side?",
+      "Curious how you navigate dreams vs. reality?",
+      "Want to go deeper on spirituality or sensitivity?",
+      "Anything about imagination or boundaries you'd like to dig into?",
     ],
     pluto: [
-      "Would you like me to elaborate on anything specific about your transformation or intensity?",
-      "Should I explain more about how you handle power, control, or deep change?",
-      "Do you have questions about your emotional depth or regenerative capacity?",
-      "Is there anything else about your transformative nature you'd like to explore?",
+      "Want to explore how you handle power or deep change?",
+      "Curious where transformation shows up in your life?",
+      "Want to go deeper on intensity or regeneration?",
+      "Anything about control or surrender you'd like to talk about?",
     ],
     ascendant: [
-      "Would you like me to elaborate on anything specific about your outer personality?",
-      "Should I explain more about how your Ascendant affects first impressions or appearance?",
-      "Do you have questions about how others perceive you versus your inner self?",
-      "Is there anything else about your public persona you'd like to explore?",
+      "Want to explore how others see you vs. how you feel inside?",
+      "Curious how your first impression or style ties into your chart?",
+      "Want to go deeper on your outer personality?",
+      "Anything about your public face you'd like to dig into?",
     ],
     midheaven: [
-      "Would you like me to elaborate on anything specific about your career or public image?",
-      "Should I explain more about your professional calling or life direction?",
-      "Do you have questions about your reputation or how you're seen professionally?",
-      "Is there anything else about your career path you'd like to explore?",
+      "Want to explore your calling or how you're seen professionally?",
+      "Curious how your career path fits your chart?",
+      "Want to go deeper on reputation or life direction?",
+      "Anything about work or public image you'd like to explore?",
     ],
     aspects: [
-      "Would you like me to elaborate on anything specific about how your planets interact?",
-      "Should I explain more about working with these aspects or aspect patterns?",
-      "Do you have questions about how these aspects manifest in your life?",
-      "Is there anything else about the relationships between your planets you'd like to explore?",
+      "Want to go deeper on how those planets work together—or clash?",
+      "Curious how that aspect shows up in real life?",
+      "Want to explore how to work with that tension or flow?",
+      "Anything about the way your placements interact you'd like to dig into?",
     ],
     houses: [
-      "Would you like me to elaborate on anything specific about this life area?",
-      "Should I explain more about how this house placement affects your daily life?",
-      "Do you have questions about the themes or experiences in this house?",
-      "Is there anything else about this area of your life you'd like to explore?",
+      "Want to explore how that area of life plays out for you?",
+      "Curious how this house shows up in your day-to-day?",
+      "Want to go deeper on the themes of this life area?",
+      "Anything specific about this part of your chart you'd like to explore?",
     ],
     relationships: [
-      "Would you like me to elaborate on your relationship patterns?",
-      "Should I explain what you need in a partner?",
-      "Do you have questions about compatibility with specific signs?",
-      "Is there anything else about your approach to relationships you'd like to know?",
+      "Want to go deeper on what you need in a partner?",
+      "Curious how your relationship patterns show up?",
+      "Want to explore compatibility or attachment style?",
+      "Anything about love or partnership you'd like to dig into?",
     ],
     career: [
-      "Would you like me to elaborate on anything specific about your career?",
-      "Should I explain more about your work style or professional strengths?",
-      "Do you have questions about career paths that might suit you?",
-      "Is there anything else about your professional life you'd like to explore?",
-      "Would you like to know more about how your chart influences your work?",
+      "Want to explore work style or paths that might fit you?",
+      "Curious how your chart shows up in your profession?",
+      "Want to go deeper on strengths—or blocks—at work?",
+      "Anything about career or calling you'd like to explore?",
     ],
     challenges: [
-      "Would you like me to elaborate on anything specific about these challenges?",
-      "Should I explain more about how to work with or transform these difficulties?",
-      "Do you have questions about the growth opportunities in these challenges?",
-      "Is there anything else about navigating these patterns you'd like to explore?",
+      "Want to talk about how to work with that rather than against it?",
+      "Curious where the growth opportunity is in that challenge?",
+      "Want to explore how that pattern shows up—and how it could shift?",
+      "Anything about navigating that difficulty you'd like to dig into?",
     ],
     strengths: [
-      "Would you like me to elaborate on anything specific about these strengths?",
-      "Should I explain more about how these talents manifest in your life?",
-      "Do you have questions about developing or maximizing these gifts?",
-      "Is there anything else about your natural abilities you'd like to explore?",
+      "Want to explore how that strength shows up in your life?",
+      "Curious how to lean into that gift more?",
+      "Want to go deeper on how that talent manifests?",
+      "Anything about developing that strength you'd like to explore?",
     ],
     family: [
-      "Would you like me to elaborate on anything specific about your family dynamics?",
-      "Should I explain more about your relationship with family members?",
-      "Do you have questions about your home life or family patterns?",
-      "Is there anything else about your family relationships you'd like to explore?",
+      "Want to explore how that shows up at home or with family?",
+      "Curious about family patterns or your roots?",
+      "Want to go deeper on home life or early conditioning?",
+      "Anything about family dynamics you'd like to dig into?",
     ],
     friends: [
-      "Would you like me to elaborate on anything specific about your friendships?",
-      "Should I explain more about your social patterns or group connections?",
-      "Do you have questions about your friendships or community involvement?",
-      "Is there anything else about your social life you'd like to explore?",
+      "Want to explore how you show up in friendship or groups?",
+      "Curious about your social style or community?",
+      "Want to go deeper on friendships or your role in a circle?",
+      "Anything about your social life you'd like to explore?",
     ],
     money: [
-      "Would you like me to elaborate on anything specific about your finances?",
-      "Should I explain more about your relationship with money or resources?",
-      "Do you have questions about your financial patterns or values?",
-      "Is there anything else about your material security you'd like to explore?",
+      "Want to explore your relationship with money or security?",
+      "Curious how your chart shows up around resources or values?",
+      "Want to go deeper on financial patterns or what you value?",
+      "Anything about money or material life you'd like to dig into?",
     ],
     health: [
-      "Would you like me to elaborate on anything specific about your health?",
-      "Should I explain more about your physical well-being or body awareness?",
-      "Do you have questions about health patterns in your chart?",
-      "Is there anything else about your wellness you'd like to explore?",
+      "Want to explore how your chart might show up in your body or habits?",
+      "Curious about wellness or energy patterns?",
+      "Want to go deeper on physical or mental well-being in your chart?",
+      "Anything about health or self-care you'd like to explore?",
     ],
   };
 
@@ -1020,10 +1092,10 @@ function generateFollowUpQuestion(userMessage, aiResponse, birthChart) {
     (message.includes("tell me") && message.includes("about"))
   ) {
     const generalQuestions = [
-      "Would you like me to elaborate on anything specific about your personality or chart?",
-      "Do you have questions about your relationships, career, or personal growth?",
-      "Is there a particular area of your life you'd like to explore deeper?",
-      "Would you like to know more about your strengths, challenges, or how your planets interact?",
+      "Want to go deeper on your personality, relationships, or career?",
+      "Curious about a specific area—love, work, challenges, or growth?",
+      "Anything in particular you'd like to explore next?",
+      "Want to dig into your strengths, challenges, or how your planets work together?",
     ];
     question =
       generalQuestions[Math.floor(Math.random() * generalQuestions.length)];
@@ -1041,50 +1113,44 @@ function generateFollowUpQuestion(userMessage, aiResponse, birthChart) {
       response.includes("love") ||
       response.includes("partner")
     ) {
-      question =
-        "Would you like me to elaborate on anything specific about your relationships?";
+      question = "Want to go deeper on your relationships or what you need in a partner?";
     } else if (
       response.includes("career") ||
       response.includes("work") ||
       response.includes("professional")
     ) {
-      question =
-        "Would you like me to elaborate on anything specific about your career?";
+      question = "Want to explore your career or how your chart shows up at work?";
     } else if (
       response.includes("challenge") ||
       response.includes("difficulty") ||
       response.includes("struggle")
     ) {
-      question =
-        "Would you like me to elaborate on anything specific about these challenges?";
+      question = "Want to talk about how to work with that challenge—or where the growth is in it?";
     } else if (
       response.includes("strength") ||
       response.includes("talent") ||
       response.includes("gift")
     ) {
-      question =
-        "Would you like me to elaborate on anything specific about these strengths?";
+      question = "Want to go deeper on how that strength shows up—or how to lean into it more?";
     } else {
-      // Truly generic fallback - but make it more engaging
-      // For "about me" or general questions, provide more specific options
       if (
         message.includes("about me") ||
         message.includes("tell me about") ||
         message.includes("myself")
       ) {
         const generalQuestions = [
-          "Would you like me to elaborate on anything specific about your personality or chart?",
-          "Do you have questions about your relationships, career, or personal growth?",
-          "Is there a particular area of your life you'd like to explore deeper?",
-          "Would you like to know more about your strengths, challenges, or how your planets interact?",
+          "Want to go deeper on your personality, relationships, or career?",
+          "Curious about a specific area—love, work, challenges, or growth?",
+          "Anything in particular you'd like to explore next?",
+          "Want to dig into your strengths, challenges, or how your planets work together?",
         ];
         question =
           generalQuestions[Math.floor(Math.random() * generalQuestions.length)];
       } else {
         const genericQuestions = [
-          "Would you like me to elaborate on anything specific about this?",
-          "Do you have questions about any particular aspect of this?",
-          "Is there anything else about this topic you'd like to explore?",
+          "Want to go deeper on any of that?",
+          "Anything specific you'd like to explore next?",
+          "Curious about another angle on this?",
         ];
         question =
           genericQuestions[Math.floor(Math.random() * genericQuestions.length)];
@@ -1094,7 +1160,6 @@ function generateFollowUpQuestion(userMessage, aiResponse, birthChart) {
 
   // For substantial questions, ALWAYS provide a follow-up (this should have been handled above, but double-check)
   if (!question && isSubstantialQuestion) {
-    // Check if it's an "about me" type question
     if (
       message.includes("about me") ||
       message.includes("tell me about") ||
@@ -1102,17 +1167,16 @@ function generateFollowUpQuestion(userMessage, aiResponse, birthChart) {
       (message.includes("tell me") && message.includes("about"))
     ) {
       const generalQuestions = [
-        "Would you like me to elaborate on anything specific about your personality or chart?",
-        "Do you have questions about your relationships, career, or personal growth?",
-        "Is there a particular area of your life you'd like to explore deeper?",
-        "Would you like to know more about your strengths, challenges, or how your planets interact?",
+        "Want to go deeper on your personality, relationships, or career?",
+        "Curious about a specific area—love, work, challenges, or growth?",
+        "Anything in particular you'd like to explore next?",
+        "Want to dig into your strengths, challenges, or how your planets work together?",
       ];
       question =
         generalQuestions[Math.floor(Math.random() * generalQuestions.length)];
       console.log("[FOLLOWUP] Using 'about me' fallback question (safety net)");
     } else {
-      question =
-        "Would you like me to elaborate on anything specific about this?";
+      question = "Want to go deeper on any of that?";
       console.log(
         "[FOLLOWUP] Using generic fallback for substantial question (safety net)"
       );
@@ -1121,15 +1185,13 @@ function generateFollowUpQuestion(userMessage, aiResponse, birthChart) {
 
   // Ensure we always return a question for substantial responses (backup)
   if (!question && aiResponse.length >= 100) {
-    question =
-      "Would you like me to elaborate on anything specific about this?";
+    question = "Want to go deeper on any of that?";
     console.log("[FOLLOWUP] Using length-based fallback");
   }
 
   console.log("[FOLLOWUP] Final question before final check:", question);
 
   // ABSOLUTE FINAL SAFETY: if we have a substantial question and no follow-up yet, create one
-  // This should NEVER happen if the above logic works, but just in case...
   if (!question && isSubstantialQuestion) {
     if (
       message.includes("about me") ||
@@ -1137,14 +1199,12 @@ function generateFollowUpQuestion(userMessage, aiResponse, birthChart) {
       message.includes("myself") ||
       (message.includes("tell me") && message.includes("about"))
     ) {
-      question =
-        "Would you like me to elaborate on anything specific about your personality or chart?";
+      question = "Want to dig into your strengths, challenges, or how your planets work together?";
       console.log(
         "[FOLLOWUP] ABSOLUTE FINAL SAFETY: Using 'about me' question"
       );
     } else {
-      question =
-        "Would you like me to elaborate on anything specific about this?";
+      question = "Want to go deeper on any of that?";
       console.log("[FOLLOWUP] ABSOLUTE FINAL SAFETY: Using generic question");
     }
   }
@@ -1185,10 +1245,32 @@ function generateFollowUpQuestion(userMessage, aiResponse, birthChart) {
   return question || null;
 }
 
-// Chat endpoint for follow-up questions
-app.post("/api/chat", async (req, res) => {
+// Chat endpoint for follow-up questions (wrapped so async rejections return detailed 500 with stage/stack)
+app.post("/api/chat", (req, res) => {
+  console.log("[CHAT] *** Request received ***");
+  let stage = "start";
+  const send500 = (err) => {
+    if (res.headersSent) return;
+    console.error("\n*** 500 ERROR (chat) ***", err.message);
+    console.error("*** Stage was:", stage);
+    console.error("*** Stack:\n", err.stack);
+    const stackLines = (err.stack || "").split("\n").slice(0, 15);
+    res.status(500).json({
+      error: "Failed to process chat message",
+      details: err.message,
+      stage: stage,
+      stack: err.stack || undefined,
+      stackPreview: stackLines,
+      _debug: "send500-v2", // confirms new error handler is running
+    });
+  };
+  return (async () => {
   try {
-    const { message, birthChart, conversationHistory } = req.body;
+    const body = req.body || {};
+    const message = body.message;
+    const birthChart = body.birthChart;
+    const conversationHistory = body.conversationHistory || [];
+    stage = "after-body";
 
     if (!message || !birthChart) {
       return res.status(400).json({
@@ -1197,137 +1279,478 @@ app.post("/api/chat", async (req, res) => {
       });
     }
 
-    // Check if this is a factual question that can be answered deterministically
-    if (isFactualQuestion(message)) {
-      const factualAnswer = answerFactualQuestion(message, birthChart);
-      if (factualAnswer) {
-        console.log("[FACTUAL] Answered factual question deterministically");
-        const followUpQuestion = generateFollowUpQuestion(
-          message,
-          factualAnswer,
-          birthChart
-        );
-        return res.json({
-          response: factualAnswer,
-          isFactual: true,
-          followUpQuestion: followUpQuestion,
-        });
-      }
-      // If it matched a pattern but couldn't answer, fall through to AI
-    }
+    // ⚠️ CHECK FOR GENERAL ASTROLOGY QUESTIONS FIRST (before any chart processing)
+    // This ensures we handle general questions without any chart context
+    const lowerMessage = message.toLowerCase().trim();
+    
+    // Pattern: "what does [planet] in [sign]" = general question
+    const isGeneralQuestionPattern =
+      (lowerMessage.includes("what does") ||
+        lowerMessage.includes("tell me about") ||
+        lowerMessage.includes("explain") ||
+        lowerMessage.includes("what is") ||
+        lowerMessage.includes("what are")) &&
+      (lowerMessage.match(/\b(venus|sun|moon|mercury|mars|jupiter|saturn|uranus|neptune|pluto)\b/i) ||
+        lowerMessage.match(/\b(scorpio|aries|taurus|gemini|cancer|leo|virgo|libra|sagittarius|capricorn|aquarius|pisces)\b/i)) &&
+      !lowerMessage.includes("my ") &&
+      !lowerMessage.includes("my chart") &&
+      !lowerMessage.includes("my birth") &&
+      !lowerMessage.includes("my venus") &&
+      !lowerMessage.includes("my sun") &&
+      !lowerMessage.includes("my moon");
 
-    // Generate deterministic interpretation if not already present
+    if (isGeneralQuestionPattern) {
+      console.log(
+        "═══════════════════════════════════════════════════════════"
+      );
+      console.log(
+        "[CHAT] 🎯 GENERAL QUESTION DETECTED - Handling separately from chart"
+      );
+      console.log("[CHAT] Original message:", message);
+      console.log(
+        "═══════════════════════════════════════════════════════════"
+      );
+
+      // Extract search query
+      let searchQuery = message
+        .replace(/^what (does|is|are) /i, "")
+        .replace(/^tell me about /i, "")
+        .replace(/^explain /i, "")
+        .replace(/\?$/, "")
+        .trim();
+
+      console.log("[CHAT] Search query:", searchQuery);
+
+      // Call function directly
+      let functionResult;
+      try {
+        functionResult = await executeFunction("search_astrology_info", {
+          query: searchQuery,
+        });
+        console.log(
+          "[CHAT] Function result length:",
+          functionResult?.length || 0
+        );
+        if (functionResult) {
+          console.log(
+            "[CHAT] Function result preview:",
+            functionResult.substring(0, 200)
+          );
+        }
+      } catch (funcError) {
+        console.error("[CHAT] Function error:", funcError);
+        functionResult = null;
+      }
+
+      if (functionResult) {
+        // Create response with ONLY the function result, NO chart data
+        // DO NOT include conversation history for general questions
+        const completion = await openai.chat.completions.create({
+          model: "gpt-3.5-turbo",
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are AstroGuide, an expert astrologer answering a GENERAL astrology question.\n\n" +
+                "⚠️ CRITICAL: This is a GENERAL educational question about astrology concepts. " +
+                "The user is asking 'What does [planet] in [sign] mean?' - they want to learn about the concept, NOT about their personal chart.\n\n" +
+                "ABSOLUTE RULES - FOLLOW THESE STRICTLY:\n" +
+                "1. NEVER mention the user's chart, their placements, or anything personal\n" +
+                "2. NEVER say 'your venus', 'your chart', 'in your chart', or any personal references\n" +
+                "3. Explain the concept GENERALLY - 'Venus in Scorpio means...' not 'Your Venus in Scorpio...'\n" +
+                "4. Write as if teaching astrology to a student who wants to understand the concept\n" +
+                "5. Use the provided information below to give a comprehensive, educational answer\n" +
+                "6. If you mention the concept, say 'Venus in Scorpio' not 'your Venus in Scorpio'\n\n" +
+                "You have been provided with detailed information about this astrology concept. " +
+                "Use ONLY this information to answer. Do NOT reference any chart data, birth data, or personal information.",
+            },
+            {
+              role: "user",
+              content: message,
+            },
+            {
+              role: "assistant",
+              content: `Here's what I have on this:\n\n${functionResult}\n\nI'll explain it in a clear, conversational way.`,
+            },
+          ],
+          temperature: 0.7,
+          max_tokens: 1000,
+        });
+
+        const completionPlainGeneral = JSON.parse(JSON.stringify(completion));
+        const response = completionPlainGeneral.choices[0].message.content;
+        
+        // Check if response incorrectly mentions user's chart
+        const responseLower = response.toLowerCase();
+        const mentionsUserChart =
+          responseLower.includes("your venus") ||
+          responseLower.includes("your chart") ||
+          responseLower.includes("in your chart") ||
+          responseLower.includes("your placement");
+        
+        if (mentionsUserChart) {
+          console.warn(
+            "[CHAT] ⚠️ WARNING: Response mentions user's chart despite being general question!"
+          );
+          console.warn("[CHAT] Response:", response.substring(0, 300));
+        }
+        
+        console.log(
+          "═══════════════════════════════════════════════════════════"
+        );
+        console.log("[CHAT] ✅ General question answered successfully");
+        console.log("[CHAT] Response length:", response.length);
+        console.log("[CHAT] Mentions user chart:", mentionsUserChart);
+        console.log("[CHAT] Response preview:", response.substring(0, 300));
+        console.log(
+          "═══════════════════════════════════════════════════════════"
+        );
+
+        // IMPORTANT: Return early - don't fall through to chart processing
+        return res.json({
+          response: response,
+          followUpQuestion: generateFollowUpQuestion(
+            message,
+            response,
+            birthChart
+          ),
+          usedExternalResources: true,
+        });
+      } else {
+        console.log(
+          "[CHAT] ⚠️ Function returned no result, falling through to normal flow"
+        );
+        console.log(
+          "[CHAT] Function result was:",
+          functionResult === null ? "null" : functionResult === undefined ? "undefined" : "empty string"
+        );
+      }
+    } else {
+      console.log(
+        "[CHAT] Not a general question - processing as chart question"
+      );
+    }
+    stage = "before-interpretation";
+
+    // Generate deterministic interpretation if not already present (needed for system prompt)
     let interpretationTemplate;
     if (birthChart.interpretationTemplate) {
-      // Use existing deterministic template
       interpretationTemplate = birthChart.interpretationTemplate;
     } else if (birthChart.deterministicInterpretation) {
-      // Format existing deterministic interpretation
       interpretationTemplate = formatInterpretationForAI(
         birthChart.deterministicInterpretation,
         birthChart
       );
     } else {
-      // Generate new deterministic interpretation from raw chart data
-      const deterministicInterpretation =
-        generateChartInterpretation(birthChart);
+      const deterministicInterpretation = generateChartInterpretation(birthChart);
       interpretationTemplate = formatInterpretationForAI(
         deterministicInterpretation,
         birthChart
       );
     }
 
-    // Create the messages array for the chat completion
-    // AI now receives the deterministic template, not raw data
+    // Note: General question check already happened above at the start of the function
+    // If we reach here, it's not a general question, so process as chart question
+
+    // Check if this is a factual question that can be answered deterministically
+    if (isFactualQuestion(message)) {
+      const factualAnswer = answerFactualQuestion(message, birthChart);
+      if (factualAnswer) {
+        console.log("[FACTUAL] Answered factual question deterministically");
+        return res.json({
+          response: factualAnswer,
+          isFactual: true,
+        });
+      }
+      // If it matched a pattern but couldn't answer, fall through to AI
+    }
+
+    stage = "after-interpretation";
+
+    // PRIMARY SOURCE FOR INTERPRETATION: gather from the web (broad breadth of resources)
+    // Hardcoded data is used for chart facts only; web is main for interpretation.
+    let webInterpretations = "";
+    try {
+      console.log("[CHAT] Gathering chart interpretations from web (primary source)...");
+      webInterpretations = await gatherChartInterpretationsFromWeb(birthChart);
+      console.log("[CHAT] Web interpretations length:", webInterpretations.length);
+    } catch (err) {
+      console.warn("[CHAT] Web gathering failed, continuing with chart facts only:", err.message);
+    }
+
+    let chartFactsOnly;
+    try {
+      chartFactsOnly = formatBirthChartForChatGPT(birthChart);
+    } catch (formatErr) {
+      console.error("[CHAT] formatBirthChartForChatGPT failed:", formatErr.message, formatErr.stack);
+      chartFactsOnly = "Chart data (summary): " + (birthChart.birthData ? `Date: ${birthChart.birthData.date} ${birthChart.birthData.time}` : "unknown") + ". " +
+        (birthChart.planets ? `Planets: ${Object.entries(birthChart.planets).map(([p, d]) => `${p} in ${d.sign || "?"}`).join("; ")}` : "");
+    }
+    stage = "after-chart-facts";
+    const maxWebLen = 12000;
+    const webBlock = webInterpretations && webInterpretations.length > maxWebLen
+      ? webInterpretations.slice(0, maxWebLen) + "\n[... truncated for length ...]"
+      : (webInterpretations || "");
+    const webSection = webInterpretations
+      ? "--- WEB-SOURCED INTERPRETATIONS (primary for interpretation) ---\n" + webBlock + "\n--- END WEB INTERPRETATIONS ---"
+      : "--- No web interpretations were available for this chart. You may call search_astrology_info() for specific placements (e.g. 'Sun in Leo interpretation') to get interpretation content. ---";
+
+    // Log so we can confirm chart data is being sent (Astrology API data is in chartFactsOnly)
+    console.log("[CHAT] Chart facts length:", (chartFactsOnly || "").length, "chars; birthData present:", !!birthChart?.birthData);
+
+    // CHAT BEHAVIOR – Do not remove or weaken these; they prevent regression to checklist/generic style:
+    // • OUTPUT FORMAT: plain paragraphs only, no numbers/###/headers, no one paragraph per planet.
+    // • MORE FROM THE WEB: encourage search_astrology_info/search_web_astrology; pre-loaded block is a guide, not the main script.
+    // • AVOID GENERIC PHRASING: no stock blurbs ("invites you to delve...", "deep insights and meaningful interactions").
+    // • DESCRIPTIVE NOT PRESCRIPTIVE: describe how traits show up; no "you should" / "you need to".
+    // • MINOR ASPECTS: use for depth; do not name or explain unless the user asks.
+    // • History filter below omits checklist-format assistant messages. User message below gets a format reminder appended.
+
+    const systemContent =
+      "You are AstroGuide: conversational, sharp, warm. Answer using the chart below.\n\n" +
+      "OUTPUT FORMAT – YOU MUST OBEY THIS ON EVERY REPLY (including follow-ups):\n" +
+      "Your entire reply must be 3–6 plain paragraphs. No numbers (no 1. 2. 3. 4. 5.). No section headers (no ###, no **Bold:**, no \"Depth and Intensity:\" or \"Emotional Sensitivity and Harmony:\"). No bullet points. No \"Let's explore\", \"Let's delve\", \"comprehensive view\", \"These aspects offer a glimpse\", or \"If you have specific questions, feel free to share!\", or generic lines like \"invites you to delve into... leading to deep insights and meaningful interactions.\" Do not dedicate one paragraph to Sun, one to Moon, one to Mercury, etc. Weave multiple placements and aspects into the same paragraph. Start directly with content; end when you've said what matters.\n\n" +
+      "Even when the user asks for \"many aspects\", \"comprehensive\", \"list challenges\", \"what other aspects should I be aware of\", or \"consider as many aspects as possible\", you MUST still answer in flowing prose only—never switch to numbered sections (1. 2. 3.) or ### headers or one topic per paragraph. Keep the same style as your first \"tell me about myself\" answer for every reply.\n\n" +
+      "NEVER WRITE LIKE THIS (forbidden pattern):\n" +
+      "\"It seems like you're eager to dive deeper... Your birth chart reveals a rich tapestry... Let's explore a few key aspects:\n\n### 1. **Depth and Intensity**:\nWith your Sun in Scorpio...\n\n### 2. **Emotional Sensitivity and Harmony**:\nYour Moon in Libra...\n\n### 3. **Communication Style and Depth**:\nMercury in Libra...\n\nThese aspects offer a glimpse... If you have specific questions, feel free to share!\"\n\n" +
+      "WRITE LIKE THIS INSTEAD (required style):\n" +
+      "Plain paragraphs only. Example opening: \"What comes through strongly is a mix of depth and a need for real connection—you're not surface-level in how you love or think, and that can show up as intensity in relationships and a pull toward things that feel meaningful. Your need for balance in how you're seen and how you relate sits alongside that; you can be both all-in and careful about fairness. In the way you communicate and work, there's a desire to do things well and to be recognized, sometimes with a tension between wanting to stand out and wanting to keep the peace.\" Continue in that vein: flowing prose, several chart factors per paragraph, no labels or numbers.\n\n" +
+      "DESCRIPTIVE, NOT PRESCRIPTIVE: Describe what the chart suggests and how traits might show up—don't tell the user what to do. Use language like \"this can show up as…\", \"there's often a tendency toward…\", \"it might manifest as…\". Avoid advice or directives: no \"you should\", \"you need to\", \"try to\", \"you ought to\".\n\n" +
+      "CRITICAL: The user's FULL BIRTH CHART is in CHART FACTS below. Use it. Never ask for birth date, time, or location. Use all planets, aspects (major and minor), houses, elemental/modal balance, stelliums, and aspect patterns where relevant. For simple factual questions use only CHART FACTS.\n\n" +
+      "MORE FROM THE WEB – DON'T RELY ON THE PRE-LOADED BLOCK ALONE:\n" +
+      "The WEB-SOURCED INTERPRETATIONS block gives you themes and key phrases—use them to inform your understanding, but do NOT lean on them for the bulk of your wording. That makes replies sound generic. Instead: call search_astrology_info(query) or search_web_astrology(query) for placements you're discussing (e.g. 'Moon in Libra 7th house', 'Sun Scorpio 8th house interpretation', 'Venus square Saturn meaning') so you pull in fresh, varied language from the web. Prefer supplementing with 1–2 search calls per substantive reply when interpreting the chart; use the pre-loaded block as a guide, not as the main script. We want more from the web, not a rephrase of the same themes.\n\n" +
+      "AVOID GENERIC PHRASING: Do not use stock astrology blurbs like \"invites you to delve into your emotions through thoughtful communication, leading to deep insights and meaningful interactions,\" or similar vague, interchangeable lines. Be concrete and specific; vary your language; let web search results add color and detail so it doesn't sound like every other chart reading.\n\n" +
+      "MINOR ASPECTS: CHART FACTS may include minor aspects (e.g. quincunx, semisextile, semisquare, sesquiquadrate). Use them to deepen your interpretation—they add nuance and subtlety. Do NOT name or explain minor aspects unless the user specifically asks about them or asks what in the interpretation accounts for them. Do not bring them up when discussing interpretations. Weave their influence into your prose without using the terminology; they are a niche concept for the general public.\n\n" +
+      "--- CHART FACTS (birth data – use for personalization) ---\n" +
+      chartFactsOnly +
+      "\n--- END CHART FACTS ---\n\n" +
+      webSection +
+      "\n\nBefore you respond: no numbers, no ### or **headers**, no one paragraph per planet, no \"rich tapestry\" or \"if you have questions.\" Use web search to add variety; avoid generic phrasing. Plain paragraphs only.";
+
     const messages = [
       {
         role: "system",
-        content: generateSystemPrompt(interpretationTemplate),
+        content: systemContent,
       },
     ];
 
-    // Add conversation history if available
+    // Add conversation history if available (sanitize so content is never null)
+    // Skip assistant messages that asked for birth data so the model doesn't repeat that
     if (conversationHistory && conversationHistory.length > 0) {
-      messages.push(...conversationHistory);
-    }
-
-    // Add the current message
-    messages.push({
-      role: "user",
-      content: message,
-    });
-
-    // Make the API call to OpenAI
-    // Adjusted parameters for comprehensive, detailed responses
-    const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
-      messages: messages,
-      temperature: 0.7, // Higher for more varied, detailed responses
-      max_tokens: 1000, // Increased significantly to allow comprehensive responses (400-600 words)
-      presence_penalty: 0.1, // Lower to allow natural flow
-      frequency_penalty: 0.0, // No penalty to allow full expression
-    });
-
-    // Generate contextually relevant follow-up question
-    let followUpQuestion;
-    try {
-      followUpQuestion = generateFollowUpQuestion(
-        message,
-        completion.choices[0].message.content,
-        birthChart
-      );
-    } catch (error) {
-      console.error("[CHAT] Error generating follow-up question:", error);
-      // Fallback: if there's an error, still try to generate a basic follow-up
-      if (
-        message.toLowerCase().includes("tell me") ||
-        message.toLowerCase().includes("about")
-      ) {
-        followUpQuestion =
-          "Would you like me to elaborate on anything specific about this?";
+      for (const m of conversationHistory) {
+        const content = m.content == null ? "" : String(m.content);
+        const contentLower = content.toLowerCase();
+        if (m.role === "assistant") {
+          const isAskingForBirthData =
+            contentLower.includes("birth date") || contentLower.includes("birth time") ||
+            contentLower.includes("birth location") || contentLower.includes("provide me with those details");
+          const isChecklistFormat =
+            content.includes("###") || /\*\*\s*\d+\./.test(content) || content.includes("**1.") || content.includes("**2.") || content.includes("Let's delve") || content.includes("These aspects offer a glimpse") || content.includes("If you have specific questions, feel free to share");
+          if (isAskingForBirthData || isChecklistFormat) continue; // omit so model doesn't repeat checklist style
+        }
+        const msg = { role: m.role, content };
+        if (m.role === "function" && m.name) msg.name = m.name;
+        if (m.role === "assistant" && m.function_call) msg.function_call = m.function_call;
+        messages.push(msg);
       }
     }
 
-    // Ensure followUpQuestion is always a string or null, never undefined
-    const finalFollowUp = followUpQuestion || null;
+    // Add the current message with a format reminder so every turn enforces prose-only and web use (avoids checklist slip on follow-ups)
+    const userContent =
+      message +
+      "\n\n[Reply in plain paragraphs only—no numbers (1. 2. 3.), no ### or **headers**, no one topic per paragraph. Weave themes together. When interpreting the chart, use web search (search_astrology_info) for placements you discuss so the reply stays varied and non-generic.]";
+    messages.push({
+      role: "user",
+      content: userContent,
+    });
 
-    console.log("[CHAT] Sending response with follow-up:", {
-      responseLength: completion.choices[0].message.content.length,
-      hasFollowUp: !!finalFollowUp,
-      followUpQuestion: finalFollowUp?.substring(0, 50),
-      followUpQuestionType: typeof finalFollowUp,
-      followUpQuestionValue: finalFollowUp,
+    stage = "before-openai";
+    const functions = getFunctionDefinitions();
+    let completion;
+    let usedExternalResources = false;
+
+    try {
+      completion = await openai.chat.completions.create({
+        model: "gpt-3.5-turbo",
+        messages: messages,
+        functions: functions,
+        function_call: "auto",
+        temperature: 0.7,
+        max_tokens: 1000,
+        presence_penalty: 0.1,
+        frequency_penalty: 0.0,
+      });
+    } catch (openaiErr) {
+      const wrapped = new Error("[OpenAI create] " + (openaiErr.message || ""));
+      wrapped.stack = openaiErr.stack;
+      throw wrapped;
+    }
+
+    let completionPlain;
+    try {
+      completionPlain = JSON.parse(JSON.stringify(completion));
+    } catch (_) {
+      completionPlain = completion;
+    }
+    const messageResponse = completionPlain.choices[0].message;
+    const functionCall = messageResponse.function_call;
+    const hasFunctionCall = functionCall && functionCall.name;
+
+    if (hasFunctionCall) {
+      usedExternalResources = true;
+      const functionName = functionCall.name;
+      let functionArgs = {};
+      try {
+        functionArgs = JSON.parse(functionCall.arguments || "{}");
+      } catch (parseError) {
+        console.error("[CHAT] Error parsing function arguments:", parseError);
+      }
+
+      let functionResult;
+      try {
+        functionResult = await executeFunction(functionName, functionArgs);
+      } catch (execError) {
+        console.error("[CHAT] Error executing " + functionName + ":", execError);
+        functionResult = { error: String(execError.message) };
+      }
+
+      messages.push({
+        role: "assistant",
+        content: "",
+        function_call: functionCall,
+      });
+      messages.push({
+        role: "function",
+        name: functionName,
+        content: JSON.stringify(functionResult),
+      });
+
+      completion = await openai.chat.completions.create({
+        model: "gpt-3.5-turbo",
+        messages: messages,
+        functions: functions,
+        function_call: "auto",
+        temperature: 0.7,
+        max_tokens: 1400,
+        presence_penalty: 0.1,
+        frequency_penalty: 0.0,
+      });
+    }
+
+    stage = "after-openai";
+    let completionFinal;
+    try {
+      completionFinal = JSON.parse(JSON.stringify(completion));
+    } catch (_) {
+      completionFinal = completion;
+    }
+    const rawContent = completionFinal.choices[0].message.content;
+    const finalResponse = rawContent != null ? String(rawContent) : "";
+
+    console.log("[CHAT] Sending response:", {
+      responseLength: finalResponse.length,
+      usedExternalResources: usedExternalResources,
       messagePreview: message.substring(0, 50),
     });
 
-    // Return the response with follow-up question
-    // ALWAYS include followUpQuestion field, even if null
-    const responseObj = {
-      response: completion.choices[0].message.content,
-      followUpQuestion: finalFollowUp,
-    };
-
-    console.log(
-      "[CHAT] Response object:",
-      JSON.stringify({
-        ...responseObj,
-        response: responseObj.response.substring(0, 50) + "...",
-      })
-    );
-
-    return res.json(responseObj);
+    return res.json({ response: String(finalResponse) });
   } catch (error) {
-    console.error("Error in chat endpoint:", error);
-    return res.status(500).json({
-      error: "Failed to process chat message",
-      details: error.message,
-    });
+    send500(error);
+  }
+  })().catch(send500);
+}); // handler returns promise so .catch(send500) handles async rejections
+
+// Debug: run chat flow without OpenAI to find "Assignment to constant variable"
+app.get("/api/chat-debug", async (req, res) => {
+  try {
+    const birthChart = req.body?.birthChart || {
+      birthData: { date: "1990-01-01", time: "12:00", location: { latitude: 40, longitude: -74, timezone: -5 } },
+      angles: { ascendant: { sign: "Leo", degree: 10, element: "Fire" }, midheaven: { sign: "Taurus", degree: 5, element: "Earth" } },
+      planets: { sun: { sign: "Capricorn", degree: 25, element: "Earth", house: 10 }, moon: { sign: "Cancer", degree: 12, element: "Water", house: 4 } },
+      houses: [],
+      aspects: [],
+    };
+    const message = "hello";
+    let webInterpretations = "";
+    try {
+      webInterpretations = await gatherChartInterpretationsFromWeb(birthChart);
+    } catch (e) {
+      webInterpretations = "";
+    }
+    let chartFactsOnly;
+    try {
+      chartFactsOnly = formatBirthChartForChatGPT(birthChart);
+    } catch (e) {
+      chartFactsOnly = "chart summary";
+    }
+    const maxWebLen = 12000;
+    const webBlock = webInterpretations && webInterpretations.length > maxWebLen ? webInterpretations.slice(0, maxWebLen) + "\n[...]" : (webInterpretations || "");
+    const webSection = webInterpretations ? "--- WEB ---\n" + webBlock + "\n---" : "--- No web ---";
+    const systemContent =
+      "You are AstroGuide.\n\n--- CHART ---\n" + chartFactsOnly + "\n---\n\n" + webSection;
+    const messages = [{ role: "system", content: systemContent }, { role: "user", content: message }];
+    return res.json({ ok: true, systemContentLength: systemContent.length, messagesCount: messages.length });
+  } catch (err) {
+    console.error("[CHAT-DEBUG] Error:", err);
+    return res.status(500).json({ error: err.message, stack: (err.stack || "").split("\n").slice(0, 12) });
   }
 });
 
 // Add a test endpoint
 app.get("/api/test", (req, res) => {
   res.json({ message: "Backend server is running" });
+});
+
+// Diagnostic endpoint to test general question detection
+app.post("/api/test-general-question", (req, res) => {
+  const { message } = req.body;
+  if (!message) {
+    return res.status(400).json({ error: "Message required" });
+  }
+
+  const lowerMessage = message.toLowerCase().trim();
+  const isGeneralQuestionPattern =
+    (lowerMessage.includes("what does") ||
+      lowerMessage.includes("tell me about") ||
+      lowerMessage.includes("explain") ||
+      lowerMessage.includes("what is") ||
+      lowerMessage.includes("what are")) &&
+    (lowerMessage.match(/\b(venus|sun|moon|mercury|mars|jupiter|saturn|uranus|neptune|pluto)\b/i) ||
+      lowerMessage.match(/\b(scorpio|aries|taurus|gemini|cancer|leo|virgo|libra|sagittarius|capricorn|aquarius|pisces)\b/i)) &&
+    !lowerMessage.includes("my ") &&
+    !lowerMessage.includes("my chart") &&
+    !lowerMessage.includes("my birth") &&
+    !lowerMessage.includes("my venus") &&
+    !lowerMessage.includes("my sun") &&
+    !lowerMessage.includes("my moon");
+
+  return res.json({
+    message: message,
+    isGeneralQuestion: isGeneralQuestionPattern,
+    analysis: {
+      hasQuestionWords: lowerMessage.includes("what does") || lowerMessage.includes("tell me about") || lowerMessage.includes("explain"),
+      hasPlanet: !!lowerMessage.match(/\b(venus|sun|moon|mercury|mars|jupiter|saturn|uranus|neptune|pluto)\b/i),
+      hasSign: !!lowerMessage.match(/\b(scorpio|aries|taurus|gemini|cancer|leo|virgo|libra|sagittarius|capricorn|aquarius|pisces)\b/i),
+      hasMy: lowerMessage.includes("my "),
+    },
+  });
+});
+
+// Catch-all error handler so 500s are logged and returned safely
+app.use((err, req, res, next) => {
+  console.error("\n*** 500 ERROR (global handler) ***", err.message);
+  console.error("*** Stack:\n", err.stack);
+  if (!res.headersSent) {
+    const stackLines = (err.stack || "").split("\n").slice(0, 15);
+    res.status(500).json({
+      error: "Server error",
+      details: err.message,
+      stage: err.stage || null,
+      stack: err.stack || undefined,
+      stackPreview: stackLines,
+      _debug: "global-handler",
+    });
+  }
 });
 
 // Start server

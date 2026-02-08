@@ -15,6 +15,7 @@
       }
     </script>
 
+    <div id="connection-banner" class="connection-banner connection-pending">Checking server…</div>
     <div class="chat-container">
       <div class="chat-header">
         <h1>AstroGuide</h1>
@@ -49,6 +50,20 @@
         background: #23243a;
         color: #f5f6fa;
       }
+      .connection-banner {
+        padding: 8px 16px;
+        text-align: center;
+        font-size: 0.9rem;
+        margin-bottom: 8px;
+        border-radius: 8px;
+      }
+      .connection-pending { background: #35365a; color: #a0a0c0; }
+      .connection-ok { background: #1a472a; color: #90ee90; }
+      .connection-refused {
+        background: #5c2a2a;
+        color: #ffb0b0;
+      }
+      .connection-refused a { color: #7dd3fc; }
       .chat-container {
         background: #18192b;
         border-radius: 12px;
@@ -81,6 +96,35 @@
         color: #fff;
         margin-left: auto;
         border: 1px solid #2563eb;
+      }
+      .follow-up-suggestions {
+        margin-top: 12px;
+        margin-bottom: 8px;
+        min-height: 0;
+      }
+      .follow-up-chip {
+        display: inline-block;
+        padding: 10px 16px;
+        margin: 4px 8px 4px 0;
+        background: #2d2e48;
+        color: #a5b4fc;
+        border: 1px solid #35365a;
+        border-radius: 20px;
+        font-size: 0.95em;
+        cursor: pointer;
+        transition: background 0.2s, border-color 0.2s;
+        max-width: 100%;
+        text-align: left;
+      }
+      .follow-up-chip:hover {
+        background: #35365a;
+        border-color: #4a4a6a;
+        color: #c7d2fe;
+      }
+      .follow-up-suggestions .suggestion-label {
+        font-size: 0.85em;
+        color: #888ca3;
+        margin-bottom: 6px;
       }
       .input-container {
         display: flex;
@@ -258,106 +302,9 @@
       const botMessageQueue = [];
       let isTyping = false;
 
-      /**
-       * Generate a contextually relevant follow-up question for any message
-       * Only for substantial messages, not short acknowledgments
-       * @param {string} message - The bot's message
-       * @returns {string|null} Follow-up question or null if not needed
-       */
-      function generateFollowUpForMessage(message) {
-        // Don't generate follow-up for very short messages
-        if (message.length < 150) {
-          return null;
-        }
-
-        const msg = message.toLowerCase();
-
-        // Error messages - only for substantial error explanations
-        if (
-          (msg.includes("error") ||
-            msg.includes("trouble") ||
-            msg.includes("failed")) &&
-          message.length > 100
-        ) {
-          const errorQuestions = [
-            "Would you like to try again?",
-            "Should I help you troubleshoot this?",
-            "Is there anything else I can help with?",
-          ];
-          return errorQuestions[
-            Math.floor(Math.random() * errorQuestions.length)
-          ];
-        }
-
-        // Chart calculation messages - only show once, not after every calculation message
-        if (
-          (msg.includes("calculating") ||
-            msg.includes("timezone") ||
-            msg.includes("coordinates")) &&
-          message.length > 100
-        ) {
-          const chartQuestions = [
-            "What would you like to explore first in your chart?",
-            "Would you like to learn about your Sun, Moon, or Ascendant?",
-          ];
-          return chartQuestions[
-            Math.floor(Math.random() * chartQuestions.length)
-          ];
-        }
-
-        // Don't add follow-up to loading messages - they're too short
-        if (
-          msg.includes("loading") ||
-          msg.includes("let me") ||
-          msg.includes("taking a look")
-        ) {
-          return null;
-        }
-
-        // For other substantial messages, return null - let the backend handle it
-        // The backend will provide contextually relevant follow-ups for chat responses
-        return null;
-      }
-
-      // Queue-based addMessage for bot messages
-      // Automatically adds follow-up question unless isFollowUp is true (to avoid recursion)
-      function queueBotMessage(
-        message,
-        isUser = false,
-        fromQueue = false,
-        isFollowUp = false,
-        skipFollowUp = false
-      ) {
-        console.log(
-          "[QUEUE] Adding bot message to queue:",
-          message,
-          "isFollowUp:",
-          isFollowUp
-        );
+      function queueBotMessage(message, isUser = false, fromQueue = false) {
         return new Promise((resolve) => {
-          botMessageQueue.push({ message, resolve, isFollowUp });
-
-          // Automatically add follow-up question for non-follow-up messages
-          // Skip if explicitly told to skip, or if this is already a follow-up question
-          // Only add for substantial messages (not short system messages)
-          if (!isFollowUp && !skipFollowUp && message.length > 150) {
-            const followUpQuestion = generateFollowUpForMessage(message);
-            // Only add if a follow-up was generated (not null)
-            if (followUpQuestion) {
-              // Add follow-up question to queue with a small delay
-              setTimeout(() => {
-                botMessageQueue.push({
-                  message: followUpQuestion,
-                  resolve: () => {},
-                  isFollowUp: true,
-                });
-                // Process the queue to show the follow-up
-                setTimeout(processBotQueue, 0);
-              }, 100);
-            }
-          }
-
-          // Always try to process the queue, even if already typing
+          botMessageQueue.push({ message, resolve });
           setTimeout(processBotQueue, 0);
         });
       }
@@ -365,42 +312,17 @@
       async function processBotQueue() {
         if (isTyping || botMessageQueue.length === 0) return;
         isTyping = true;
-        const {
-          message,
-          resolve,
-          isFollowUp = false,
-        } = botMessageQueue.shift();
-        console.log(
-          "[QUEUE] Processing bot message:",
-          message,
-          "isFollowUp:",
-          isFollowUp
-        );
-        await addMessage(message, false, true, isFollowUp); // true = from queue, isFollowUp = follow-up question
+        const { message, resolve } = botMessageQueue.shift();
+        await addMessage(message, false, true);
         isTyping = false;
         resolve();
-        // Always try to process the queue again in case new messages were added
         setTimeout(processBotQueue, 0);
       }
 
-      // Modified addMessage to support queue and follow-up questions
-      function addMessage(
-        message,
-        isUser = false,
-        fromQueue = false,
-        isFollowUp = false
-      ) {
+      function addMessage(message, isUser = false, fromQueue = false) {
         return new Promise((resolve) => {
           const messageDiv = document.createElement("div");
-          messageDiv.className = `message ${
-            isUser ? "user-message" : "bot-message"
-          }${isFollowUp ? " follow-up-question" : ""}`;
-
-          // Add italic styling for follow-up questions
-          if (isFollowUp) {
-            messageDiv.style.fontStyle = "italic";
-            messageDiv.style.opacity = "0.9";
-          }
+          messageDiv.className = `message ${isUser ? "user-message" : "bot-message"}`;
 
           if (isUser) {
             console.log("[MESSAGE] Adding user message:", message);
@@ -950,12 +872,25 @@
                 }),
               });
 
-              const data = await response.json();
+              const data = await response.json().catch(() => ({}));
               console.log("[API] Received chat response:", data);
               console.log(
                 "[API] Raw chat response:",
                 JSON.stringify(data, null, 2)
               );
+
+              if (!response.ok) {
+                const errMsg = data.details || data.error || response.statusText || "Unknown error";
+                const stageHint = data.stage != null ? ` [Stage: ${data.stage}]` : "";
+                const stackPreview = data.stackPreview && data.stackPreview.length ? "\n\nStack:\n" + data.stackPreview.join("\n") : "";
+                const debugHint = data._debug ? ` (${data._debug})` : "";
+                console.log("[API] 500 full payload:", data);
+                await queueBotMessage(
+                  "Server error (" + response.status + "): " + errMsg + stageHint + debugHint + stackPreview + " — Check backend/.env and server terminal for details."
+                );
+                hideSpinner();
+                return;
+              }
 
               // Add the bot's response to the conversation history
               conversationHistory.push({
@@ -974,37 +909,7 @@
                 JSON.stringify(conversationHistory)
               );
 
-              // Display the response with typewriter effect
-              // Skip auto follow-up since backend provides one
-              await queueBotMessage(data.response, false, false, false, true);
-
-              // Display follow-up question from backend if available
-              // Backend generates contextually relevant follow-ups based on user's question
-              console.log(
-                "[FRONTEND] Received follow-up question:",
-                data.followUpQuestion
-              );
-              if (data.followUpQuestion) {
-                // Add a small delay before showing the follow-up question
-                setTimeout(async () => {
-                  console.log(
-                    "[FRONTEND] Displaying follow-up question:",
-                    data.followUpQuestion
-                  );
-                  await queueBotMessage(
-                    data.followUpQuestion,
-                    false,
-                    true,
-                    true, // Mark as follow-up question
-                    true // Skip auto follow-up (this is already a follow-up)
-                  );
-                }, 500);
-              } else {
-                console.log(
-                  "[FRONTEND] No follow-up question received from backend"
-                );
-              }
-              // Don't generate fallback - backend handles all follow-ups for chat responses
+              await queueBotMessage(data.response);
             } catch (error) {
               console.error("Error:", error);
               await queueBotMessage(
@@ -1032,15 +937,21 @@
         );
       }
 
-      // Add a function to test the backend connection
+      // Add a function to test the backend connection and show status in UI
       function testBackendConnection() {
+        const banner = document.getElementById("connection-banner");
+        if (!banner) return;
         fetch("http://localhost:3000/api/test")
           .then((response) => response.json())
           .then((data) => {
             console.log("Backend test response:", data);
+            banner.className = "connection-banner connection-ok";
+            banner.textContent = "Server connected";
           })
           .catch((error) => {
             console.error("Backend connection test failed:", error);
+            banner.className = "connection-banner connection-refused";
+            banner.innerHTML = "Connection refused. Start the server: open a terminal in the project folder and run <strong>npm start</strong>, then refresh this page.";
           });
       }
 

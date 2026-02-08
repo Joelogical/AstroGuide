@@ -102,7 +102,7 @@ const planetMeanings = {
       },
     },
     negative: {
-      core: "Ego inflation force, dominance energy, arrogance power, defensive drive, attention-seeking force",
+      core: "Ego inflation, dominance energy, arrogance power, defensivness, attention-seeking",
       themes: [
         "ego inflation force",
         "dominance energy",
@@ -4540,6 +4540,11 @@ const aspectStyles = {
   square: { polarity: "friction", tension: "high", strength: 0.8 },
   trine: { polarity: "flowing", tension: "low", strength: 0.7 },
   sextile: { polarity: "cooperative", tension: "low", strength: 0.5 },
+  // Minor aspects (used for depth; typically not named in general interpretations)
+  quincunx: { polarity: "adjustment", tension: "medium", strength: 0.4 },
+  semisextile: { polarity: "slight", tension: "low", strength: 0.3 },
+  semisquare: { polarity: "mild friction", tension: "medium", strength: 0.35 },
+  sesquiquadrate: { polarity: "mild friction", tension: "medium", strength: 0.35 },
 };
 
 /**

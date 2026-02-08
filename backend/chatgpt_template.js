@@ -10,7 +10,7 @@ const chatGPTTemplate = {
 
 {{BIRTH_CHART_DATA}}
 
-Share your insights as if you're having a one-on-one conversation with the person, focusing on:
+Share your insights in a natural, conversational way—like a thoughtful one-on-one—focusing on:
 1. Their unique personality and potential
 2. Key life themes and patterns
 3. Important relationships and career directions
@@ -23,92 +23,95 @@ Please structure your response in a natural, flowing conversation.`,
 
 // Function to format birth chart data for ChatGPT
 function formatBirthChartForChatGPT(birthChart) {
+  if (!birthChart || typeof birthChart !== "object") {
+    throw new Error("formatBirthChartForChatGPT: birthChart is required");
+  }
+  const bd = birthChart.birthData || {};
+  const loc = bd.location || {};
+  const angles = birthChart.angles || {};
+  const asc = angles.ascendant || {};
+  const mc = angles.midheaven || {};
+  const planets = birthChart.planets && typeof birthChart.planets === "object" ? birthChart.planets : {};
+  const houses = Array.isArray(birthChart.houses) ? birthChart.houses : [];
+  const aspects = Array.isArray(birthChart.aspects) ? birthChart.aspects : [];
+
+  const planetNames = {
+    sun: "Sun", moon: "Moon", mars: "Mars", mercury: "Mercury", jupiter: "Jupiter",
+    venus: "Venus", saturn: "Saturn", uranus: "Uranus", neptune: "Neptune", pluto: "Pluto",
+  };
+  const planetList = Object.entries(planets)
+    .map(([planet, info]) => {
+      const deg = info && typeof info.degree === "number" ? info.degree.toFixed(2) : "?";
+      const retrograde = info && info.isRetrograde ? " (R)" : "";
+      return `${planetNames[planet] || planet}: ${deg}° ${info?.sign || "?"} (${info?.element || "?"}) - House ${info?.house ?? "?"}${retrograde}`;
+    })
+    .join("\n");
+  const houseList = houses
+    .map((house) => `House ${house?.number ?? "?"}: ${house?.degree != null ? Number(house.degree).toFixed(2) : "?"}° ${house?.sign || "?"} (${house?.element || "?"})`)
+    .join("\n");
+  const aspectList = aspects
+    .map((aspect) => `${planetNames[aspect?.planet1] || aspect?.planet1} (${aspect?.planet1Sign || "?"}) ${aspect?.aspect || "?"} ${planetNames[aspect?.planet2] || aspect?.planet2} (${aspect?.planet2Sign || "?"}) - ${aspect?.orb != null ? Number(aspect.orb).toFixed(1) : "?"}° orb`)
+    .join("\n");
+
+  let elementalBalance = "";
+  let modalBalance = "";
+  let stelliums = "";
+  let aspectPatterns = "";
+  try {
+    elementalBalance = calculateElementalBalance(birthChart);
+  } catch (e) {
+    elementalBalance = "(unavailable)";
+  }
+  try {
+    modalBalance = calculateModalBalance(birthChart);
+  } catch (e) {
+    modalBalance = "(unavailable)";
+  }
+  try {
+    stelliums = findStelliums(birthChart);
+  } catch (e) {
+    stelliums = "(unavailable)";
+  }
+  try {
+    aspectPatterns = findAspectPatterns(birthChart);
+  } catch (e) {
+    aspectPatterns = "(unavailable)";
+  }
+
   return `
 Birth Chart Analysis Request
 
 Birth Data:
-Date: ${birthChart.birthData.date}
-Time: ${birthChart.birthData.time}
-Location: ${birthChart.birthData.location.latitude}°N, ${
-    birthChart.birthData.location.longitude
-  }°E
-Timezone: UTC${birthChart.birthData.location.timezone}
+Date: ${bd.date ?? "?"}
+Time: ${bd.time ?? "?"}
+Location: ${loc.latitude != null ? loc.latitude + "°N" : "?"}, ${loc.longitude != null ? loc.longitude + "°E" : "?"}
+Timezone: UTC${loc.timezone != null ? loc.timezone : "?"}
 
 Angular Points:
-Ascendant: ${birthChart.angles.ascendant.degree.toFixed(2)}° ${
-    birthChart.angles.ascendant.sign
-  } (${birthChart.angles.ascendant.element})
-Midheaven: ${birthChart.angles.midheaven.degree.toFixed(2)}° ${
-    birthChart.angles.midheaven.sign
-  } (${birthChart.angles.midheaven.element})
+Ascendant: ${asc.degree != null ? Number(asc.degree).toFixed(2) : "?"}° ${asc.sign || "?"} (${asc.element || "?"})
+Midheaven: ${mc.degree != null ? Number(mc.degree).toFixed(2) : "?"}° ${mc.sign || "?"} (${mc.element || "?"})
 
 Planetary Positions:
-${Object.entries(birthChart.planets)
-  .map(([planet, info]) => {
-    const planetNames = {
-      sun: "Sun",
-      moon: "Moon",
-      mars: "Mars",
-      mercury: "Mercury",
-      jupiter: "Jupiter",
-      venus: "Venus",
-      saturn: "Saturn",
-      uranus: "Uranus",
-      neptune: "Neptune",
-      pluto: "Pluto",
-    };
-    const retrograde = info.isRetrograde ? " (R)" : "";
-    return `${planetNames[planet]}: ${info.degree.toFixed(2)}° ${info.sign} (${
-      info.element
-    }) - House ${info.house}${retrograde}`;
-  })
-  .join("\n")}
+${planetList || "(none)"}
 
 Houses:
-${birthChart.houses
-  .map(
-    (house) =>
-      `House ${house.number}: ${house.degree.toFixed(2)}° ${house.sign} (${
-        house.element
-      })`
-  )
-  .join("\n")}
+${houseList || "(none)"}
 
 Aspects:
-${birthChart.aspects
-  .map((aspect) => {
-    const planetNames = {
-      sun: "Sun",
-      moon: "Moon",
-      mars: "Mars",
-      mercury: "Mercury",
-      jupiter: "Jupiter",
-      venus: "Venus",
-      saturn: "Saturn",
-      uranus: "Uranus",
-      neptune: "Neptune",
-      pluto: "Pluto",
-    };
-    return `${planetNames[aspect.planet1]} (${aspect.planet1Sign}) ${
-      aspect.aspect
-    } ${planetNames[aspect.planet2]} (${
-      aspect.planet2Sign
-    }) - ${aspect.orb.toFixed(1)}° orb`;
-  })
-  .join("\n")}
+${aspectList || "(none)"}
 
 Additional Analysis Points:
 1. Elemental Balance:
-${calculateElementalBalance(birthChart)}
+${elementalBalance}
 
 2. Modal Balance:
-${calculateModalBalance(birthChart)}
+${modalBalance}
 
 3. Stelliums:
-${findStelliums(birthChart)}
+${stelliums}
 
 4. Aspect Patterns:
-${findAspectPatterns(birthChart)}
+${aspectPatterns}
 `;
 }
 
@@ -255,13 +258,14 @@ function generateSystemPrompt(interpretationTemplate) {
 CRITICAL RULES - FOLLOW THESE STRICTLY:
 
 0. UNIFIED HOLISTIC INTERPRETATION (MOST CRITICAL - VIOLATING THIS IS THE #1 ERROR):
-   - The chart is ONE INTEGRATED SYSTEM, not separate sections or placements
+   - The chart is ONE INTEGRATED SYSTEM. Use the FULL chart: all planets, ALL aspects (with orbs), houses, elemental/modal balance, stelliums, aspect patterns. Do not stop at a few placements—draw from the whole chart.
+   - Do NOT list many characteristics independently. INSTEAD: pick a few central themes or questions and go deep. Weave placements, aspects, and elements together so the response is one coherent portrait, not a trait-by-trait checklist.
    - DO NOT structure your response by planet ("Your Sun...", "Your Moon...", "Your Mercury...", "Your Venus...")
    - DO NOT structure by sections ("In terms of identity...", "Regarding communication...", "When it comes to relationships...")
    - DO NOT address each placement separately—this creates a fragmented, checklist-style response
    - INSTEAD: Synthesize ALL placements, aspects, and themes into ONE unified, flowing narrative
-   - Weave together multiple placements in each paragraph—show how they interconnect
-   - Each paragraph should integrate 2-3+ chart elements, not isolate them
+   - Weave together multiple placements and aspects in each paragraph—show how they interconnect
+   - Each paragraph should integrate 2-3+ chart elements (planets, aspects, elements, houses), not isolate them
    - Think of the chart as a single web—your interpretation should reflect this unity
    - Your response should read like a unified portrait of a person, not a planet-by-planet breakdown
    - Example of WRONG approach: "Your Sun in Gemini... [paragraph]. Your Moon in Virgo... [paragraph]. Your Mercury... [paragraph]"
@@ -305,12 +309,12 @@ CRITICAL RULES - FOLLOW THESE STRICTLY:
    - DO: Create a unified narrative where traits flow together, not separate paragraphs for separate themes
 
 5. COMMUNICATION STYLE:
-   - Professional yet approachable
-   - Direct and neutral, but gentle
-   - Honest and balanced—MUST acknowledge both strengths AND challenges in every response
-   - No flattery, no sugarcoating, but not harsh
-   - Short sentences, short paragraphs
-   - Every trait has both a positive expression and a shadow side—address both
+   - Descriptive, not prescriptive: describe what the chart suggests and how traits might show up; don't tell the user what to do. Use "this can show up as…", "there's often a tendency toward…". Avoid "you should", "you need to", "try to", "you ought to".
+   - Conversational and human: write like you're talking to someone, not filing a report
+   - Intellectually honest—nuance over certainty; it's fine to say "often" or "it depends"
+   - Direct but warm; vary sentence length so it doesn't feel robotic
+   - Honest and balanced—acknowledge both strengths AND challenges; no sugarcoating, not harsh
+   - Every trait has a light side and a shadow side—address both in natural language, not as lists
 
 6. DEPTH OVER TROPES:
    - Consider aspects deeply—how planets interact
@@ -335,6 +339,10 @@ BAD STYLE - PLANET-BY-PLANET BREAKDOWN (NEVER DO THIS):
 This is WRONG because it treats each planet as a separate topic. DO NOT structure your response this way.
 
 BAD STYLE (other things to avoid):
+- Numbered or headed sections: "### 1. Depth and Intensity:", "**Emotional Sensitivity and Harmony:**", "5. Drive and Creativity:" (checklist feel)
+- One paragraph per planet (Sun paragraph, Moon paragraph, Mercury paragraph...)
+- Opening fluff: "It seems you're eager to dive deeper...", "Your chart reveals a rich tapestry..."
+- Closing list/summary: "These aspects offer a glimpse...", "If you have specific questions, feel free to share!"
 - "Your Sun in Gemini in the 3rd house highlights..." (too chart-focused)
 - Listing placements: "Your chart also suggests..." (too technical)
 - Only positive traits with no challenges (incomplete)
