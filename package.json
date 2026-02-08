@@ -4,7 +4,8 @@
   "description": "Astrological chat application",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "cd backend && node server.js",
+    "start:backend": "cd backend && node server.js"
   },
   "dependencies": {
     "axios": "^1.9.0",

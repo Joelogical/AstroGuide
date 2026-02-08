@@ -93,8 +93,20 @@
       document.getElementById("login").addEventListener("submit", async (e) => {
         e.preventDefault();
 
-        const email = document.getElementById("login-email").value;
+        const email = document.getElementById("login-email").value.trim();
         const password = document.getElementById("login-password").value;
+        const submitButton = e.target.querySelector('button[type="submit"]');
+        const originalButtonText = submitButton.textContent;
+
+        // Validate inputs
+        if (!email || !password) {
+          alert("Please enter both email and password");
+          return;
+        }
+
+        // Show loading state
+        submitButton.disabled = true;
+        submitButton.textContent = "Logging in...";
 
         try {
           const response = await fetch("http://localhost:3000/api/login", {
@@ -104,6 +116,23 @@
             },
             body: JSON.stringify({ email, password }),
           });
+
+          // Check if response is ok
+          if (!response.ok) {
+            // Try to get error message from response
+            let errorMessage = "Login failed";
+            try {
+              const errorData = await response.json();
+              errorMessage = errorData.error || errorMessage;
+            } catch (parseError) {
+              // If response isn't JSON, use status text
+              errorMessage = `Server error: ${response.status} ${response.statusText}`;
+            }
+            alert(errorMessage);
+            submitButton.disabled = false;
+            submitButton.textContent = originalButtonText;
+            return;
+          }
 
           const data = await response.json();
 
@@ -115,11 +144,24 @@
             // Redirect to main page
             window.location.href = "index.html";
           } else {
-            alert(data.error || "Login failed");
+            alert(data.error || "Login failed. Please check your credentials.");
+            submitButton.disabled = false;
+            submitButton.textContent = originalButtonText;
           }
         } catch (error) {
           console.error("Login error:", error);
-          alert("An error occurred during login");
+          
+          // Provide more specific error messages
+          if (error.name === "TypeError" && error.message.includes("fetch")) {
+            alert("Cannot connect to server. Please make sure the backend server is running on http://localhost:3000");
+          } else if (error.name === "NetworkError" || error.message.includes("network")) {
+            alert("Network error. Please check your internet connection.");
+          } else {
+            alert(`An error occurred during login: ${error.message}`);
+          }
+          
+          submitButton.disabled = false;
+          submitButton.textContent = originalButtonText;
         }
       });
 
@@ -129,13 +171,31 @@
         .addEventListener("submit", async (e) => {
           e.preventDefault();
 
-          const name = document.getElementById("signup-name").value;
-          const email = document.getElementById("signup-email").value;
+          const name = document.getElementById("signup-name").value.trim();
+          const email = document.getElementById("signup-email").value.trim();
           const password = document.getElementById("signup-password").value;
           const birthDate = document.getElementById("signup-birth-date").value;
           const birthTime = document.getElementById("signup-birth-time").value;
-          const birthPlace =
-            document.getElementById("signup-birth-place").value;
+          const birthPlace = document.getElementById("signup-birth-place").value.trim();
+          const submitButton = e.target.querySelector('button[type="submit"]');
+          const originalButtonText = submitButton.textContent;
+
+          // Validate inputs
+          if (!name || !email || !password || !birthDate || !birthTime || !birthPlace) {
+            alert("Please fill in all fields");
+            return;
+          }
+
+          // Validate email format
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (!emailRegex.test(email)) {
+            alert("Please enter a valid email address");
+            return;
+          }
+
+          // Show loading state
+          submitButton.disabled = true;
+          submitButton.textContent = "Signing up...";
 
           try {
             const response = await fetch("http://localhost:3000/api/signup", {
@@ -153,6 +213,23 @@
               }),
             });
 
+            // Check if response is ok
+            if (!response.ok) {
+              // Try to get error message from response
+              let errorMessage = "Signup failed";
+              try {
+                const errorData = await response.json();
+                errorMessage = errorData.error || errorMessage;
+              } catch (parseError) {
+                // If response isn't JSON, use status text
+                errorMessage = `Server error: ${response.status} ${response.statusText}`;
+              }
+              alert(errorMessage);
+              submitButton.disabled = false;
+              submitButton.textContent = originalButtonText;
+              return;
+            }
+
             const data = await response.json();
 
             if (data.success) {
@@ -163,11 +240,24 @@
               // Redirect to main page
               window.location.href = "index.html";
             } else {
-              alert(data.error || "Signup failed");
+              alert(data.error || "Signup failed. Please try again.");
+              submitButton.disabled = false;
+              submitButton.textContent = originalButtonText;
             }
           } catch (error) {
             console.error("Signup error:", error);
-            alert("An error occurred during signup");
+            
+            // Provide more specific error messages
+            if (error.name === "TypeError" && error.message.includes("fetch")) {
+              alert("Cannot connect to server. Please make sure the backend server is running on http://localhost:3000");
+            } else if (error.name === "NetworkError" || error.message.includes("network")) {
+              alert("Network error. Please check your internet connection.");
+            } else {
+              alert(`An error occurred during signup: ${error.message}`);
+            }
+            
+            submitButton.disabled = false;
+            submitButton.textContent = originalButtonText;
           }
         });
     </script>
