@@ -303,18 +303,24 @@
       .chart-wheel-container svg .house-group,
       .chart-wheel-container svg .sign-group,
       .chart-wheel-container svg .ac-group,
-      .chart-wheel-container svg .mc-group {
+      .chart-wheel-container svg .mc-group,
+      .chart-wheel-container svg .aspect-group {
         transition: transform 0.2s ease;
       }
       .chart-wheel-container svg .planet-group:hover,
       .chart-wheel-container svg .house-group:hover,
       .chart-wheel-container svg .sign-group:hover,
       .chart-wheel-container svg .ac-group:hover,
-      .chart-wheel-container svg .mc-group:hover {
-        transform: scale(1.05);
+      .chart-wheel-container svg .mc-group:hover,
+      .chart-wheel-container svg .aspect-group:hover {
+        transform: scale(1.02);
       }
       .chart-wheel-container svg line {
         transition: stroke-width 0.2s ease, opacity 0.2s ease;
+      }
+      .chart-wheel-container svg .aspect-group text {
+        transition: opacity 0.2s ease, font-size 0.2s ease;
+        pointer-events: none; /* Allow clicks to pass through to group */
       }
       .chat-header {
         display: flex;
@@ -1451,6 +1457,34 @@
             
             // House cusp line (from inner circle to outer edge)
             const innerPos = getPosition(displayDegree, innerRadius);
+            
+            // Invisible wider hit area for house line (for easier clicking)
+            const houseHitArea = svg.append("line")
+              .attr("x1", innerPos.x)
+              .attr("y1", innerPos.y)
+              .attr("x2", pos.x)
+              .attr("y2", pos.y)
+              .attr("stroke", "transparent")
+              .attr("stroke-width", 25) // Broad invisible hit area
+              .attr("opacity", 0)
+              .style("cursor", "pointer")
+              .on("mouseenter", function() {
+                houseLine
+                  .attr("stroke-width", 3)
+                  .attr("opacity", 1)
+                  .attr("stroke", "#10b981");
+              })
+              .on("mouseleave", function() {
+                houseLine
+                  .attr("stroke-width", 1.5)
+                  .attr("opacity", 0.6)
+                  .attr("stroke", "#64748b");
+              })
+              .on("click", function() {
+                const houseSign = house.sign || "";
+                queryChartElement(`House ${house.number}${houseSign ? ` ${houseSign}` : ''}`);
+              });
+            
             const houseLine = svg.append("line")
               .attr("x1", innerPos.x)
               .attr("y1", innerPos.y)
@@ -1474,11 +1508,12 @@
                   .attr("stroke", "#64748b");
               })
               .on("click", function() {
-                queryChartElement(`Tell me about House ${house.number} in my chart`);
+                const houseSign = house.sign || "";
+                queryChartElement(`House ${house.number}${houseSign ? ` ${houseSign}` : ''}`);
               });
 
-            // House number label (inside inner circle, larger) - clickable area
-            const labelRadius = innerRadius - 25;
+            // House number label (outside the wheel) - clickable area
+            const labelRadius = outerRadius + 20;
             const labelPos = getPosition(displayDegree, labelRadius);
             const houseGroup = svg.append("g")
               .attr("class", "house-group")
@@ -1522,7 +1557,8 @@
                 .attr("stroke", "#64748b");
             })
             .on("click", function() {
-              queryChartElement(`Tell me about House ${house.number} in my chart`);
+              const houseSign = house.sign || "";
+              queryChartElement(`House ${house.number}${houseSign ? ` ${houseSign}` : ''}`);
             });
           }
         });
@@ -1592,7 +1628,135 @@
               .attr("fill", "#94a3b8");
           })
           .on("click", function() {
-            queryChartElement(`Tell me about ${signFullNames[i]} in my chart`);
+            queryChartElement(signFullNames[i]);
+          });
+        }
+
+        // Draw aspect lines FIRST (so they appear behind planets)
+        if (birthChart.aspects && Array.isArray(birthChart.aspects)) {
+          const majorAspects = ["conjunction", "opposition", "square", "trine", "sextile"];
+          const aspectColors = {
+            conjunction: "#ffffff",
+            opposition: "#ff6b6b",
+            square: "#ffa500",
+            trine: "#4ecdc4",
+            sextile: "#95e1d3"
+          };
+
+          birthChart.aspects.forEach(aspect => {
+            if (aspect && 
+                aspect.aspect && 
+                majorAspects.includes(aspect.aspect.toLowerCase()) &&
+                aspect.planet1 && 
+                aspect.planet2) {
+              const planet1 = birthChart.planets[aspect.planet1?.toLowerCase()];
+              const planet2 = birthChart.planets[aspect.planet2?.toLowerCase()];
+              
+              if (planet1 && 
+                  planet2 && 
+                  planet1.degree !== undefined && 
+                  planet1.degree !== null &&
+                  !isNaN(planet1.degree) &&
+                  planet2.degree !== undefined && 
+                  planet2.degree !== null &&
+                  !isNaN(planet2.degree)) {
+                // Position aspect lines at same radius as planets (85% of outer radius)
+                const planetRingRadius = outerRadius * 0.85;
+                const displayDeg1 = chartToDisplayDegree(planet1.degree);
+                const displayDeg2 = chartToDisplayDegree(planet2.degree);
+                const pos1 = getPosition(displayDeg1, planetRingRadius);
+                const pos2 = getPosition(displayDeg2, planetRingRadius);
+                const color = aspectColors[aspect.aspect.toLowerCase()] || "#ffffff";
+                
+                // Calculate midpoint for aspect label
+                const midX = (pos1.x + pos2.x) / 2;
+                const midY = (pos1.y + pos2.y) / 2;
+                
+                // Create aspect group for better organization and interactivity
+                const aspectGroup = svg.append("g")
+                  .attr("class", "aspect-group")
+                  .style("cursor", "pointer");
+                
+                // Invisible wider hit area for the aspect line (inserted before planets for proper z-order)
+                const hitArea = svg.insert("line", "circle")
+                  .attr("x1", pos1.x)
+                  .attr("y1", pos1.y)
+                  .attr("x2", pos2.x)
+                  .attr("y2", pos2.y)
+                  .attr("stroke", "transparent")
+                  .attr("stroke-width", 30) // Much broader invisible hit area for easier clicking
+                  .attr("opacity", 0)
+                  .style("cursor", "pointer");
+                
+                // Draw aspect line (behind planets) - append directly since aspects are drawn before planets
+                const aspectLine = svg.append("line")
+                  .attr("x1", pos1.x)
+                  .attr("y1", pos1.y)
+                  .attr("x2", pos2.x)
+                  .attr("y2", pos2.y)
+                  .attr("stroke", color)
+                  .attr("stroke-width", 2.5)
+                  .attr("opacity", 0.6)
+                  .style("cursor", "pointer");
+                
+                // Add aspect label at midpoint for better visibility
+                const aspectName = aspect.aspect.charAt(0).toUpperCase() + aspect.aspect.slice(1);
+                const aspectLabel = aspectGroup.append("text")
+                  .attr("x", midX)
+                  .attr("y", midY)
+                  .attr("text-anchor", "middle")
+                  .attr("dominant-baseline", "middle")
+                  .attr("fill", color)
+                  .attr("font-size", "10px")
+                  .attr("font-weight", "bold")
+                  .attr("opacity", 0)
+                  .text(aspectName.substring(0, 3)); // Abbreviated aspect name
+                
+                // Hover and click handlers for aspect group
+                aspectGroup.on("mouseenter", function() {
+                  aspectLine
+                    .attr("stroke-width", 4)
+                    .attr("opacity", 0.9)
+                    .transition()
+                    .duration(200);
+                  aspectLabel
+                    .attr("opacity", 0.8)
+                    .attr("font-size", "12px")
+                    .transition()
+                    .duration(200);
+                  hitArea
+                    .attr("stroke-width", 40); // Expand hit area even more on hover
+                })
+                .on("mouseleave", function() {
+                  aspectLine
+                    .attr("stroke-width", 2.5)
+                    .attr("opacity", 0.6)
+                    .transition()
+                    .duration(200);
+                  aspectLabel
+                    .attr("opacity", 0)
+                    .attr("font-size", "10px")
+                    .transition()
+                    .duration(200);
+                  hitArea
+                    .attr("stroke-width", 30); // Reset hit area to broader size
+                })
+                .on("click", function() {
+                  const planet1Name = aspect.planet1.charAt(0).toUpperCase() + aspect.planet1.slice(1);
+                  const planet2Name = aspect.planet2.charAt(0).toUpperCase() + aspect.planet2.slice(1);
+                  const aspectName = aspect.aspect.toLowerCase();
+                  queryChartElement(`${planet1Name} ${aspectName} ${planet2Name}`);
+                });
+                
+                // Also make hit area clickable (part of aspect group)
+                hitArea.on("click", function() {
+                  const planet1Name = aspect.planet1.charAt(0).toUpperCase() + aspect.planet1.slice(1);
+                  const planet2Name = aspect.planet2.charAt(0).toUpperCase() + aspect.planet2.slice(1);
+                  const aspectName = aspect.aspect.toLowerCase();
+                  queryChartElement(`${planet1Name} ${aspectName} ${planet2Name}`);
+                });
+              }
+            }
           });
         }
 
@@ -1733,7 +1897,8 @@
               })
               .on("click", function() {
                 const planetDisplayName = planetName.charAt(0).toUpperCase() + planetName.slice(1);
-                queryChartElement(`Tell me about ${planetDisplayName} in my chart`);
+                const planetSign = planetData.sign || "";
+                queryChartElement(`${planetDisplayName}${planetSign ? ` ${planetSign}` : ''}`);
               });
             }
           });
@@ -1785,7 +1950,8 @@
               .attr("font-size", "16px");
           })
           .on("click", function() {
-            queryChartElement("Tell me about my Ascendant in my chart");
+            const ascSign = birthChart.angles?.ascendant?.sign || "";
+            queryChartElement(`Ascendant${ascSign ? ` ${ascSign}` : ''}`);
           });
 
           // Midheaven (MC) - relative to Ascendant - clickable
@@ -1832,122 +1998,13 @@
                 .attr("font-size", "16px");
             })
             .on("click", function() {
-              queryChartElement("Tell me about my Midheaven (MC) in my chart");
+              const mcSign = birthChart.angles?.midheaven?.sign || "";
+              queryChartElement(`Midheaven${mcSign ? ` ${mcSign}` : ''}`);
             });
           }
         }
 
-        // Draw aspect lines (major aspects only)
-        if (birthChart.aspects && Array.isArray(birthChart.aspects)) {
-          const majorAspects = ["conjunction", "opposition", "square", "trine", "sextile"];
-          const aspectColors = {
-            conjunction: "#ffffff",
-            opposition: "#ff6b6b",
-            square: "#ffa500",
-            trine: "#4ecdc4",
-            sextile: "#95e1d3"
-          };
-
-          birthChart.aspects.forEach(aspect => {
-            if (aspect && 
-                aspect.aspect && 
-                majorAspects.includes(aspect.aspect.toLowerCase()) &&
-                aspect.planet1 && 
-                aspect.planet2) {
-              const planet1 = birthChart.planets[aspect.planet1?.toLowerCase()];
-              const planet2 = birthChart.planets[aspect.planet2?.toLowerCase()];
-              
-              if (planet1 && 
-                  planet2 && 
-                  planet1.degree !== undefined && 
-                  planet1.degree !== null &&
-                  !isNaN(planet1.degree) &&
-                  planet2.degree !== undefined && 
-                  planet2.degree !== null &&
-                  !isNaN(planet2.degree)) {
-                // Position aspect lines at same radius as planets (85% of outer radius)
-                const planetRingRadius = outerRadius * 0.85;
-                const displayDeg1 = chartToDisplayDegree(planet1.degree);
-                const displayDeg2 = chartToDisplayDegree(planet2.degree);
-                const pos1 = getPosition(displayDeg1, planetRingRadius);
-                const pos2 = getPosition(displayDeg2, planetRingRadius);
-                const color = aspectColors[aspect.aspect.toLowerCase()] || "#ffffff";
-                
-                // Create invisible wider line for easier clicking
-                const midX = (pos1.x + pos2.x) / 2;
-                const midY = (pos1.y + pos2.y) / 2;
-                const lineLength = Math.sqrt(Math.pow(pos2.x - pos1.x, 2) + Math.pow(pos2.y - pos1.y, 2));
-                const angle = Math.atan2(pos2.y - pos1.y, pos2.x - pos1.x);
-                
-                // Invisible wider hit area for the aspect line
-                const hitArea = svg.insert("line", "circle")
-                  .attr("x1", pos1.x)
-                  .attr("y1", pos1.y)
-                  .attr("x2", pos2.x)
-                  .attr("y2", pos2.y)
-                  .attr("stroke", "transparent")
-                  .attr("stroke-width", 15) // Wider hit area
-                  .attr("opacity", 0)
-                  .style("cursor", "pointer");
-                
-                // Draw aspect line (behind planets, more visible)
-                const aspectLine = svg.insert("line", "circle")
-                  .attr("x1", pos1.x)
-                  .attr("y1", pos1.y)
-                  .attr("x2", pos2.x)
-                  .attr("y2", pos2.y)
-                  .attr("stroke", color)
-                  .attr("stroke-width", 2.5)
-                  .attr("opacity", 0.6)
-                  .style("cursor", "pointer");
-                
-                // Hover and click handlers for aspect line
-                const aspectGroup = svg.append("g")
-                  .attr("class", "aspect-group");
-                
-                aspectLine.on("mouseenter", function() {
-                  d3.select(this)
-                    .attr("stroke-width", 4)
-                    .attr("opacity", 0.9)
-                    .transition()
-                    .duration(200);
-                })
-                .on("mouseleave", function() {
-                  d3.select(this)
-                    .attr("stroke-width", 2.5)
-                    .attr("opacity", 0.6)
-                    .transition()
-                    .duration(200);
-                })
-                .on("click", function() {
-                  const planet1Name = aspect.planet1.charAt(0).toUpperCase() + aspect.planet1.slice(1);
-                  const planet2Name = aspect.planet2.charAt(0).toUpperCase() + aspect.planet2.slice(1);
-                  const aspectName = aspect.aspect.charAt(0).toUpperCase() + aspect.aspect.slice(1);
-                  queryChartElement(`Tell me about the ${aspectName} aspect between ${planet1Name} and ${planet2Name} in my chart`);
-                });
-                
-                // Also make hit area clickable
-                hitArea.on("click", function() {
-                  const planet1Name = aspect.planet1.charAt(0).toUpperCase() + aspect.planet1.slice(1);
-                  const planet2Name = aspect.planet2.charAt(0).toUpperCase() + aspect.planet2.slice(1);
-                  const aspectName = aspect.aspect.charAt(0).toUpperCase() + aspect.aspect.slice(1);
-                  queryChartElement(`Tell me about the ${aspectName} aspect between ${planet1Name} and ${planet2Name} in my chart`);
-                });
-              }
-            }
-          });
-        }
-
-        // Center label (larger, more prominent)
-        svg.append("text")
-          .attr("x", 0)
-          .attr("y", 0)
-          .attr("text-anchor", "middle")
-          .attr("dominant-baseline", "middle")
-          .attr("fill", "#e2e8f0")
-          .attr("font-size", "18px")
-          .attr("font-weight", "bold")
-          .text("Birth Chart");
+        // Center remains empty - no label
 
           console.log("[CHART WHEEL] Chart wheel rendered successfully");
         } catch (error) {
