@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AstroGuide</title>
     <link rel="stylesheet" href="styles.css" />
+    <script src="https://d3js.org/d3.v7.min.js"></script>
   </head>
   <body>
     <script>
@@ -16,33 +17,73 @@
     </script>
 
     <div id="connection-banner" class="connection-banner connection-pending">Checking server…</div>
-    <div class="chat-container">
-      <div class="chat-header">
-        <h1>AstroGuide</h1>
-        <button id="logout-button" class="logout-button">Logout</button>
-        <button id="clear-button" class="clear-button">Clear Chat</button>
-        <button id="recalculate-chart-button" class="recalculate-button">
-          Recalculate Chart
-        </button>
-        <button id="view-raw-data-button" class="view-raw-button">
-          View Raw Data
-        </button>
-      </div>
-      <div class="chat-messages" id="chat-messages">
-        <div class="message bot-message initial-message">
-          Hello! I'm AstroGuide, your astrological guide. I'm here to help you
-          understand yourself through your birth chart. What would you like to
-          explore?
+    <div class="main-container">
+      <div class="chat-container">
+        <div class="chat-header">
+          <h1>AstroGuide</h1>
+          <div class="profile-switcher">
+            <button type="button" id="profile-dropdown-btn" class="profile-dropdown-btn" aria-haspopup="true" aria-expanded="false">
+              Chart: <span id="active-profile-name">—</span> ▼
+            </button>
+            <div id="profile-dropdown" class="profile-dropdown hidden">
+              <div id="profile-list"></div>
+              <button type="button" id="add-profile-btn" class="add-profile-btn">+ Add profile</button>
+            </div>
+          </div>
+          <button id="logout-button" class="logout-button">Logout</button>
+          <button id="clear-button" class="clear-button">Clear Chat</button>
+          <button id="recalculate-chart-button" class="recalculate-button">
+            Recalculate Chart
+          </button>
+          <button id="view-raw-data-button" class="view-raw-button">
+            View Raw Data
+          </button>
+        </div>
+        <!-- Add profile modal -->
+        <div id="add-profile-modal" class="modal hidden">
+          <div class="modal-content">
+            <h3>Add chart profile</h3>
+            <form id="add-profile-form">
+              <div class="form-group">
+                <label for="profile-name">Profile name</label>
+                <input type="text" id="profile-name" placeholder="e.g. Me, Partner, Child" required />
+              </div>
+              <div class="form-group">
+                <label for="profile-birth-date">Birth date</label>
+                <input type="date" id="profile-birth-date" required />
+              </div>
+              <div class="form-group">
+                <label for="profile-birth-time">Birth time</label>
+                <input type="time" id="profile-birth-time" required />
+              </div>
+              <div class="form-group">
+                <label for="profile-birth-place">Birth place</label>
+                <input type="text" id="profile-birth-place" placeholder="City, Country" required />
+              </div>
+              <div class="modal-actions">
+                <button type="button" id="add-profile-cancel" class="btn-secondary">Cancel</button>
+                <button type="submit" id="add-profile-submit" class="btn-primary">Add & switch</button>
+              </div>
+            </form>
+          </div>
+        </div>
+        <div class="chat-messages" id="chat-messages">
+          <div class="message bot-message initial-message">
+            Hello! I'm AstroGuide, your astrological guide. I'm here to help you
+            understand yourself through your birth chart. What would you like to
+            explore?
+          </div>
+        </div>
+        <div class="input-container">
+          <input
+            type="text"
+            id="message-input"
+            placeholder="Type your message here..."
+          />
+          <button id="send-button">Send</button>
         </div>
       </div>
-      <div class="input-container">
-        <input
-          type="text"
-          id="message-input"
-          placeholder="Type your message here..."
-        />
-        <button id="send-button">Send</button>
-      </div>
+      <div id="chart-wheel-container" class="chart-wheel-container"></div>
     </div>
 
     <style>
@@ -64,11 +105,22 @@
         color: #ffb0b0;
       }
       .connection-refused a { color: #7dd3fc; }
+      .main-container {
+        display: flex;
+        gap: 20px;
+        align-items: flex-start;
+        max-width: 1800px;
+        margin: 0 auto;
+      }
       .chat-container {
+        flex: 1;
+        min-width: 0;
         background: #18192b;
         border-radius: 12px;
         box-shadow: 0 2px 16px rgba(0, 0, 0, 0.3);
         padding: 24px;
+        display: flex;
+        flex-direction: column;
       }
       .chat-header h1 {
         color: #fff;
@@ -208,6 +260,192 @@
       .view-raw-button:hover {
         background: #059669;
       }
+      .chart-wheel-container {
+        flex-shrink: 0;
+        width: 750px;
+        padding: 20px;
+        background: rgba(15, 23, 42, 0.9);
+        border-radius: 12px;
+        text-align: center;
+        overflow: visible;
+        position: sticky;
+        top: 20px;
+        max-height: calc(100vh - 40px);
+        overflow-y: auto;
+      }
+      .chart-wheel-container:empty::before {
+        content: "Chart wheel will appear here when a birth chart is loaded";
+        display: block;
+        color: #64748b;
+        padding: 40px 20px;
+        font-style: italic;
+      }
+      @media (max-width: 1400px) {
+        .main-container {
+          flex-direction: column;
+        }
+        .chart-wheel-container {
+          width: 100%;
+          max-width: 750px;
+          margin: 20px auto 0;
+          position: static;
+          max-height: none;
+        }
+      }
+      .chart-wheel-container svg {
+        background: rgba(15, 23, 42, 0.3);
+        border-radius: 8px;
+        display: block;
+        margin: 0 auto;
+      }
+      /* Interactive chart elements - hover effects */
+      .chart-wheel-container svg .planet-group,
+      .chart-wheel-container svg .house-group,
+      .chart-wheel-container svg .sign-group,
+      .chart-wheel-container svg .ac-group,
+      .chart-wheel-container svg .mc-group {
+        transition: transform 0.2s ease;
+      }
+      .chart-wheel-container svg .planet-group:hover,
+      .chart-wheel-container svg .house-group:hover,
+      .chart-wheel-container svg .sign-group:hover,
+      .chart-wheel-container svg .ac-group:hover,
+      .chart-wheel-container svg .mc-group:hover {
+        transform: scale(1.05);
+      }
+      .chart-wheel-container svg line {
+        transition: stroke-width 0.2s ease, opacity 0.2s ease;
+      }
+      .chat-header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+      .profile-switcher {
+        position: relative;
+        margin-left: 10px;
+      }
+      .profile-dropdown-btn {
+        padding: 8px 14px;
+        background: #2d2e48;
+        border: 1px solid #35365a;
+        border-radius: 6px;
+        color: #f5f6fa;
+        cursor: pointer;
+        font-size: 0.95em;
+      }
+      .profile-dropdown-btn:hover {
+        background: #35365a;
+      }
+      .profile-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        margin-top: 4px;
+        min-width: 200px;
+        background: #23243a;
+        border: 1px solid #35365a;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        z-index: 100;
+        padding: 8px 0;
+      }
+      .profile-dropdown.hidden {
+        display: none;
+      }
+      .profile-dropdown .profile-item {
+        display: block;
+        width: 100%;
+        padding: 10px 14px;
+        border: none;
+        background: none;
+        color: #f5f6fa;
+        text-align: left;
+        cursor: pointer;
+        font-size: 0.95em;
+      }
+      .profile-dropdown .profile-item:hover {
+        background: #35365a;
+      }
+      .add-profile-btn {
+        display: block;
+        width: 100%;
+        padding: 10px 14px;
+        margin-top: 4px;
+        border: none;
+        border-top: 1px solid #35365a;
+        background: none;
+        color: #a5b4fc;
+        cursor: pointer;
+        font-size: 0.9em;
+      }
+      .add-profile-btn:hover {
+        background: #35365a;
+      }
+      .modal {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.6);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 200;
+      }
+      .modal.hidden {
+        display: none;
+      }
+      .modal-content {
+        background: #23243a;
+        border: 1px solid #35365a;
+        border-radius: 12px;
+        padding: 24px;
+        max-width: 400px;
+        width: 90%;
+      }
+      .modal-content h3 {
+        margin: 0 0 16px 0;
+        color: #fff;
+      }
+      .modal-content .form-group {
+        margin-bottom: 14px;
+      }
+      .modal-content label {
+        display: block;
+        margin-bottom: 4px;
+        color: #a0a0c0;
+        font-size: 0.9em;
+      }
+      .modal-content input {
+        width: 100%;
+        padding: 8px 12px;
+        border-radius: 6px;
+        border: 1px solid #35365a;
+        background: #18192b;
+        color: #f5f6fa;
+        box-sizing: border-box;
+      }
+      .modal-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 20px;
+      }
+      .btn-secondary {
+        padding: 8px 16px;
+        background: #35365a;
+        color: #f5f6fa;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      .btn-primary {
+        padding: 8px 16px;
+        background: #3b82f6;
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+      }
       .raw-data-display {
         background: #1a1a2e;
         border: 1px solid #35365a;
@@ -297,6 +535,305 @@
         "recalculate-chart-button"
       );
       const viewRawDataButton = document.getElementById("view-raw-data-button");
+
+      // ---------- Profile storage (switch between charts) ----------
+      const PROFILE_STORAGE_KEY = "chartProfiles";
+      const ACTIVE_PROFILE_KEY = "activeProfileId";
+
+      function getChartProfiles() {
+        try {
+          const raw = localStorage.getItem(PROFILE_STORAGE_KEY);
+          return raw ? JSON.parse(raw) : [];
+        } catch (e) {
+          return [];
+        }
+      }
+
+      function setChartProfiles(profiles) {
+        localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profiles));
+      }
+
+      function getActiveProfileId() {
+        return localStorage.getItem(ACTIVE_PROFILE_KEY);
+      }
+
+      function setActiveProfileId(id) {
+        localStorage.setItem(ACTIVE_PROFILE_KEY, id);
+      }
+
+      function getActiveProfile() {
+        const profiles = getChartProfiles();
+        const id = getActiveProfileId();
+        if (id) {
+          const p = profiles.find((x) => x.id === id);
+          if (p) return p;
+        }
+        return profiles.length ? profiles[0] : null;
+      }
+
+      function saveActiveProfileChart(birthChartData) {
+        const profiles = getChartProfiles();
+        const id = getActiveProfileId();
+        const idx = profiles.findIndex((x) => x.id === id);
+        if (idx === -1) return;
+        profiles[idx].birthChartData = birthChartData;
+        setChartProfiles(profiles);
+        // Automatically render the chart wheel when chart data is saved
+        if (birthChartData) {
+          renderChartWheel(birthChartData);
+        }
+      }
+
+      function saveActiveProfileConversation(history) {
+        const profiles = getChartProfiles();
+        const id = getActiveProfileId();
+        const idx = profiles.findIndex((x) => x.id === id);
+        if (idx === -1) return;
+        profiles[idx].conversationHistory = history;
+        setChartProfiles(profiles);
+      }
+
+      function getActiveProfileConversation() {
+        const p = getActiveProfile();
+        if (!p) return [];
+        // Ensure the profile has its own conversation history array
+        if (p.conversationHistory === undefined) {
+          p.conversationHistory = [];
+          const profiles = getChartProfiles();
+          const idx = profiles.findIndex((x) => x.id === p.id);
+          if (idx !== -1) {
+            profiles[idx].conversationHistory = [];
+            setChartProfiles(profiles);
+          }
+        }
+        return p.conversationHistory || [];
+      }
+
+      function migrateFromLegacyProfiles() {
+        const profiles = getChartProfiles();
+        if (profiles.length > 0) return;
+        const userData = JSON.parse(localStorage.getItem("userData") || "{}");
+        const birthChartData = JSON.parse(localStorage.getItem("birthChartData") || "null");
+        const name = userData.name || "My chart";
+        const id = crypto.randomUUID ? crypto.randomUUID() : "legacy-" + Date.now();
+        // Only migrate conversation history for the legacy profile (one-time migration)
+        // After migration, each profile will have its own isolated history
+        const legacyHistory = JSON.parse(localStorage.getItem("conversationHistory") || "[]");
+        const newProfile = {
+          id,
+          name,
+          birthDate: userData.birthDate || "",
+          birthTime: userData.birthTime || "",
+          birthPlace: userData.birthPlace || "",
+          birthChartData: birthChartData || null,
+          conversationHistory: legacyHistory, // Only for legacy migration - new profiles get []
+        };
+        setChartProfiles([newProfile]);
+        setActiveProfileId(id);
+        localStorage.removeItem("birthChartData");
+        localStorage.removeItem("conversationHistory"); // Remove shared key after migration
+      }
+
+      function renderProfileDropdown() {
+        const profiles = getChartProfiles();
+        const activeId = getActiveProfileId();
+        const listEl = document.getElementById("profile-list");
+        const nameEl = document.getElementById("active-profile-name");
+        if (!listEl || !nameEl) return;
+        const active = profiles.find((p) => p.id === activeId) || profiles[0];
+        nameEl.textContent = active ? active.name : "—";
+        listEl.innerHTML = "";
+        profiles.forEach((p) => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "profile-item";
+          btn.textContent = p.name;
+          btn.dataset.profileId = p.id;
+          if (p.id === activeId) btn.style.fontWeight = "bold";
+          btn.addEventListener("click", () => switchToProfile(p.id));
+          listEl.appendChild(btn);
+        });
+      }
+
+      function renderConversation(profile) {
+        const container = document.getElementById("chat-messages");
+        if (!container) return;
+        const initial = container.querySelector(".initial-message");
+        container.innerHTML = "";
+        if (initial) container.appendChild(initial);
+        const history = (profile && profile.conversationHistory) ? profile.conversationHistory : [];
+        history.forEach((msg) => {
+          const div = document.createElement("div");
+          div.className = `message ${msg.role === "user" ? "user-message" : "bot-message"}`;
+          div.textContent = msg.content || "";
+          container.appendChild(div);
+        });
+        container.scrollTop = container.scrollHeight;
+      }
+
+      function switchToProfile(profileId) {
+        const profiles = getChartProfiles();
+        const current = getActiveProfile();
+        
+        // Ensure current profile has its own conversation history (don't load from shared localStorage)
+        if (current) {
+          const idx = profiles.findIndex((p) => p.id === current.id);
+          if (idx !== -1) {
+            // Initialize conversationHistory if it doesn't exist (empty array, not from shared storage)
+            if (profiles[idx].conversationHistory === undefined) {
+              profiles[idx].conversationHistory = [];
+              setChartProfiles(profiles);
+            }
+          }
+        }
+        
+        setActiveProfileId(profileId);
+        const next = getChartProfiles().find((p) => p.id === profileId);
+        
+        // Ensure the next profile also has its own conversation history
+        if (next) {
+          const nextIdx = profiles.findIndex((p) => p.id === profileId);
+          if (nextIdx !== -1 && profiles[nextIdx].conversationHistory === undefined) {
+            profiles[nextIdx].conversationHistory = [];
+            setChartProfiles(profiles);
+          }
+        }
+        
+        renderProfileDropdown();
+        renderConversation(next);
+        document.getElementById("profile-dropdown").classList.add("hidden");
+        ensureChartLoadedForActiveProfile();
+        // Render chart wheel for the switched profile if chart data exists
+        if (next && next.birthChartData) {
+          renderChartWheel(next.birthChartData);
+        } else {
+          // Clear wheel if no chart data
+          const container = document.getElementById("chart-wheel-container");
+          if (container) {
+            container.innerHTML = "";
+          }
+        }
+      }
+
+      // Top-level geocoding for use in chat and add-profile flow
+      async function getCoordinates(cityName) {
+        if (!cityName || cityName.trim() === "") {
+          throw new Error("Birth place is required");
+        }
+        const query = encodeURIComponent(cityName.trim());
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${query}&limit=1&addressdetails=1`,
+          { headers: { "User-Agent": "AstroGuide/1.0" } }
+        );
+        if (!response.ok) throw new Error(`Geocoding service error: ${response.status}`);
+        const data = await response.json();
+        if (!data || data.length === 0) {
+          throw new Error(`Location "${cityName}" not found. Please try a more specific location (e.g., "City, Country").`);
+        }
+        const result = data[0];
+        const latitude = parseFloat(result.lat);
+        const longitude = parseFloat(result.lon);
+        if (isNaN(latitude) || isNaN(longitude)) throw new Error("Invalid coordinates from geocoding");
+        if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+          throw new Error("Coordinates out of valid range");
+        }
+        return {
+          latitude,
+          longitude,
+          displayName: result.display_name || cityName,
+          originalQuery: cityName,
+        };
+      }
+
+      function getNthSunday(year, month, n) {
+        const firstDay = new Date(year, month - 1, 1);
+        const firstSunday = 1 + ((7 - firstDay.getDay()) % 7);
+        return firstSunday + (n - 1) * 7;
+      }
+
+      function getLastSunday(year, month) {
+        const lastDay = new Date(year, month, 0);
+        const dayOfWeek = lastDay.getDay();
+        return lastDay.getDate() - dayOfWeek;
+      }
+
+      async function calculateTimezone(lat, lon, y, m, d) {
+        let baseOffset = Math.round(lon / 15);
+        if (lon >= -125 && lon < -67) {
+          if (lon >= -125 && lon < -112) baseOffset = -8;
+          else if (lon >= -112 && lon < -102) baseOffset = -7;
+          else if (lon >= -102 && lon < -87) baseOffset = -6;
+          else if (lon >= -87 && lon < -67) baseOffset = -5;
+          const isArizona = lat >= 31 && lat <= 37 && lon >= -115 && lon < -109;
+          const isHawaii = lat >= 18 && lat <= 23 && lon >= -161 && lon < -154;
+          if (!isArizona && !isHawaii) {
+            if (y >= 2007) {
+              const marchStart = getNthSunday(y, 3, 2);
+              const novEnd = getNthSunday(y, 11, 1);
+              const dateNum = y * 10000 + m * 100 + d;
+              const startNum = y * 10000 + 3 * 100 + marchStart;
+              const endNum = y * 10000 + 11 * 100 + novEnd;
+              if (dateNum >= startNum && dateNum < endNum) baseOffset += 1;
+            } else if (y >= 1987) {
+              const aprilStart = getNthSunday(y, 4, 1);
+              const octEnd = getLastSunday(y, 10);
+              const dateNum = y * 10000 + m * 100 + d;
+              const startNum = y * 10000 + 4 * 100 + aprilStart;
+              const endNum = y * 10000 + 10 * 100 + octEnd;
+              if (dateNum >= startNum && dateNum <= endNum) baseOffset += 1;
+            }
+          }
+        }
+        return baseOffset;
+      }
+
+      /** Fetches birth chart for a profile (birthDate, birthTime, birthPlace). Returns { chartData, resolvedLocation } or throws. */
+      async function fetchBirthChartForProfile(profile) {
+        if (!profile || !profile.birthDate || !profile.birthTime || !profile.birthPlace) {
+          throw new Error("Profile is missing birth date, time, or place.");
+        }
+        const [year, month, day] = profile.birthDate.split("-").map(Number);
+        const [hours, minutes] = profile.birthTime.split(":").map(Number);
+        const coordinates = await getCoordinates(profile.birthPlace);
+        const timezone = await calculateTimezone(coordinates.latitude, coordinates.longitude, year, month, day);
+        const requestData = {
+          year, month, day, hour: hours, minute: minutes,
+          latitude: coordinates.latitude,
+          longitude: coordinates.longitude,
+          timezone,
+        };
+        const response = await fetch("http://localhost:3000/api/birth-chart", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestData),
+        });
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          throw new Error(err.details || err.error || "Failed to calculate birth chart");
+        }
+        const chartData = await response.json();
+        return { chartData, resolvedLocation: coordinates.displayName };
+      }
+
+      /** If active profile has birth info but no cached chart, fetch and save it in the background. */
+      function ensureChartLoadedForActiveProfile() {
+        const profile = getActiveProfile();
+        if (!profile || profile.birthChartData || !profile.birthDate || !profile.birthTime || !profile.birthPlace) return;
+        fetchBirthChartForProfile(profile)
+          .then(({ chartData }) => {
+            saveActiveProfileChart(chartData);
+          })
+          .catch((err) => console.warn("[Chart preload]", err.message));
+      }
+
+      migrateFromLegacyProfiles();
+      renderProfileDropdown();
+      const activeProfile = getActiveProfile();
+      if (activeProfile && activeProfile.conversationHistory && activeProfile.conversationHistory.length > 0) {
+        renderConversation(activeProfile);
+      }
+      // Preload chart for active profile so View raw data works without sending a message
+      ensureChartLoadedForActiveProfile();
 
       // Message queue for bot messages
       const botMessageQueue = [];
@@ -395,446 +932,42 @@
             return;
           }
 
-          // Check if birth chart data exists, if not, fetch it automatically
-          let birthChartData = JSON.parse(
-            localStorage.getItem("birthChartData")
-          );
+          // Use active profile for chart and birth details
+          const activeProfile = getActiveProfile();
+          let birthChartData = activeProfile ? activeProfile.birthChartData : null;
+          const profileBirthDate = activeProfile ? activeProfile.birthDate : userData.birthDate;
+          const profileBirthTime = activeProfile ? activeProfile.birthTime : userData.birthTime;
+          const profileBirthPlace = activeProfile ? activeProfile.birthPlace : userData.birthPlace;
 
           if (!birthChartData) {
-            // Automatically fetch birth chart on first message
-            const loadingMessage = "Let me take a look at your birth chart...";
+            // Automatically fetch birth chart on first message for this profile
+            const loadingMessage = "Let me take a look at this birth chart...";
             await queueBotMessage(loadingMessage);
             console.log("[SPINNER] Showing spinner after loading message");
             showSpinner();
 
-            // Parse birth date and time directly from strings
-            const [year, month, day] = userData.birthDate
-              .split("-")
-              .map(Number);
-            const [hours, minutes] = userData.birthTime.split(":").map(Number);
-
-            // Function to get coordinates from city name with better error handling
-            async function getCoordinates(cityName) {
-              if (!cityName || cityName.trim() === "") {
-                throw new Error("Birth place is required");
-              }
-
-              try {
-                // Use a more specific query format for better results
-                const query = encodeURIComponent(cityName.trim());
-                const response = await fetch(
-                  `https://nominatim.openstreetmap.org/search?format=json&q=${query}&limit=1&addressdetails=1`,
-                  {
-                    headers: {
-                      "User-Agent": "AstroGuide/1.0", // Required by Nominatim
-                    },
-                  }
-                );
-
-                if (!response.ok) {
-                  throw new Error(
-                    `Geocoding service error: ${response.status}`
-                  );
-                }
-
-                const data = await response.json();
-
-                if (!data || data.length === 0) {
-                  throw new Error(
-                    `Location "${cityName}" not found. Please check the spelling and try a more specific location (e.g., "City, State, Country").`
-                  );
-                }
-
-                const result = data[0];
-                const latitude = parseFloat(result.lat);
-                const longitude = parseFloat(result.lon);
-
-                // Validate coordinates are valid numbers
-                if (isNaN(latitude) || isNaN(longitude)) {
-                  throw new Error(
-                    "Invalid coordinates returned from geocoding service"
-                  );
-                }
-
-                // Validate coordinates are within valid ranges
-                if (
-                  latitude < -90 ||
-                  latitude > 90 ||
-                  longitude < -180 ||
-                  longitude > 180
-                ) {
-                  throw new Error("Coordinates out of valid range");
-                }
-
-                // Get the display name for verification
-                const displayName = result.display_name || cityName;
-
-                console.log(`[GEOCODING] Resolved "${cityName}" to:`, {
-                  displayName: displayName,
-                  latitude: latitude,
-                  longitude: longitude,
-                  type: result.type,
-                  importance: result.importance,
-                });
-
-                return {
-                  latitude: latitude,
-                  longitude: longitude,
-                  displayName: displayName,
-                  originalQuery: cityName,
-                };
-              } catch (error) {
-                console.error("[GEOCODING] Error getting coordinates:", error);
-                // Don't silently default - throw the error so user knows
-                throw error;
-              }
-            }
-
-            // Get coordinates from birth place with validation
-            const birthPlace = userData.birthPlace;
-
-            if (!birthPlace || birthPlace.trim() === "") {
+            if (!profileBirthDate || !profileBirthTime || !profileBirthPlace) {
               await queueBotMessage(
-                "Error: Birth place is required. Please update your profile with your birth location."
+                "This profile is missing birth date, time, or place. Add a profile with full birth data or use the default profile."
               );
               return;
             }
 
-            let coordinates;
-            let resolvedLocation;
-
             try {
-              coordinates = await getCoordinates(birthPlace);
-              resolvedLocation = coordinates.displayName;
-
-              // Verify the resolved location matches (or warn if it's different)
-              if (
-                coordinates.originalQuery.toLowerCase() !==
-                coordinates.displayName.toLowerCase()
-              ) {
-                console.warn(
-                  `[GEOCODING] Location resolved to different name: "${coordinates.displayName}" from "${birthPlace}"`
-                );
-                // Show a message to the user about the resolved location
-                await queueBotMessage(
-                  `Note: I've resolved your birth place "${birthPlace}" to "${coordinates.displayName}". If this is incorrect, please update your birth location in your profile.`
-                );
-              }
-            } catch (error) {
-              await queueBotMessage(
-                `Error: Could not find coordinates for "${birthPlace}". ${error.message} Please update your birth location with a more specific format (e.g., "City, State, Country" or "City, Country").`
-              );
-              return;
-            }
-
-            // Calculate timezone from coordinates and date
-            // Simplified version that worked before - US-focused with proper boundaries and DST
-            async function calculateTimezone(lat, lon, y, m, d) {
-              // Base offset from longitude (rough estimate: 15 degrees = 1 hour)
-              let baseOffset = Math.round(lon / 15);
-
-              // US timezone adjustments (most accurate for US locations)
-              // These boundaries match what worked previously - NO latitude restriction
-              // Note: Timezone boundaries don't follow longitude exactly
-              // Tucson, AZ is at ~-110.9° and should be Mountain Time (UTC-7)
-              if (lon >= -125 && lon < -67) {
-                // Pacific Time: West Coast (approximately -125 to -112)
-                if (lon >= -125 && lon < -112) {
-                  baseOffset = -8; // Pacific Time
-                }
-                // Mountain Time: Mountain states (approximately -112 to -102)
-                // This includes Arizona (Tucson at -110.9°), New Mexico, Colorado, etc.
-                else if (lon >= -112 && lon < -102) {
-                  baseOffset = -7; // Mountain Time
-                }
-                // Central Time: Central states (approximately -102 to -87)
-                else if (lon >= -102 && lon < -87) {
-                  baseOffset = -6; // Central Time
-                }
-                // Eastern Time: East Coast (approximately -87 to -67)
-                else if (lon >= -87 && lon < -67) {
-                  baseOffset = -5; // Eastern Time
-                }
-
-                // Check for Daylight Saving Time (US)
-                // IMPORTANT: Arizona and Hawaii do NOT observe DST
-                const month = m;
-                const day = d;
-
-                // Check if location is in Arizona (no DST)
-                // Arizona roughly: lat 31-37, lon -115 to -109
-                const isArizona =
-                  lat >= 31 && lat <= 37 && lon >= -115 && lon < -109;
-
-                // Check if location is in Hawaii (no DST)
-                // Hawaii roughly: lat 18-23, lon -161 to -154
-                const isHawaii =
-                  lat >= 18 && lat <= 23 && lon >= -161 && lon < -154;
-
-                // Only apply DST if NOT in Arizona or Hawaii
-                if (!isArizona && !isHawaii) {
-                  // DST since 2007: Second Sunday March to First Sunday November
-                  if (y >= 2007) {
-                    const marchStart = getNthSunday(y, 3, 2);
-                    const novEnd = getNthSunday(y, 11, 1);
-                    const dateNum = y * 10000 + month * 100 + day;
-                    const startNum = y * 10000 + 3 * 100 + marchStart;
-                    const endNum = y * 10000 + 11 * 100 + novEnd;
-
-                    if (dateNum >= startNum && dateNum < endNum) {
-                      baseOffset += 1; // DST
-                    }
-                  } else if (y >= 1987) {
-                    // 1987-2006: First Sunday April to Last Sunday October
-                    const aprilStart = getNthSunday(y, 4, 1);
-                    const octEnd = getLastSunday(y, 10);
-                    const dateNum = y * 10000 + month * 100 + day;
-                    const startNum = y * 10000 + 4 * 100 + aprilStart;
-                    const endNum = y * 10000 + 10 * 100 + octEnd;
-
-                    if (dateNum >= startNum && dateNum <= endNum) {
-                      baseOffset += 1; // DST
-                    }
-                  }
-                } else {
-                  // Arizona and Hawaii don't observe DST - always stay at base offset
-                  console.log(
-                    `[TIMEZONE] Location is in ${
-                      isArizona ? "Arizona" : "Hawaii"
-                    } - no DST applied`
-                  );
-                }
-              }
-
-              // Enhanced logging with clear timezone display
-              const timezoneInfo = {
-                timezone: baseOffset,
-                display:
-                  baseOffset >= 0 ? `UTC+${baseOffset}` : `UTC${baseOffset}`,
-                coordinates: `(${lat.toFixed(4)}, ${lon.toFixed(4)})`,
-                date: `${y}-${m}-${d}`,
-                isArizona: lat >= 31 && lat <= 37 && lon >= -115 && lon < -109,
-                isHawaii: lat >= 18 && lat <= 23 && lon >= -161 && lon < -154,
-              };
-
-              console.log(
-                "═══════════════════════════════════════════════════"
-              );
-              console.log("🌍 TIMEZONE CALCULATION RESULT");
-              console.log(
-                "═══════════════════════════════════════════════════"
-              );
-              console.log(`📍 Location: ${timezoneInfo.coordinates}`);
-              console.log(`📅 Date: ${timezoneInfo.date}`);
-              console.log(
-                `⏰ Timezone: ${timezoneInfo.display} (${baseOffset} hours from UTC)`
-              );
-              if (timezoneInfo.isArizona) {
-                console.log(
-                  `⚠️  Arizona detected - NO DST applied (always UTC-7)`
-                );
-              } else if (timezoneInfo.isHawaii) {
-                console.log(
-                  `⚠️  Hawaii detected - NO DST applied (always UTC-10)`
-                );
-              }
-              console.log(
-                "═══════════════════════════════════════════════════"
-              );
-
-              return baseOffset;
-            }
-
-            function getNthSunday(year, month, n) {
-              const firstDay = new Date(year, month - 1, 1);
-              const firstSunday = 1 + ((7 - firstDay.getDay()) % 7);
-              return firstSunday + (n - 1) * 7;
-            }
-
-            function getLastSunday(year, month) {
-              const lastDay = new Date(year, month, 0);
-              const dayOfWeek = lastDay.getDay();
-              return lastDay.getDate() - dayOfWeek;
-            }
-
-            const approximateTimezone = await calculateTimezone(
-              coordinates.latitude,
-              coordinates.longitude,
-              year,
-              month,
-              day
-            );
-
-            // Format timezone for display (e.g., "UTC-5" or "UTC+5.5")
-            const timezoneDisplay =
-              approximateTimezone >= 0
-                ? `UTC+${approximateTimezone}`
-                : `UTC${approximateTimezone}`;
-
-            const requestData = {
-              year: year,
-              month: month,
-              day: day,
-              hour: hours,
-              minute: minutes,
-              latitude: coordinates.latitude,
-              longitude: coordinates.longitude,
-              timezone: approximateTimezone, // Timezone offset in hours
-            };
-
-            // Detailed logging for debugging ascendant issues
-            console.log("=== BIRTH CHART CALCULATION DEBUG ===");
-            console.log("Original Input:", {
-              birthPlace: birthPlace,
-              birthDate: userData.birthDate,
-              birthTime: userData.birthTime,
-            });
-            console.log("Resolved Location:", {
-              displayName: resolvedLocation,
-              latitude: coordinates.latitude,
-              longitude: coordinates.longitude,
-            });
-            console.log("Parsed Date/Time:", {
-              year: year,
-              month: month,
-              day: day,
-              hour: hours,
-              minute: minutes,
-            });
-            const isUSLocation =
-              coordinates.longitude >= -125 && coordinates.longitude < -67;
-            console.log("═══════════════════════════════════════════════════");
-            console.log("📊 BIRTH CHART REQUEST SUMMARY");
-            console.log("═══════════════════════════════════════════════════");
-            console.log("📍 Location:", {
-              original: birthPlace,
-              resolved: resolvedLocation,
-              coordinates: `${coordinates.latitude.toFixed(
-                4
-              )}°N, ${coordinates.longitude.toFixed(4)}°E`,
-            });
-            console.log("📅 Date/Time:", {
-              date: `${year}-${month}-${day}`,
-              time: `${hours}:${String(minutes).padStart(2, "0")}`,
-            });
-            console.log("⏰ TIMEZONE:", {
-              offset: approximateTimezone,
-              display: timezoneDisplay,
-              isUSLocation: isUSLocation,
-              note: isUSLocation
-                ? "Using US timezone boundaries"
-                : "Using longitude approximation (may be inaccurate)",
-            });
-            console.log("═══════════════════════════════════════════════════");
-            console.log("Final Request Data:", requestData);
-            console.log("=====================================");
-
-            // Show user the calculated timezone for verification
-            const arizonaNote =
-              coordinates.latitude >= 31 &&
-              coordinates.latitude <= 37 &&
-              coordinates.longitude >= -115 &&
-              coordinates.longitude < -109
-                ? " (Arizona - no DST)"
-                : "";
-            await queueBotMessage(
-              `Calculating chart for ${resolvedLocation} (${coordinates.latitude.toFixed(
-                4
-              )}°N, ${coordinates.longitude.toFixed(
-                4
-              )}°E)\n\n⏰ Timezone: ${timezoneDisplay}${arizonaNote}\n\nIf this timezone is incorrect, the ascendant may be wrong. Check the browser console (F12) for detailed timezone information.`
-            );
-
-            // Additional validation logging
-            console.log("[VALIDATION] Birth chart request validation:", {
-              dateValid:
-                year > 1900 &&
-                year < 2100 &&
-                month >= 1 &&
-                month <= 12 &&
-                day >= 1 &&
-                day <= 31,
-              timeValid:
-                hours >= 0 && hours < 24 && minutes >= 0 && minutes < 60,
-              coordinatesValid:
-                coordinates.latitude >= -90 &&
-                coordinates.latitude <= 90 &&
-                coordinates.longitude >= -180 &&
-                coordinates.longitude <= 180,
-              timezoneValid:
-                approximateTimezone >= -12 && approximateTimezone <= 14,
-            });
-
-            try {
-              // Make API call to backend
-              console.log("[API] Requesting birth chart:", requestData);
-              const response = await fetch(
-                "http://localhost:3000/api/birth-chart",
-                {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                  },
-                  body: JSON.stringify(requestData),
-                }
-              );
-              console.log("[API] Fetch to /api/birth-chart sent");
-
-              if (!response.ok) {
-                const err = await response.json();
-                console.error(
-                  "[API] Error response from /api/birth-chart:",
-                  err
-                );
-                throw new Error(
-                  err.details || err.error || "Failed to calculate birth chart"
-                );
-              }
-
-              const data = await response.json();
-              console.log("[API] Received birth chart data:", data);
-              console.log(
-                "[API] Raw birth chart data structure:",
-                JSON.stringify(data, null, 2)
-              );
-
-              // Store the birth chart data in localStorage for follow-up questions
-              localStorage.setItem("birthChartData", JSON.stringify(data));
-              birthChartData = data;
-
-              // Birth chart loaded successfully
-              // Show a brief confirmation with location verification
-              const locationInfo = `Using location: ${resolvedLocation} (${coordinates.latitude.toFixed(
-                4
-              )}°N, ${coordinates.longitude.toFixed(4)}°E)`;
-              console.log("[API] Birth chart calculated with:", locationInfo);
-
+              const { chartData, resolvedLocation } = await fetchBirthChartForProfile(activeProfile);
+              saveActiveProfileChart(chartData);
+              birthChartData = chartData;
               await queueBotMessage(
                 `I've calculated your birth chart using ${resolvedLocation}! Let me answer your question...`
               );
             } catch (error) {
-              console.error(
-                "[ERROR] Exception in /api/birth-chart flow:",
-                error
-              );
-              let errorMessage =
-                "I'm having trouble calculating your birth chart right now.";
-
-              if (error.message) {
-                errorMessage = error.message;
-              } else if (error.details) {
-                errorMessage = error.details;
-              }
-
-              await queueBotMessage(`Error: ${errorMessage}`);
-              return; // Stop if birth chart couldn't be loaded
+              console.error("[ERROR] Birth chart fetch:", error);
+              const errorMessage = error.message || "I'm having trouble calculating your birth chart right now.";
+              await queueBotMessage("Error: " + errorMessage);
+              return;
             } finally {
-              console.log("[SPINNER] Hiding spinner after birth chart flow");
               hideSpinner();
             }
-
-            // After loading birth chart successfully, continue to process the user's message below
-            // (birthChartData is now set, so it will fall through to the chat handling)
           }
 
           // Handle questions about the birth chart
@@ -842,10 +975,8 @@
           if (birthChartData) {
             console.log("[SPINNER] Showing spinner for chat follow-up");
             showSpinner();
-            // Get conversation history from localStorage
-            let conversationHistory = JSON.parse(
-              localStorage.getItem("conversationHistory") || "[]"
-            );
+            // Get conversation history for the active profile
+            let conversationHistory = getActiveProfileConversation().slice();
 
             // Add the user's message to the conversation history
             conversationHistory.push({
@@ -903,11 +1034,8 @@
                 conversationHistory = conversationHistory.slice(-10);
               }
 
-              // Save the updated conversation history
-              localStorage.setItem(
-                "conversationHistory",
-                JSON.stringify(conversationHistory)
-              );
+              // Save the updated conversation history to the active profile
+              saveActiveProfileConversation(conversationHistory);
 
               await queueBotMessage(data.response);
             } catch (error) {
@@ -920,18 +1048,21 @@
               hideSpinner();
             }
           } else {
-            // This shouldn't happen since we fetch it automatically above,
-            // but just in case there was an error
             await queueBotMessage(
-              "I'm having trouble accessing your birth chart data. Please try refreshing the page."
+              "No chart for this profile yet. Send a message to calculate the chart, or add a profile with birth date, time, and place."
             );
           }
         }
       }
 
-      // Add a function to clear conversation history
+      // Add a function to clear conversation history for the active profile only
       function clearConversationHistory() {
-        localStorage.removeItem("conversationHistory");
+        const profile = getActiveProfile();
+        if (profile) {
+          profile.conversationHistory = [];
+          saveActiveProfileConversation([]);
+          renderConversation(profile);
+        }
         addMessage(
           "Conversation history cleared. Feel free to start a new conversation!"
         );
@@ -958,6 +1089,104 @@
       // Test backend connection when page loads
       testBackendConnection();
 
+      // Profile dropdown toggle
+      document.getElementById("profile-dropdown-btn").addEventListener("click", () => {
+        const dd = document.getElementById("profile-dropdown");
+        dd.classList.toggle("hidden");
+      });
+
+      // Close dropdown when clicking outside
+      document.addEventListener("click", (e) => {
+        const switcher = document.querySelector(".profile-switcher");
+        if (switcher && !switcher.contains(e.target)) {
+          document.getElementById("profile-dropdown").classList.add("hidden");
+        }
+      });
+
+      // Add profile button → show modal
+      document.getElementById("add-profile-btn").addEventListener("click", () => {
+        document.getElementById("add-profile-modal").classList.remove("hidden");
+      });
+
+      // Add profile cancel and overlay → hide modal
+      document.getElementById("add-profile-cancel").addEventListener("click", () => {
+        document.getElementById("add-profile-modal").classList.add("hidden");
+      });
+      document.getElementById("add-profile-modal").addEventListener("click", (e) => {
+        if (e.target.id === "add-profile-modal") {
+          e.target.classList.add("hidden");
+        }
+      });
+
+      // Add profile form submit: geocode, birth-chart API, create profile, switch
+      document.getElementById("add-profile-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const name = document.getElementById("profile-name").value.trim();
+        const birthDate = document.getElementById("profile-birth-date").value;
+        const birthTime = document.getElementById("profile-birth-time").value;
+        const birthPlace = document.getElementById("profile-birth-place").value.trim();
+        if (!name || !birthDate || !birthTime || !birthPlace) {
+          alert("Please fill in all fields.");
+          return;
+        }
+        const [y, m, d] = birthDate.split("-").map(Number);
+        const [hours, minutes] = birthTime.split(":").map(Number);
+        let coordinates;
+        try {
+          coordinates = await getCoordinates(birthPlace);
+        } catch (err) {
+          alert("Could not find location: " + err.message);
+          return;
+        }
+        const timezone = Math.round(coordinates.longitude / 15);
+        const requestData = {
+          year: y, month: m, day: d,
+          hour: hours, minute: minutes,
+          latitude: coordinates.latitude,
+          longitude: coordinates.longitude,
+          timezone: timezone,
+        };
+        try {
+          const response = await fetch("http://localhost:3000/api/birth-chart", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(requestData),
+          });
+          if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.details || err.error || "Failed to calculate birth chart");
+          }
+          const birthChartData = await response.json();
+          const newProfile = {
+            id: crypto.randomUUID(),
+            name,
+            birthDate,
+            birthTime,
+            birthPlace,
+            birthChartData,
+            conversationHistory: [],
+          };
+          const profiles = getChartProfiles();
+          profiles.push(newProfile);
+          setChartProfiles(profiles);
+          setActiveProfileId(newProfile.id);
+          document.getElementById("add-profile-modal").classList.add("hidden");
+          document.getElementById("add-profile-form").reset();
+          renderProfileDropdown();
+          switchToProfile(newProfile.id);
+        } catch (err) {
+          alert("Error: " + (err.message || "Could not add profile."));
+        }
+      });
+
+      // Clear chat: clear active profile conversation and re-render
+      clearButton.addEventListener("click", () => {
+        const profile = getActiveProfile();
+        if (!profile) return;
+        saveActiveProfileConversation([]);
+        renderConversation(profile);
+      });
+
       // Logout handler
       logoutButton.addEventListener("click", () => {
         // Clear all stored data
@@ -973,22 +1202,27 @@
         }
       });
 
-      // Recalculate chart button handler - clears cached data and forces recalculation
+      // Recalculate chart button handler - clears cached chart for active profile and forces recalculation
       recalculateChartButton.addEventListener("click", async () => {
-        // Clear the cached birth chart data
-        localStorage.removeItem("birthChartData");
-        localStorage.removeItem("conversationHistory");
-
+        const profile = getActiveProfile();
+        if (!profile) return;
+        profile.birthChartData = null;
+        const profiles = getChartProfiles();
+        const idx = profiles.findIndex((p) => p.id === profile.id);
+        if (idx !== -1) {
+          profiles[idx].birthChartData = null;
+          setChartProfiles(profiles);
+        }
         await queueBotMessage(
-          "I've cleared your cached birth chart data. Please send a message to recalculate your chart with the correct location."
+          "I've cleared the cached chart for \"" + profile.name + "\". Send a message to recalculate with the same birth details."
         );
       });
 
+      // Chart wheel is now always visible on the right side - no toggle button needed
+
       // View raw data button handler
       viewRawDataButton.addEventListener("click", () => {
-        const birthChartData = JSON.parse(
-          localStorage.getItem("birthChartData") || "null"
-        );
+        const birthChartData = getActiveProfile() ? getActiveProfile().birthChartData : null;
 
         if (!birthChartData) {
           alert(
@@ -1046,6 +1280,683 @@
         }
 
         return info;
+      }
+
+      /**
+       * Send a query about a chart element to the chat bot
+       * @param {string} query - The question about the chart element
+       */
+      function queryChartElement(query) {
+        const messageInput = document.getElementById("message-input");
+        if (messageInput) {
+          messageInput.value = query;
+          messageInput.focus();
+          // Small delay to ensure input is ready, then trigger send
+          setTimeout(() => {
+            const sendButton = document.getElementById("send-button");
+            if (sendButton) {
+              sendButton.click();
+            }
+          }, 100);
+        }
+      }
+
+      /**
+       * Render birth chart wheel with counter-clockwise progression (mirrored/reverse clock)
+       * 
+       * COORDINATE SYSTEM:
+       * - Top-down view: Ascendant at 9 o'clock (left) = 180° in standard polar coordinates
+       * - All elements progress COUNTER-CLOCKWISE from Ascendant
+       * - Houses: 1, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2 (counter-clockwise)
+       * - Zodiac signs: Natural order going counter-clockwise
+       * - Uses negated angles in Math.cos/sin to create reverse clock effect
+       * 
+       * @param {Object} birthChart - Birth chart data with houses, planets, aspects, angles
+       */
+      function renderChartWheel(birthChart) {
+        try {
+          console.log("[CHART WHEEL] Rendering chart wheel with data:", birthChart);
+          
+          // Validate input
+          if (!birthChart || typeof birthChart !== 'object') {
+            throw new Error("Invalid birth chart data");
+          }
+          
+          // Check if D3 is loaded
+          if (typeof d3 === 'undefined') {
+            console.error("[CHART WHEEL] D3.js is not loaded!");
+            const container = document.getElementById("chart-wheel-container");
+            if (container) {
+              container.innerHTML = '<div style="color: #ff6b6b; padding: 20px;">Error: D3.js library is not loaded. Please refresh the page.</div>';
+            }
+            return;
+          }
+
+          const container = document.getElementById("chart-wheel-container");
+          if (!container) {
+            console.error("[CHART WHEEL] Container element not found!");
+            return;
+          }
+          
+          container.innerHTML = ""; // Clear previous render
+
+          const width = 700;
+          const height = 700;
+          // Reduce diameter by 7% total (2% + 5% more) to fit within container border
+          const outerRadius = (Math.min(width, height) / 2 - 20) * 0.93;
+          const innerRadius = outerRadius * 0.25; // Much smaller inner circle to fill more space
+          const centerX = width / 2;
+          const centerY = height / 2;
+
+          // Get Ascendant degree for rotation - normalize to 0-360 range
+          let ascendantDegree = birthChart.angles?.ascendant?.degree;
+          if (ascendantDegree === undefined || ascendantDegree === null || isNaN(ascendantDegree)) {
+            console.warn("[CHART WHEEL] Ascendant degree not found, defaulting to 0°");
+            ascendantDegree = 0;
+          }
+          // Normalize to 0-360 range
+          ascendantDegree = ((ascendantDegree % 360) + 360) % 360;
+          
+          const svg = d3.select("#chart-wheel-container")
+            .append("svg")
+            .attr("width", width)
+            .attr("height", height)
+            .attr("viewBox", `0 0 ${width} ${height}`)
+            .append("g")
+            .attr("transform", `translate(${centerX}, ${centerY})`);
+
+        // Helper function to convert degrees to radians
+        // MIRRORED/REVERSE CLOCK: For counter-clockwise progression (like astrology charts)
+        // Standard polar: 0° = right (3 o'clock), but we want 0° = left (9 o'clock) for Ascendant
+        // To create reverse clock effect, we NEGATE the angle in calculations
+        function degToRad(deg) {
+          return deg * (Math.PI / 180);
+        }
+
+        // Helper function to convert chart degree to display degree
+        // TOP-DOWN VIEW: Ascendant at 9 o'clock (left) = 180°
+        // Houses and signs go COUNTER-CLOCKWISE from Ascendant (like a reverse clock)
+        function chartToDisplayDegree(chartDegree) {
+          // Validate and normalize input degree to 0-360 range
+          if (chartDegree === undefined || chartDegree === null || isNaN(chartDegree)) {
+            console.warn("[CHART WHEEL] Invalid chart degree:", chartDegree);
+            return 180; // Default to Ascendant position
+          }
+          const normalizedDegree = ((chartDegree % 360) + 360) % 360;
+          // Calculate relative position from Ascendant (increases counter-clockwise)
+          const relative = (normalizedDegree - ascendantDegree + 360) % 360;
+          // Ascendant (relative 0°) should be at 180° (9 o'clock/left)
+          // As relative increases counter-clockwise, display increases counter-clockwise
+          return (180 + relative) % 360;
+        }
+
+        // Helper function to get position on circle
+        // MIRRORED CLOCK: Negate angle to reverse direction (counter-clockwise progression)
+        function getPosition(degree, radius = outerRadius) {
+          // Validate and normalize degree to 0-360 range
+          if (degree === undefined || degree === null || isNaN(degree)) {
+            console.warn("[CHART WHEEL] Invalid degree for position:", degree);
+            return { x: 0, y: 0 };
+          }
+          const normalizedDegree = ((degree % 360) + 360) % 360;
+          const rad = degToRad(normalizedDegree);
+          // NEGATE the angle to create reverse/mirrored clock effect (counter-clockwise)
+          return {
+            x: Math.cos(-rad) * radius,  // Negate for counter-clockwise
+            y: Math.sin(-rad) * radius   // Negate for counter-clockwise
+          };
+        }
+
+        // Draw outer circle (main wheel)
+        svg.append("circle")
+          .attr("r", outerRadius)
+          .attr("fill", "rgba(30, 41, 59, 0.3)")
+          .attr("stroke", "#64748b")
+          .attr("stroke-width", 2);
+
+        // Draw inner circle
+        svg.append("circle")
+          .attr("r", innerRadius)
+          .attr("fill", "none")
+          .attr("stroke", "#475569")
+          .attr("stroke-width", 1)
+          .attr("opacity", 0.5);
+
+        // Draw house divisions (12 houses) - COUNTER-CLOCKWISE from Ascendant
+        const houses = birthChart.houses || [];
+        
+        // Sort houses by degree to ensure proper COUNTER-CLOCKWISE order from Ascendant
+        // House 1 is at Ascendant, then houses go COUNTER-CLOCKWISE: 1, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2
+        const sortedHouses = [...houses].sort((a, b) => {
+          if (a.degree === undefined || b.degree === undefined) {
+            // Fallback to number if degree not available
+            const numA = a.number !== undefined ? a.number : (houses.indexOf(a) + 1);
+            const numB = b.number !== undefined ? b.number : (houses.indexOf(b) + 1);
+            return numA - numB;
+          }
+          // Sort by degree going COUNTER-CLOCKWISE from Ascendant (normal sort)
+          // Normalize degrees to 0-360 range before calculating relative positions
+          const normA = ((a.degree % 360) + 360) % 360;
+          const normB = ((b.degree % 360) + 360) % 360;
+          const relA = (normA - ascendantDegree + 360) % 360;
+          const relB = (normB - ascendantDegree + 360) % 360;
+          return relA - relB; // Normal sort for COUNTER-CLOCKWISE
+        });
+
+        // Draw house cusps (radial lines) - COUNTER-CLOCKWISE order with interactivity
+        sortedHouses.forEach((house) => {
+          if (house && house.degree !== undefined && house.degree !== null && !isNaN(house.degree) && house.number !== undefined) {
+            const displayDegree = chartToDisplayDegree(house.degree);
+            const pos = getPosition(displayDegree, outerRadius);
+            
+            // House cusp line (from inner circle to outer edge)
+            const innerPos = getPosition(displayDegree, innerRadius);
+            const houseLine = svg.append("line")
+              .attr("x1", innerPos.x)
+              .attr("y1", innerPos.y)
+              .attr("x2", pos.x)
+              .attr("y2", pos.y)
+              .attr("stroke", "#64748b")
+              .attr("stroke-width", 1.5)
+              .attr("opacity", 0.6)
+              .attr("class", "house-line")
+              .style("cursor", "pointer")
+              .on("mouseenter", function() {
+                d3.select(this)
+                  .attr("stroke-width", 3)
+                  .attr("opacity", 1)
+                  .attr("stroke", "#10b981");
+              })
+              .on("mouseleave", function() {
+                d3.select(this)
+                  .attr("stroke-width", 1.5)
+                  .attr("opacity", 0.6)
+                  .attr("stroke", "#64748b");
+              })
+              .on("click", function() {
+                queryChartElement(`Tell me about House ${house.number} in my chart`);
+              });
+
+            // House number label (inside inner circle, larger) - clickable area
+            const labelRadius = innerRadius - 25;
+            const labelPos = getPosition(displayDegree, labelRadius);
+            const houseGroup = svg.append("g")
+              .attr("class", "house-group")
+              .style("cursor", "pointer");
+            
+            // Invisible larger circle for easier clicking
+            houseGroup.append("circle")
+              .attr("cx", labelPos.x)
+              .attr("cy", labelPos.y)
+              .attr("r", 25)
+              .attr("fill", "transparent")
+              .attr("opacity", 0);
+            
+            const houseText = houseGroup.append("text")
+              .attr("x", labelPos.x)
+              .attr("y", labelPos.y)
+              .attr("text-anchor", "middle")
+              .attr("dominant-baseline", "middle")
+              .attr("fill", "#e2e8f0")
+              .attr("font-size", "18px")
+              .attr("font-weight", "bold")
+              .text(house.number);
+            
+            // Hover effects for house number
+            houseGroup.on("mouseenter", function() {
+              houseText
+                .attr("font-size", "22px")
+                .attr("fill", "#10b981");
+              houseLine
+                .attr("stroke-width", 3)
+                .attr("opacity", 1)
+                .attr("stroke", "#10b981");
+            })
+            .on("mouseleave", function() {
+              houseText
+                .attr("font-size", "18px")
+                .attr("fill", "#e2e8f0");
+              houseLine
+                .attr("stroke-width", 1.5)
+                .attr("opacity", 0.6)
+                .attr("stroke", "#64748b");
+            })
+            .on("click", function() {
+              queryChartElement(`Tell me about House ${house.number} in my chart`);
+            });
+          }
+        });
+
+        // Draw sign divisions (30 degrees each) - show signs on outer edge
+        // Signs are fixed: Aries (0-30°), Taurus (30-60°), Gemini (60-90°), etc.
+        // Position them COUNTER-CLOCKWISE from Ascendant
+        const signAbbrev = ["Ari", "Tau", "Gem", "Can", "Leo", "Vir", 
+                           "Lib", "Sco", "Sag", "Cap", "Aqu", "Pis"];
+        
+        // Draw sign markers - each sign starts at its degree (0°, 30°, 60°, etc.)
+        // Convert these to display degrees so they appear COUNTER-CLOCKWISE from Ascendant
+        for (let i = 0; i < 12; i++) {
+          const signStartDegree = i * 30; // Aries starts at 0°, Taurus at 30°, etc.
+          const displayDegree = chartToDisplayDegree(signStartDegree);
+          const pos = getPosition(displayDegree, outerRadius);
+          
+          // Sign division line (shorter, on outer edge)
+          const innerSignPos = getPosition(displayDegree, outerRadius * 0.98);
+          svg.append("line")
+            .attr("x1", innerSignPos.x)
+            .attr("y1", innerSignPos.y)
+            .attr("x2", pos.x)
+            .attr("y2", pos.y)
+            .attr("stroke", "#475569")
+            .attr("stroke-width", 1)
+            .attr("opacity", 0.4);
+
+          // Sign label (on outer edge) - positioned at middle of sign (15° into each sign) - clickable
+          const signMidDegree = signStartDegree + 15;
+          const signMidDisplayDegree = chartToDisplayDegree(signMidDegree);
+          const signLabelPos = getPosition(signMidDisplayDegree, outerRadius + 15);
+          const signFullNames = ["Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo", 
+                                "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces"];
+          
+          const signGroup = svg.append("g")
+            .attr("class", "sign-group")
+            .style("cursor", "pointer");
+          
+          // Invisible larger circle for easier clicking
+          signGroup.append("circle")
+            .attr("cx", signLabelPos.x)
+            .attr("cy", signLabelPos.y)
+            .attr("r", 20)
+            .attr("fill", "transparent")
+            .attr("opacity", 0);
+          
+          const signText = signGroup.append("text")
+            .attr("x", signLabelPos.x)
+            .attr("y", signLabelPos.y)
+            .attr("text-anchor", "middle")
+            .attr("dominant-baseline", "middle")
+            .attr("fill", "#94a3b8")
+            .attr("font-size", "14px")
+            .attr("font-weight", "600")
+            .text(signAbbrev[i]);
+          
+          // Hover effects for sign
+          signGroup.on("mouseenter", function() {
+            signText
+              .attr("font-size", "18px")
+              .attr("fill", "#10b981");
+          })
+          .on("mouseleave", function() {
+            signText
+              .attr("font-size", "14px")
+              .attr("fill", "#94a3b8");
+          })
+          .on("click", function() {
+            queryChartElement(`Tell me about ${signFullNames[i]} in my chart`);
+          });
+        }
+
+        // Draw planets
+        const planetColors = {
+          sun: "#FFD700",
+          moon: "#C0C0C0",
+          mercury: "#8C7853",
+          venus: "#FFC649",
+          mars: "#FF4500",
+          jupiter: "#C88A3D",
+          saturn: "#FAD5A5",
+          uranus: "#4FD0E7",
+          neptune: "#4166F5",
+          pluto: "#8B008B"
+        };
+
+        const planetSymbols = {
+          sun: "☉",
+          moon: "☽",
+          mercury: "☿",
+          venus: "♀",
+          mars: "♂",
+          jupiter: "♃",
+          saturn: "♄",
+          uranus: "♅",
+          neptune: "♆",
+          pluto: "♇"
+        };
+
+        // Draw planets (positioned closer to outer edge to fill wheel)
+        if (birthChart.planets && typeof birthChart.planets === 'object') {
+          Object.entries(birthChart.planets).forEach(([planetName, planetData]) => {
+            if (planetData && 
+                planetData.degree !== undefined && 
+                planetData.degree !== null && 
+                !isNaN(planetData.degree) &&
+                planetData.house !== undefined && 
+                planetData.house !== null) {
+              // Position planet closer to outer edge (use 85% of outer radius)
+              const planetRingRadius = outerRadius * 0.85;
+              const displayDegree = chartToDisplayDegree(planetData.degree);
+              const pos = getPosition(displayDegree, planetRingRadius);
+              const color = planetColors[planetName.toLowerCase()] || "#ffffff";
+              
+              // Create planet group for interactivity
+              const planetGroup = svg.append("g")
+                .attr("class", "planet-group")
+                .style("cursor", "pointer");
+              
+              // Invisible larger circle for easier clicking (bubble out area)
+              planetGroup.append("circle")
+                .attr("cx", pos.x)
+                .attr("cy", pos.y)
+                .attr("r", 30)
+                .attr("fill", "transparent")
+                .attr("opacity", 0);
+              
+              // Planet circle (larger for visibility)
+              const planetCircle = planetGroup.append("circle")
+                .attr("cx", pos.x)
+                .attr("cy", pos.y)
+                .attr("r", 14)
+                .attr("fill", color)
+                .attr("stroke", "#0f172a")
+                .attr("stroke-width", 2.5);
+
+              // Planet symbol (larger, more visible)
+              const planetSymbol = planetGroup.append("text")
+                .attr("x", pos.x)
+                .attr("y", pos.y)
+                .attr("text-anchor", "middle")
+                .attr("dominant-baseline", "middle")
+                .attr("fill", "#0f172a")
+                .attr("font-size", "16px")
+                .attr("font-weight", "bold")
+                .text(planetSymbols[planetName.toLowerCase()] || planetName.charAt(0).toUpperCase());
+
+              // Planet name label (positioned outside planet circle, closer to edge)
+              const labelRadius = planetRingRadius + 25;
+              const labelPos = getPosition(displayDegree, labelRadius);
+              const planetLabel = planetGroup.append("text")
+                .attr("x", labelPos.x)
+                .attr("y", labelPos.y)
+                .attr("text-anchor", "middle")
+                .attr("dominant-baseline", "middle")
+                .attr("fill", "#f1f5f9")
+                .attr("font-size", "13px")
+                .attr("font-weight", "600")
+                .text(planetName.charAt(0).toUpperCase() + planetName.slice(1));
+
+              // House number indicator (inside, near planet)
+              const houseLabelRadius = planetRingRadius - 18;
+              const houseLabelPos = getPosition(displayDegree, houseLabelRadius);
+              const houseNumText = planetGroup.append("text")
+                .attr("x", houseLabelPos.x)
+                .attr("y", houseLabelPos.y)
+                .attr("text-anchor", "middle")
+                .attr("dominant-baseline", "middle")
+                .attr("fill", "#cbd5e1")
+                .attr("font-size", "12px")
+                .attr("font-weight", "bold")
+                .attr("opacity", 0.9)
+                .text(planetData.house);
+              
+              // Hover effects - bubble out
+              planetGroup.on("mouseenter", function() {
+                planetCircle
+                  .attr("r", 18)
+                  .attr("stroke-width", 3.5)
+                  .transition()
+                  .duration(200);
+                planetSymbol
+                  .attr("font-size", "20px")
+                  .transition()
+                  .duration(200);
+                planetLabel
+                  .attr("font-size", "15px")
+                  .attr("fill", "#10b981")
+                  .transition()
+                  .duration(200);
+              })
+              .on("mouseleave", function() {
+                planetCircle
+                  .attr("r", 14)
+                  .attr("stroke-width", 2.5)
+                  .transition()
+                  .duration(200);
+                planetSymbol
+                  .attr("font-size", "16px")
+                  .transition()
+                  .duration(200);
+                planetLabel
+                  .attr("font-size", "13px")
+                  .attr("fill", "#f1f5f9")
+                  .transition()
+                  .duration(200);
+              })
+              .on("click", function() {
+                const planetDisplayName = planetName.charAt(0).toUpperCase() + planetName.slice(1);
+                queryChartElement(`Tell me about ${planetDisplayName} in my chart`);
+              });
+            }
+          });
+        }
+
+        // Draw Ascendant (AC) and Midheaven (MC) - prominent lines
+        // Ascendant should be at 9 o'clock (left) = 180° in standard polar coordinates
+        if (birthChart.angles) {
+          // Ascendant line (at 180° = 9 o'clock = left) - clickable
+          const acDisplayDegree = chartToDisplayDegree(ascendantDegree); // Should be 180°
+          const acPos = getPosition(acDisplayDegree, outerRadius);
+          const innerAcPos = getPosition(acDisplayDegree, innerRadius);
+          const acGroup = svg.append("g")
+            .attr("class", "ac-group")
+            .style("cursor", "pointer");
+          
+          const acLine = acGroup.append("line")
+            .attr("x1", innerAcPos.x)
+            .attr("y1", innerAcPos.y)
+            .attr("x2", acPos.x)
+            .attr("y2", acPos.y)
+            .attr("stroke", "#10b981")
+            .attr("stroke-width", 3)
+            .attr("opacity", 0.9);
+
+          const acLabelPos = getPosition(acDisplayDegree, outerRadius + 18);
+          const acLabel = acGroup.append("text")
+            .attr("x", acLabelPos.x)
+            .attr("y", acLabelPos.y)
+            .attr("text-anchor", "middle")
+            .attr("dominant-baseline", "middle")
+            .attr("fill", "#10b981")
+            .attr("font-size", "16px")
+            .attr("font-weight", "bold")
+            .text("AC");
+          
+          acGroup.on("mouseenter", function() {
+            acLine
+              .attr("stroke-width", 4)
+              .attr("opacity", 1);
+            acLabel
+              .attr("font-size", "20px");
+          })
+          .on("mouseleave", function() {
+            acLine
+              .attr("stroke-width", 3)
+              .attr("opacity", 0.9);
+            acLabel
+              .attr("font-size", "16px");
+          })
+          .on("click", function() {
+            queryChartElement("Tell me about my Ascendant in my chart");
+          });
+
+          // Midheaven (MC) - relative to Ascendant - clickable
+          if (birthChart.angles.midheaven?.degree !== undefined) {
+            const mcDisplayDegree = chartToDisplayDegree(birthChart.angles.midheaven.degree);
+            const mcPos = getPosition(mcDisplayDegree, outerRadius);
+            const innerMcPos = getPosition(mcDisplayDegree, innerRadius);
+            const mcGroup = svg.append("g")
+              .attr("class", "mc-group")
+              .style("cursor", "pointer");
+            
+            const mcLine = mcGroup.append("line")
+              .attr("x1", innerMcPos.x)
+              .attr("y1", innerMcPos.y)
+              .attr("x2", mcPos.x)
+              .attr("y2", mcPos.y)
+              .attr("stroke", "#3b82f6")
+              .attr("stroke-width", 3)
+              .attr("opacity", 0.9);
+
+            const mcLabelPos = getPosition(mcDisplayDegree, outerRadius + 18);
+            const mcLabel = mcGroup.append("text")
+              .attr("x", mcLabelPos.x)
+              .attr("y", mcLabelPos.y)
+              .attr("text-anchor", "middle")
+              .attr("dominant-baseline", "middle")
+              .attr("fill", "#3b82f6")
+              .attr("font-size", "16px")
+              .attr("font-weight", "bold")
+              .text("MC");
+            
+            mcGroup.on("mouseenter", function() {
+              mcLine
+                .attr("stroke-width", 4)
+                .attr("opacity", 1);
+              mcLabel
+                .attr("font-size", "20px");
+            })
+            .on("mouseleave", function() {
+              mcLine
+                .attr("stroke-width", 3)
+                .attr("opacity", 0.9);
+              mcLabel
+                .attr("font-size", "16px");
+            })
+            .on("click", function() {
+              queryChartElement("Tell me about my Midheaven (MC) in my chart");
+            });
+          }
+        }
+
+        // Draw aspect lines (major aspects only)
+        if (birthChart.aspects && Array.isArray(birthChart.aspects)) {
+          const majorAspects = ["conjunction", "opposition", "square", "trine", "sextile"];
+          const aspectColors = {
+            conjunction: "#ffffff",
+            opposition: "#ff6b6b",
+            square: "#ffa500",
+            trine: "#4ecdc4",
+            sextile: "#95e1d3"
+          };
+
+          birthChart.aspects.forEach(aspect => {
+            if (aspect && 
+                aspect.aspect && 
+                majorAspects.includes(aspect.aspect.toLowerCase()) &&
+                aspect.planet1 && 
+                aspect.planet2) {
+              const planet1 = birthChart.planets[aspect.planet1?.toLowerCase()];
+              const planet2 = birthChart.planets[aspect.planet2?.toLowerCase()];
+              
+              if (planet1 && 
+                  planet2 && 
+                  planet1.degree !== undefined && 
+                  planet1.degree !== null &&
+                  !isNaN(planet1.degree) &&
+                  planet2.degree !== undefined && 
+                  planet2.degree !== null &&
+                  !isNaN(planet2.degree)) {
+                // Position aspect lines at same radius as planets (85% of outer radius)
+                const planetRingRadius = outerRadius * 0.85;
+                const displayDeg1 = chartToDisplayDegree(planet1.degree);
+                const displayDeg2 = chartToDisplayDegree(planet2.degree);
+                const pos1 = getPosition(displayDeg1, planetRingRadius);
+                const pos2 = getPosition(displayDeg2, planetRingRadius);
+                const color = aspectColors[aspect.aspect.toLowerCase()] || "#ffffff";
+                
+                // Create invisible wider line for easier clicking
+                const midX = (pos1.x + pos2.x) / 2;
+                const midY = (pos1.y + pos2.y) / 2;
+                const lineLength = Math.sqrt(Math.pow(pos2.x - pos1.x, 2) + Math.pow(pos2.y - pos1.y, 2));
+                const angle = Math.atan2(pos2.y - pos1.y, pos2.x - pos1.x);
+                
+                // Invisible wider hit area for the aspect line
+                const hitArea = svg.insert("line", "circle")
+                  .attr("x1", pos1.x)
+                  .attr("y1", pos1.y)
+                  .attr("x2", pos2.x)
+                  .attr("y2", pos2.y)
+                  .attr("stroke", "transparent")
+                  .attr("stroke-width", 15) // Wider hit area
+                  .attr("opacity", 0)
+                  .style("cursor", "pointer");
+                
+                // Draw aspect line (behind planets, more visible)
+                const aspectLine = svg.insert("line", "circle")
+                  .attr("x1", pos1.x)
+                  .attr("y1", pos1.y)
+                  .attr("x2", pos2.x)
+                  .attr("y2", pos2.y)
+                  .attr("stroke", color)
+                  .attr("stroke-width", 2.5)
+                  .attr("opacity", 0.6)
+                  .style("cursor", "pointer");
+                
+                // Hover and click handlers for aspect line
+                const aspectGroup = svg.append("g")
+                  .attr("class", "aspect-group");
+                
+                aspectLine.on("mouseenter", function() {
+                  d3.select(this)
+                    .attr("stroke-width", 4)
+                    .attr("opacity", 0.9)
+                    .transition()
+                    .duration(200);
+                })
+                .on("mouseleave", function() {
+                  d3.select(this)
+                    .attr("stroke-width", 2.5)
+                    .attr("opacity", 0.6)
+                    .transition()
+                    .duration(200);
+                })
+                .on("click", function() {
+                  const planet1Name = aspect.planet1.charAt(0).toUpperCase() + aspect.planet1.slice(1);
+                  const planet2Name = aspect.planet2.charAt(0).toUpperCase() + aspect.planet2.slice(1);
+                  const aspectName = aspect.aspect.charAt(0).toUpperCase() + aspect.aspect.slice(1);
+                  queryChartElement(`Tell me about the ${aspectName} aspect between ${planet1Name} and ${planet2Name} in my chart`);
+                });
+                
+                // Also make hit area clickable
+                hitArea.on("click", function() {
+                  const planet1Name = aspect.planet1.charAt(0).toUpperCase() + aspect.planet1.slice(1);
+                  const planet2Name = aspect.planet2.charAt(0).toUpperCase() + aspect.planet2.slice(1);
+                  const aspectName = aspect.aspect.charAt(0).toUpperCase() + aspect.aspect.slice(1);
+                  queryChartElement(`Tell me about the ${aspectName} aspect between ${planet1Name} and ${planet2Name} in my chart`);
+                });
+              }
+            }
+          });
+        }
+
+        // Center label (larger, more prominent)
+        svg.append("text")
+          .attr("x", 0)
+          .attr("y", 0)
+          .attr("text-anchor", "middle")
+          .attr("dominant-baseline", "middle")
+          .attr("fill", "#e2e8f0")
+          .attr("font-size", "18px")
+          .attr("font-weight", "bold")
+          .text("Birth Chart");
+
+          console.log("[CHART WHEEL] Chart wheel rendered successfully");
+        } catch (error) {
+          console.error("[CHART WHEEL] Error rendering chart wheel:", error);
+          const container = document.getElementById("chart-wheel-container");
+          if (container) {
+            container.innerHTML = `<div style="color: #ff6b6b; padding: 20px; text-align: center;">Error rendering chart wheel: ${error.message}<br><small>Check console for details</small></div>`;
+          }
+        }
       }
 
       // Add function to toggle raw chart data visibility

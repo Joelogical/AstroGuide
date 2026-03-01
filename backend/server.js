@@ -1245,6 +1245,77 @@ function generateFollowUpQuestion(userMessage, aiResponse, birthChart) {
   return question || null;
 }
 
+/**
+ * Detect if a message is a casual greeting or simple acknowledgment
+ * @param {string} message - User's message
+ * @returns {boolean} True if message is casual/simple
+ */
+function isCasualMessage(message) {
+  const lowerMessage = message.toLowerCase().trim();
+  const casualPatterns = [
+    /^(hi|hello|hey|hiya|howdy|greetings|sup|yo|what's up|whats up)$/i,
+    /^(thanks|thank you|thx|ty|appreciate it)$/i,
+    /^(ok|okay|k|sure|yep|yeah|yes|no|nope|alright|got it)$/i,
+    /^(cool|nice|awesome|great|good|fine)$/i,
+  ];
+  
+  // Check if it matches casual patterns
+  if (casualPatterns.some(pattern => pattern.test(lowerMessage))) {
+    return true;
+  }
+  
+  // Check if it's a very short message without astrological keywords
+  const astroKeywords = [
+    'chart', 'birth', 'astrology', 'sign', 'planet', 'sun', 'moon', 'mercury', 
+    'venus', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto',
+    'aries', 'taurus', 'gemini', 'cancer', 'leo', 'virgo', 'libra', 
+    'scorpio', 'sagittarius', 'capricorn', 'aquarius', 'pisces',
+    'aspect', 'house', 'ascendant', 'midheaven', 'transit', 'interpretation'
+  ];
+  
+  if (lowerMessage.length < 20 && !astroKeywords.some(keyword => lowerMessage.includes(keyword))) {
+    return true;
+  }
+  
+  return false;
+}
+
+/**
+ * Check if user is asking about their chart or wants interpretation
+ * @param {string} message - User's message
+ * @param {Array} conversationHistory - Previous conversation messages
+ * @returns {boolean} True if user wants chart interpretation
+ */
+function wantsChartInterpretation(message, conversationHistory = []) {
+  const lowerMessage = message.toLowerCase().trim();
+  const interpretationKeywords = [
+    'tell me about', 'tell me about myself', 'interpret', 'interpretation',
+    'what does my chart', 'what does my birth chart', 'my chart', 'my birth chart',
+    'explain my', 'describe my', 'what am i', 'who am i', 'what are my',
+    'what about me', 'about myself', 'my personality', 'my traits',
+    'what are my strengths', 'what are my challenges', 'what are my weaknesses',
+    'sun', 'moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn', 
+    'uranus', 'neptune', 'pluto', 'ascendant', 'midheaven', 'rising',
+    'aspect', 'house', 'transit'
+  ];
+  
+  // Check current message
+  if (interpretationKeywords.some(keyword => lowerMessage.includes(keyword))) {
+    return true;
+  }
+  
+  // Check conversation history for context
+  const allMessages = [...conversationHistory, { role: 'user', content: message }]
+    .map(m => m.content?.toLowerCase() || '')
+    .join(' ');
+  
+  if (interpretationKeywords.some(keyword => allMessages.includes(keyword))) {
+    return true;
+  }
+  
+  return false;
+}
+
 // Chat endpoint for follow-up questions (wrapped so async rejections return detailed 500 with stage/stack)
 app.post("/api/chat", (req, res) => {
   console.log("[CHAT] *** Request received ***");
@@ -1467,15 +1538,95 @@ app.post("/api/chat", (req, res) => {
 
     stage = "after-interpretation";
 
+    // Check if this is a casual message or if user wants chart interpretation
+    const isCasual = isCasualMessage(message);
+    const wantsInterpretation = wantsChartInterpretation(message, conversationHistory);
+
+    // For casual messages, use a simpler system prompt that doesn't push chart information
+    if (isCasual && !wantsInterpretation) {
+      const casualSystemContent = 
+        "You are AstroGuide, an astrological guide. Your communication style is warm, conversational, and matches the user's tone.\n\n" +
+        "CRITICAL RULES FOR CASUAL CONVERSATION:\n" +
+        "1. MATCH THE USER'S TONE: If they say \"hello\" or \"hi\", respond with a friendly greeting and ask how you can help. If they're casual, be casual. If they're formal, be formal.\n" +
+        "2. WAIT FOR THE USER TO ASK: Don't dive into chart interpretations unless they explicitly ask. Don't volunteer chart information. Don't start listing aspects, planets, or chart details unprompted.\n" +
+        "3. BE CONVERSATIONAL: Respond naturally, like a helpful friend who knows astrology. Keep it simple for casual messages. Don't use astrological jargon unless the user introduces it.\n" +
+        "4. KEEP IT BRIEF: For simple greetings or acknowledgments, keep responses brief and natural.\n\n" +
+        "Remember: Match the user's energy. If they're just saying hello, say hello back and ask how you can help. Don't overwhelm them with information they didn't ask for.";
+
+      const messages = [
+        {
+          role: "system",
+          content: casualSystemContent,
+        },
+      ];
+
+      // Add conversation history
+      if (conversationHistory && conversationHistory.length > 0) {
+        for (const m of conversationHistory) {
+          const content = m.content == null ? "" : String(m.content);
+          const msg = { role: m.role, content };
+          if (m.role === "function" && m.name) msg.name = m.name;
+          if (m.role === "assistant" && m.function_call) msg.function_call = m.function_call;
+          messages.push(msg);
+        }
+      }
+
+      // Add current message
+      messages.push({
+        role: "user",
+        content: message,
+      });
+
+      // Make API call
+      const functions = getFunctionDefinitions();
+      let completion;
+      try {
+        completion = await openai.chat.completions.create({
+          model: "gpt-3.5-turbo",
+          messages: messages,
+          functions: functions,
+          function_call: "auto",
+          temperature: 0.7,
+          max_tokens: 500, // Shorter for casual messages
+          presence_penalty: 0.1,
+          frequency_penalty: 0.0,
+        });
+      } catch (openaiErr) {
+        const wrapped = new Error("[OpenAI create] " + (openaiErr.message || ""));
+        wrapped.stack = openaiErr.stack;
+        throw wrapped;
+      }
+
+      const finalResponse = completion.choices[0].message.content || "";
+      return res.json({ 
+        response: String(finalResponse),
+        followUpQuestion: null, // No follow-up for casual messages
+      });
+    }
+
     // PRIMARY SOURCE FOR INTERPRETATION: gather from the web (broad breadth of resources)
     // Hardcoded data is used for chart facts only; web is main for interpretation.
+    // ONLY gather web interpretations if user wants chart interpretation (not for simple questions)
     let webInterpretations = "";
-    try {
-      console.log("[CHAT] Gathering chart interpretations from web (primary source)...");
-      webInterpretations = await gatherChartInterpretationsFromWeb(birthChart);
-      console.log("[CHAT] Web interpretations length:", webInterpretations.length);
-    } catch (err) {
-      console.warn("[CHAT] Web gathering failed, continuing with chart facts only:", err.message);
+    if (wantsInterpretation) {
+      // Check if web interpretations are already cached in the birth chart
+      if (birthChart.webInterpretations && birthChart.webInterpretations.length > 0) {
+        console.log("[CHAT] Using cached web interpretations");
+        webInterpretations = birthChart.webInterpretations;
+      } else {
+        try {
+          console.log("[CHAT] Gathering chart interpretations from web (primary source)...");
+          webInterpretations = await gatherChartInterpretationsFromWeb(birthChart);
+          console.log("[CHAT] Web interpretations length:", webInterpretations.length);
+          // Cache the web interpretations in the birth chart object for future use
+          // Note: This won't persist across requests, but will help within a session
+          birthChart.webInterpretations = webInterpretations;
+        } catch (err) {
+          console.warn("[CHAT] Web gathering failed, continuing with chart facts only:", err.message);
+        }
+      }
+    } else {
+      console.log("[CHAT] Skipping web interpretations - user doesn't want full chart interpretation");
     }
 
     let chartFactsOnly;
@@ -1507,19 +1658,19 @@ app.post("/api/chat", (req, res) => {
     // • History filter below omits checklist-format assistant messages. User message below gets a format reminder appended.
 
     const systemContent =
-      "You are AstroGuide: conversational, sharp, warm. Answer using the chart below.\n\n" +
+      "You are AstroGuide: a warm, emotionally intelligent guide who speaks like a trusted friend. You understand that people are emotional creatures with their own beliefs, biases, and personal experiences. Your interpretations feel personal and resonant—not like textbook definitions anyone could Google. You connect with how things FEEL, not just what they are. Use natural, conversational language that acknowledges emotions, psychological complexity, and the human experience. Answer using the chart below.\n\n" +
       "OUTPUT FORMAT – YOU MUST OBEY THIS ON EVERY REPLY (including follow-ups):\n" +
       "Your entire reply must be 3–6 plain paragraphs. No numbers (no 1. 2. 3. 4. 5.). No section headers (no ###, no **Bold:**, no \"Depth and Intensity:\" or \"Emotional Sensitivity and Harmony:\"). No bullet points. No \"Let's explore\", \"Let's delve\", \"comprehensive view\", \"These aspects offer a glimpse\", or \"If you have specific questions, feel free to share!\", or generic lines like \"invites you to delve into... leading to deep insights and meaningful interactions.\" Do not dedicate one paragraph to Sun, one to Moon, one to Mercury, etc. Weave multiple placements and aspects into the same paragraph. Start directly with content; end when you've said what matters.\n\n" +
       "Even when the user asks for \"many aspects\", \"comprehensive\", \"list challenges\", \"what other aspects should I be aware of\", or \"consider as many aspects as possible\", you MUST still answer in flowing prose only—never switch to numbered sections (1. 2. 3.) or ### headers or one topic per paragraph. Keep the same style as your first \"tell me about myself\" answer for every reply.\n\n" +
       "NEVER WRITE LIKE THIS (forbidden pattern):\n" +
       "\"It seems like you're eager to dive deeper... Your birth chart reveals a rich tapestry... Let's explore a few key aspects:\n\n### 1. **Depth and Intensity**:\nWith your Sun in Scorpio...\n\n### 2. **Emotional Sensitivity and Harmony**:\nYour Moon in Libra...\n\n### 3. **Communication Style and Depth**:\nMercury in Libra...\n\nThese aspects offer a glimpse... If you have specific questions, feel free to share!\"\n\n" +
-      "WRITE LIKE THIS INSTEAD (required style):\n" +
-      "Plain paragraphs only. Example opening: \"What comes through strongly is a mix of depth and a need for real connection—you're not surface-level in how you love or think, and that can show up as intensity in relationships and a pull toward things that feel meaningful. Your need for balance in how you're seen and how you relate sits alongside that; you can be both all-in and careful about fairness. In the way you communicate and work, there's a desire to do things well and to be recognized, sometimes with a tension between wanting to stand out and wanting to keep the peace.\" Continue in that vein: flowing prose, several chart factors per paragraph, no labels or numbers.\n\n" +
-      "DESCRIPTIVE, NOT PRESCRIPTIVE: Describe what the chart suggests and how traits might show up—don't tell the user what to do. Use language like \"this can show up as…\", \"there's often a tendency toward…\", \"it might manifest as…\". Avoid advice or directives: no \"you should\", \"you need to\", \"try to\", \"you ought to\".\n\n" +
+      "WRITE LIKE THIS INSTEAD (required style - EMOTIONAL & NATURAL):\n" +
+      "Plain paragraphs only. Example opening: \"You're someone who feels things deeply and thinks about them even more—there's this intensity in how you connect with people and ideas that can be both beautiful and exhausting. You're not the type to just skim the surface; when you care about something, you really care, and that shows up in relationships where you're either all-in or completely checked out. There's this push-pull in you between wanting to be seen for who you really are and wanting to keep things balanced and fair, which can leave you feeling like you're constantly negotiating between your own needs and everyone else's. In how you work and communicate, you want to do things right, to be recognized, but there's also this part of you that's tired of having to prove yourself, that just wants to exist without the performance.\" Continue in that vein: natural, flowing prose that speaks to emotions and experiences, not just traits. Several chart factors per paragraph, no labels or numbers. Make it feel like you're talking TO them, not ABOUT them.\n\n" +
+      "EMOTIONAL INTELLIGENCE & NATURAL LANGUAGE: Speak like a human who understands people, not a clinical manual. Connect with how things FEEL—acknowledge emotions, biases, personal beliefs, and the complexity of being human. Use natural, conversational language with contractions, varied sentence structures, and genuine warmth. Describe what the chart suggests and how traits might show up in real life—don't tell the user what to do. Use language like \"this can show up as…\", \"you might find yourself…\", \"there's often this feeling of…\", \"it might manifest as…\". Avoid advice or directives: no \"you should\", \"you need to\", \"try to\", \"you ought to\". Make it personal and resonant—people want to feel understood, not defined.\n\n" +
       "CRITICAL: The user's FULL BIRTH CHART is in CHART FACTS below. Use it. Never ask for birth date, time, or location. Use all planets, aspects (major and minor), houses, elemental/modal balance, stelliums, and aspect patterns where relevant. For simple factual questions use only CHART FACTS.\n\n" +
-      "MORE FROM THE WEB – DON'T RELY ON THE PRE-LOADED BLOCK ALONE:\n" +
-      "The WEB-SOURCED INTERPRETATIONS block gives you themes and key phrases—use them to inform your understanding, but do NOT lean on them for the bulk of your wording. That makes replies sound generic. Instead: call search_astrology_info(query) or search_web_astrology(query) for placements you're discussing (e.g. 'Moon in Libra 7th house', 'Sun Scorpio 8th house interpretation', 'Venus square Saturn meaning') so you pull in fresh, varied language from the web. Prefer supplementing with 1–2 search calls per substantive reply when interpreting the chart; use the pre-loaded block as a guide, not as the main script. We want more from the web, not a rephrase of the same themes.\n\n" +
-      "AVOID GENERIC PHRASING: Do not use stock astrology blurbs like \"invites you to delve into your emotions through thoughtful communication, leading to deep insights and meaningful interactions,\" or similar vague, interchangeable lines. Be concrete and specific; vary your language; let web search results add color and detail so it doesn't sound like every other chart reading.\n\n" +
+      "WEB SOURCES ARE PRIMARY – MINIMIZE HARDCODED RULES:\n" +
+      "The WEB-SOURCED INTERPRETATIONS block is your PRIMARY source. Use it extensively. Additionally, you MUST call search_astrology_info(query) or search_web_astrology(query) FREQUENTLY for EVERY placement, aspect, and combination you discuss. These functions search DIVERSE sources: blogs, forums (Reddit), niche astrology sites, and mainstream sources. Call them 3–5+ times per substantive reply to get holistic, varied perspectives. Examples: 'Moon in Libra 7th house holistic interpretation', 'Sun Scorpio 8th house meaning', 'Venus square Saturn aspect', 'Sun-Moon combination interpretation'. DO NOT rely primarily on hardcoded rules—web sources provide diverse, nuanced perspectives that hardcoded rules cannot. Synthesize information from multiple web sources for truly holistic interpretations.\n\n" +
+      "AVOID GENERIC PHRASING: Do not use stock astrology blurbs like \"invites you to delve into your emotions through thoughtful communication, leading to deep insights and meaningful interactions,\" or similar vague, interchangeable lines that sound like they came from a textbook. Be concrete and specific; use natural language that acknowledges real human experiences—frustrations, hopes, contradictions, the messy reality of being a person. Vary your language; let web search results add color and detail, but make it YOUR voice, not a copy-paste of definitions. People can Google definitions—they're here because they want to feel understood.\n\n" +
       "MINOR ASPECTS: CHART FACTS may include minor aspects (e.g. quincunx, semisextile, semisquare, sesquiquadrate). Use them to deepen your interpretation—they add nuance and subtlety. Do NOT name or explain minor aspects unless the user specifically asks about them or asks what in the interpretation accounts for them. Do not bring them up when discussing interpretations. Weave their influence into your prose without using the terminology; they are a niche concept for the general public.\n\n" +
       "--- CHART FACTS (birth data – use for personalization) ---\n" +
       chartFactsOnly +
