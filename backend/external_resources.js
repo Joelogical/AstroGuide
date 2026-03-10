@@ -867,6 +867,53 @@ function getFunctionDefinitions() {
         required: ["url"],
       },
     },
+    {
+      name: "update_profile_memory",
+      description: "Save what you learned about this person so the app can remember for future messages. Call this when the user shares life themes, goals, preferences, or after you give a substantial interpretation. Use short, clear labels (e.g. 'career/10th house', 'relationship patterns', 'focus on strengths'). This makes the chat feel continuous and premium—you can later say things like 'Earlier we discussed your career pattern; this connects to that same 10th house theme.'",
+      parameters: {
+        type: "object",
+        properties: {
+          lifeThemesDiscussed: {
+            type: "array",
+            items: { type: "string" },
+            description: "Life themes or chart themes already discussed (e.g. 'career/10th house', 'Moon in Cancer', 'Venus-Mars aspects'). Short labels.",
+          },
+          userGoals: {
+            type: "array",
+            items: { type: "string" },
+            description: "Goals or interests the user has mentioned (e.g. 'understand relocation', 'relationship timing').",
+          },
+          sensitivityFlags: {
+            type: "array",
+            items: { type: "string" },
+            description: "Sensitivity preferences (e.g. 'softer language', 'focus on strengths', 'avoid prediction'). Only if the user has expressed these.",
+          },
+          priorTopicsSummary: {
+            type: "string",
+            description: "Optional one-sentence summary of what has been covered so far, for continuity.",
+          },
+        },
+        required: [],
+      },
+    },
+    {
+      name: "save_chart_summary",
+      description: "Save a reusable summary of this person's chart so the app can reuse it in later prompts instead of rediscovering them each time. Call this ONCE after your first substantive full-chart interpretation (e.g. when they ask 'tell me about myself' or 'interpret my chart'). Use the chart to fill in: personality summary, emotional style, relationship style, work style, strengths, blind spots, recurring life themes, timing tendencies. Keep each field to 1-3 short sentences. If the user already has a STORED CHART SUMMARY in the prompt, do NOT call this again—use that summary.",
+      parameters: {
+        type: "object",
+        properties: {
+          personalitySummary: { type: "string", description: "1-3 sentences: core personality and identity from the chart." },
+          emotionalStyle: { type: "string", description: "1-3 sentences: how they process and express emotions." },
+          relationshipStyle: { type: "string", description: "1-3 sentences: how they approach partnerships and connection." },
+          workStyle: { type: "string", description: "1-3 sentences: approach to career, ambition, and daily work." },
+          strengths: { type: "string", description: "1-3 sentences or short list: chart-backed strengths and gifts." },
+          blindSpots: { type: "string", description: "1-3 sentences or short list: recurring blind spots or growth edges." },
+          recurringLifeThemes: { type: "string", description: "1-3 sentences: recurring life themes (e.g. authority, belonging, change)." },
+          timingTendencies: { type: "string", description: "1-3 sentences: tendencies around timing, cycles, or when things tend to unfold." },
+        },
+        required: ["personalitySummary", "emotionalStyle", "relationshipStyle", "workStyle", "strengths", "blindSpots", "recurringLifeThemes", "timingTendencies"],
+      },
+    },
   ];
 }
 
@@ -891,7 +938,13 @@ async function executeFunction(functionName, functionArgs) {
       
     case "get_astrology_article":
       return await fetchAstrologyArticle(functionArgs.url);
-      
+
+    case "update_profile_memory":
+      return JSON.stringify({ acknowledged: true, message: "Profile memory will be updated for future messages." });
+
+    case "save_chart_summary":
+      return JSON.stringify({ acknowledged: true, message: "Chart summary stored; will be reused in future prompts." });
+
     default:
       throw new Error(`Unknown function: ${functionName}`);
   }

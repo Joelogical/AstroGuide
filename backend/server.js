@@ -32,6 +32,11 @@ const {
   executeFunction,
   gatherChartInterpretationsFromWeb,
 } = require("./external_resources");
+const { getPrioritizedChartPoints } = require("./chart_signals");
+const {
+  buildProfileMemoryBlock,
+  composeSystemContent,
+} = require("./prompt_layers");
 
 // Debug logging for environment variables
 console.log("Environment variables loaded:");
@@ -1341,6 +1346,8 @@ app.post("/api/chat", (req, res) => {
     const message = body.message;
     const birthChart = body.birthChart;
     const conversationHistory = body.conversationHistory || [];
+    const profileMemory = body.profileMemory || null;
+    const chartSummary = body.chartSummary || null;
     stage = "after-body";
 
     if (!message || !birthChart) {
@@ -1649,34 +1656,29 @@ app.post("/api/chat", (req, res) => {
     // Log so we can confirm chart data is being sent (Astrology API data is in chartFactsOnly)
     console.log("[CHAT] Chart facts length:", (chartFactsOnly || "").length, "chars; birthData present:", !!birthChart?.birthData);
 
-    // CHAT BEHAVIOR – Do not remove or weaken these; they prevent regression to checklist/generic style:
-    // • OUTPUT FORMAT: plain paragraphs only, no numbers/###/headers, no one paragraph per planet.
-    // • MORE FROM THE WEB: encourage search_astrology_info/search_web_astrology; pre-loaded block is a guide, not the main script.
-    // • AVOID GENERIC PHRASING: no stock blurbs ("invites you to delve...", "deep insights and meaningful interactions").
-    // • DESCRIPTIVE NOT PRESCRIPTIVE: describe how traits show up; no "you should" / "you need to".
-    // • MINOR ASPECTS: use for depth; do not name or explain unless the user asks.
-    // • History filter below omits checklist-format assistant messages. User message below gets a format reminder appended.
+    // Ranking and weighting: pass only highest-value chart points so the model gives 3 reasons, 2 caveats—not 25 scattered facts
+    let prioritizedBlock = "";
+    if (wantsInterpretation) {
+      try {
+        const { prioritizedBlock: block } = getPrioritizedChartPoints(birthChart, message, birthChart.currentTransits || null);
+        prioritizedBlock = block;
+      } catch (err) {
+        console.warn("[CHAT] getPrioritizedChartPoints failed:", err.message);
+      }
+    }
 
-    const systemContent =
-      "You are AstroGuide: a warm, emotionally intelligent guide who speaks like a trusted friend. You understand that people are emotional creatures with their own beliefs, biases, and personal experiences. Your interpretations feel personal and resonant—not like textbook definitions anyone could Google. You connect with how things FEEL, not just what they are. Use natural, conversational language that acknowledges emotions, psychological complexity, and the human experience. Answer using the chart below.\n\n" +
-      "OUTPUT FORMAT – YOU MUST OBEY THIS ON EVERY REPLY (including follow-ups):\n" +
-      "Your entire reply must be 3–6 plain paragraphs. No numbers (no 1. 2. 3. 4. 5.). No section headers (no ###, no **Bold:**, no \"Depth and Intensity:\" or \"Emotional Sensitivity and Harmony:\"). No bullet points. No \"Let's explore\", \"Let's delve\", \"comprehensive view\", \"These aspects offer a glimpse\", or \"If you have specific questions, feel free to share!\", or generic lines like \"invites you to delve into... leading to deep insights and meaningful interactions.\" Do not dedicate one paragraph to Sun, one to Moon, one to Mercury, etc. Weave multiple placements and aspects into the same paragraph. Start directly with content; end when you've said what matters.\n\n" +
-      "Even when the user asks for \"many aspects\", \"comprehensive\", \"list challenges\", \"what other aspects should I be aware of\", or \"consider as many aspects as possible\", you MUST still answer in flowing prose only—never switch to numbered sections (1. 2. 3.) or ### headers or one topic per paragraph. Keep the same style as your first \"tell me about myself\" answer for every reply.\n\n" +
-      "NEVER WRITE LIKE THIS (forbidden pattern):\n" +
-      "\"It seems like you're eager to dive deeper... Your birth chart reveals a rich tapestry... Let's explore a few key aspects:\n\n### 1. **Depth and Intensity**:\nWith your Sun in Scorpio...\n\n### 2. **Emotional Sensitivity and Harmony**:\nYour Moon in Libra...\n\n### 3. **Communication Style and Depth**:\nMercury in Libra...\n\nThese aspects offer a glimpse... If you have specific questions, feel free to share!\"\n\n" +
-      "WRITE LIKE THIS INSTEAD (required style - EMOTIONAL & NATURAL):\n" +
-      "Plain paragraphs only. Example opening: \"You're someone who feels things deeply and thinks about them even more—there's this intensity in how you connect with people and ideas that can be both beautiful and exhausting. You're not the type to just skim the surface; when you care about something, you really care, and that shows up in relationships where you're either all-in or completely checked out. There's this push-pull in you between wanting to be seen for who you really are and wanting to keep things balanced and fair, which can leave you feeling like you're constantly negotiating between your own needs and everyone else's. In how you work and communicate, you want to do things right, to be recognized, but there's also this part of you that's tired of having to prove yourself, that just wants to exist without the performance.\" Continue in that vein: natural, flowing prose that speaks to emotions and experiences, not just traits. Several chart factors per paragraph, no labels or numbers. Make it feel like you're talking TO them, not ABOUT them.\n\n" +
-      "EMOTIONAL INTELLIGENCE & NATURAL LANGUAGE: Speak like a human who understands people, not a clinical manual. Connect with how things FEEL—acknowledge emotions, biases, personal beliefs, and the complexity of being human. Use natural, conversational language with contractions, varied sentence structures, and genuine warmth. Describe what the chart suggests and how traits might show up in real life—don't tell the user what to do. Use language like \"this can show up as…\", \"you might find yourself…\", \"there's often this feeling of…\", \"it might manifest as…\". Avoid advice or directives: no \"you should\", \"you need to\", \"try to\", \"you ought to\". Make it personal and resonant—people want to feel understood, not defined.\n\n" +
-      "CRITICAL: The user's FULL BIRTH CHART is in CHART FACTS below. Use it. Never ask for birth date, time, or location. Use all planets, aspects (major and minor), houses, elemental/modal balance, stelliums, and aspect patterns where relevant. For simple factual questions use only CHART FACTS.\n\n" +
-      "WEB SOURCES ARE PRIMARY – MINIMIZE HARDCODED RULES:\n" +
-      "The WEB-SOURCED INTERPRETATIONS block is your PRIMARY source. Use it extensively. Additionally, you MUST call search_astrology_info(query) or search_web_astrology(query) FREQUENTLY for EVERY placement, aspect, and combination you discuss. These functions search DIVERSE sources: blogs, forums (Reddit), niche astrology sites, and mainstream sources. Call them 3–5+ times per substantive reply to get holistic, varied perspectives. Examples: 'Moon in Libra 7th house holistic interpretation', 'Sun Scorpio 8th house meaning', 'Venus square Saturn aspect', 'Sun-Moon combination interpretation'. DO NOT rely primarily on hardcoded rules—web sources provide diverse, nuanced perspectives that hardcoded rules cannot. Synthesize information from multiple web sources for truly holistic interpretations.\n\n" +
-      "AVOID GENERIC PHRASING: Do not use stock astrology blurbs like \"invites you to delve into your emotions through thoughtful communication, leading to deep insights and meaningful interactions,\" or similar vague, interchangeable lines that sound like they came from a textbook. Be concrete and specific; use natural language that acknowledges real human experiences—frustrations, hopes, contradictions, the messy reality of being a person. Vary your language; let web search results add color and detail, but make it YOUR voice, not a copy-paste of definitions. People can Google definitions—they're here because they want to feel understood.\n\n" +
-      "MINOR ASPECTS: CHART FACTS may include minor aspects (e.g. quincunx, semisextile, semisquare, sesquiquadrate). Use them to deepen your interpretation—they add nuance and subtlety. Do NOT name or explain minor aspects unless the user specifically asks about them or asks what in the interpretation accounts for them. Do not bring them up when discussing interpretations. Weave their influence into your prose without using the terminology; they are a niche concept for the general public.\n\n" +
-      "--- CHART FACTS (birth data – use for personalization) ---\n" +
-      chartFactsOnly +
-      "\n--- END CHART FACTS ---\n\n" +
-      webSection +
-      "\n\nBefore you respond: no numbers, no ### or **headers**, no one paragraph per planet, no \"rich tapestry\" or \"if you have questions.\" Use web search to add variety; avoid generic phrasing. Plain paragraphs only.";
+    const profileMemoryBlock = buildProfileMemoryBlock(profileMemory);
+
+    // System content is composed from prompt_layers.js (system rules, interpreter rules, response templates, runtime context)
+    const systemContent = composeSystemContent({
+      profileMemoryBlock,
+      prioritizedBlock: prioritizedBlock || "",
+      chartFactsOnly,
+      webSection,
+      hasPrioritized: !!prioritizedBlock,
+      preferredMode: profileMemory && profileMemory.preferredMode ? profileMemory.preferredMode : null,
+      chartSummary: chartSummary && typeof chartSummary === "object" ? chartSummary : null,
+    });
 
     const messages = [
       {
@@ -1719,6 +1721,8 @@ app.post("/api/chat", (req, res) => {
     const functions = getFunctionDefinitions();
     let completion;
     let usedExternalResources = false;
+    let memoryUpdate = null;
+    let chartSummaryUpdate = null;
 
     try {
       completion = await openai.chat.completions.create({
@@ -1755,6 +1759,13 @@ app.post("/api/chat", (req, res) => {
         functionArgs = JSON.parse(functionCall.arguments || "{}");
       } catch (parseError) {
         console.error("[CHAT] Error parsing function arguments:", parseError);
+      }
+
+      if (functionName === "update_profile_memory") {
+        memoryUpdate = functionArgs;
+      }
+      if (functionName === "save_chart_summary") {
+        chartSummaryUpdate = functionArgs;
       }
 
       let functionResult;
@@ -1804,7 +1815,11 @@ app.post("/api/chat", (req, res) => {
       messagePreview: message.substring(0, 50),
     });
 
-    return res.json({ response: String(finalResponse) });
+    return res.json({
+      response: String(finalResponse),
+      ...(memoryUpdate != null && Object.keys(memoryUpdate).length > 0 ? { memoryUpdate } : {}),
+      ...(chartSummaryUpdate != null && Object.keys(chartSummaryUpdate).length > 0 ? { chartSummaryUpdate } : {}),
+    });
   } catch (error) {
     send500(error);
   }

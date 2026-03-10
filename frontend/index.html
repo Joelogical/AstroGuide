@@ -29,6 +29,7 @@
               <div id="profile-list"></div>
               <button type="button" id="add-profile-btn" class="add-profile-btn">+ Add profile</button>
             </div>
+            <button type="button" id="profile-preferences-btn" class="profile-preferences-btn" title="Profile preferences &amp; memory">⚙</button>
           </div>
           <button id="logout-button" class="logout-button">Logout</button>
           <button id="clear-button" class="clear-button">Clear Chat</button>
@@ -65,6 +66,39 @@
                 <button type="submit" id="add-profile-submit" class="btn-primary">Add & switch</button>
               </div>
             </form>
+          </div>
+        </div>
+        <!-- Profile preferences modal (memory: mode, sensitivity) -->
+        <div id="profile-preferences-modal" class="modal hidden">
+          <div class="modal-content">
+            <h3>Profile preferences</h3>
+            <p style="color: #a0a0c0; font-size: 0.85em; margin: 0 0 14px 0;">So the chat feels continuous and knows your preferences.</p>
+            <div class="form-group">
+              <label for="profile-memory-mode">Astrology level</label>
+              <select id="profile-memory-mode" class="profile-memory-select">
+                <option value="beginner">Beginner – plain language, avoid jargon</option>
+                <option value="advanced">Advanced – deeper, can use terminology</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Sensitivity (optional)</label>
+              <div class="preference-checkbox">
+                <input type="checkbox" id="pref-softer" value="softer language" />
+                <label for="pref-softer">Softer language</label>
+              </div>
+              <div class="preference-checkbox">
+                <input type="checkbox" id="pref-strengths" value="focus on strengths" />
+                <label for="pref-strengths">Focus on strengths</label>
+              </div>
+              <div class="preference-checkbox">
+                <input type="checkbox" id="pref-no-prediction" value="avoid prediction" />
+                <label for="pref-no-prediction">Avoid prediction</label>
+              </div>
+            </div>
+            <div class="modal-actions">
+              <button type="button" id="profile-preferences-cancel" class="btn-secondary">Cancel</button>
+              <button type="button" id="profile-preferences-save" class="btn-primary">Save</button>
+            </div>
           </div>
         </div>
         <div class="chat-messages" id="chat-messages">
@@ -304,6 +338,8 @@
       .chart-wheel-container svg .sign-group,
       .chart-wheel-container svg .ac-group,
       .chart-wheel-container svg .mc-group,
+      .chart-wheel-container svg .dc-group,
+      .chart-wheel-container svg .ic-group,
       .chart-wheel-container svg .aspect-group {
         transition: transform 0.2s ease;
       }
@@ -312,6 +348,8 @@
       .chart-wheel-container svg .sign-group:hover,
       .chart-wheel-container svg .ac-group:hover,
       .chart-wheel-container svg .mc-group:hover,
+      .chart-wheel-container svg .dc-group:hover,
+      .chart-wheel-container svg .ic-group:hover,
       .chart-wheel-container svg .aspect-group:hover {
         transform: scale(1.02);
       }
@@ -389,6 +427,37 @@
       .add-profile-btn:hover {
         background: #35365a;
       }
+      .profile-preferences-btn {
+        margin-left: 6px;
+        padding: 6px 10px;
+        border: none;
+        border-radius: 6px;
+        background: #35365a;
+        color: #a0a0c0;
+        cursor: pointer;
+        font-size: 1.1em;
+      }
+      .profile-preferences-btn:hover {
+        background: #43456a;
+        color: #f5f6fa;
+      }
+      .profile-memory-select {
+        width: 100%;
+        padding: 8px 12px;
+        border-radius: 6px;
+        border: 1px solid #35365a;
+        background: #18192b;
+        color: #f5f6fa;
+        box-sizing: border-box;
+      }
+      .preference-checkbox {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 6px 0;
+      }
+      .preference-checkbox input { width: auto; margin: 0; }
+      .preference-checkbox label { margin: 0; cursor: pointer; }
       .modal {
         position: fixed;
         inset: 0;
@@ -590,6 +659,16 @@
         }
       }
 
+      function saveActiveProfileChartSummary(summary) {
+        if (!summary || typeof summary !== "object") return;
+        const profiles = getChartProfiles();
+        const id = getActiveProfileId();
+        const idx = profiles.findIndex((x) => x.id === id);
+        if (idx === -1) return;
+        profiles[idx].chartSummary = summary;
+        setChartProfiles(profiles);
+      }
+
       function saveActiveProfileConversation(history) {
         const profiles = getChartProfiles();
         const id = getActiveProfileId();
@@ -615,6 +694,45 @@
         return p.conversationHistory || [];
       }
 
+      function getDefaultProfileMemory() {
+        return { preferredMode: "beginner", lifeThemesDiscussed: [], userGoals: [], sensitivityFlags: [], priorTopicsSummary: "" };
+      }
+
+      function getActiveProfileMemory() {
+        const p = getActiveProfile();
+        if (!p) return getDefaultProfileMemory();
+        if (!p.memory || typeof p.memory !== "object") {
+          p.memory = getDefaultProfileMemory();
+          const profiles = getChartProfiles();
+          const idx = profiles.findIndex((x) => x.id === p.id);
+          if (idx !== -1) { profiles[idx].memory = p.memory; setChartProfiles(profiles); }
+        }
+        return p.memory;
+      }
+
+      function mergeMemoryUpdate(update) {
+        if (!update || typeof update !== "object") return;
+        const profiles = getChartProfiles();
+        const id = getActiveProfileId();
+        const idx = profiles.findIndex((x) => x.id === id);
+        if (idx === -1) return;
+        const mem = profiles[idx].memory || getDefaultProfileMemory();
+        if (Array.isArray(update.lifeThemesDiscussed) && update.lifeThemesDiscussed.length > 0) {
+          mem.lifeThemesDiscussed = [...new Set([...(mem.lifeThemesDiscussed || []), ...update.lifeThemesDiscussed])].slice(-20);
+        }
+        if (Array.isArray(update.userGoals) && update.userGoals.length > 0) {
+          mem.userGoals = [...new Set([...(mem.userGoals || []), ...update.userGoals])].slice(-15);
+        }
+        if (Array.isArray(update.sensitivityFlags) && update.sensitivityFlags.length > 0) {
+          mem.sensitivityFlags = [...new Set([...(mem.sensitivityFlags || []), ...update.sensitivityFlags])].slice(-10);
+        }
+        if (update.priorTopicsSummary && String(update.priorTopicsSummary).trim()) {
+          mem.priorTopicsSummary = String(update.priorTopicsSummary).trim().slice(0, 500);
+        }
+        profiles[idx].memory = mem;
+        setChartProfiles(profiles);
+      }
+
       function migrateFromLegacyProfiles() {
         const profiles = getChartProfiles();
         if (profiles.length > 0) return;
@@ -633,6 +751,7 @@
           birthPlace: userData.birthPlace || "",
           birthChartData: birthChartData || null,
           conversationHistory: legacyHistory, // Only for legacy migration - new profiles get []
+          memory: { preferredMode: "beginner", lifeThemesDiscussed: [], userGoals: [], sensitivityFlags: [], priorTopicsSummary: "" },
         };
         setChartProfiles([newProfile]);
         setActiveProfileId(id);
@@ -833,10 +952,28 @@
       }
 
       migrateFromLegacyProfiles();
+      // Sync active profile ID if stale (e.g. deleted profile or wrong storage): ensure it exists in the list
+      const profiles = getChartProfiles();
+      const storedActiveId = getActiveProfileId();
+      if (profiles.length > 0 && storedActiveId) {
+        const found = profiles.some((p) => p.id === storedActiveId);
+        if (!found) setActiveProfileId(profiles[0].id);
+      } else if (profiles.length > 0 && !storedActiveId) {
+        setActiveProfileId(profiles[0].id);
+      }
       renderProfileDropdown();
       const activeProfile = getActiveProfile();
       if (activeProfile && activeProfile.conversationHistory && activeProfile.conversationHistory.length > 0) {
         renderConversation(activeProfile);
+      }
+      // Show chart wheel for active profile on load if we have cached chart data
+      if (activeProfile && activeProfile.birthChartData) {
+        renderChartWheel(activeProfile.birthChartData);
+      } else {
+        const chartContainer = document.getElementById("chart-wheel-container");
+        if (chartContainer && !chartContainer.querySelector("svg")) {
+          chartContainer.innerHTML = "<div class=\"chart-placeholder\">Chart will appear when a profile with a birth chart is selected or loaded.</div>";
+        }
       }
       // Preload chart for active profile so View raw data works without sending a message
       ensureChartLoadedForActiveProfile();
@@ -1006,11 +1143,19 @@
                   message: message,
                   birthChart: birthChartData,
                   conversationHistory: conversationHistory,
+                  profileMemory: getActiveProfileMemory(),
+                  chartSummary: (getActiveProfile() && getActiveProfile().chartSummary) ? getActiveProfile().chartSummary : null,
                 }),
               });
 
               const data = await response.json().catch(() => ({}));
               console.log("[API] Received chat response:", data);
+              if (data.memoryUpdate) {
+                mergeMemoryUpdate(data.memoryUpdate);
+              }
+              if (data.chartSummaryUpdate) {
+                saveActiveProfileChartSummary(data.chartSummaryUpdate);
+              }
               console.log(
                 "[API] Raw chat response:",
                 JSON.stringify(data, null, 2)
@@ -1124,6 +1269,41 @@
         }
       });
 
+      // Profile preferences modal: open, load memory, save
+      document.getElementById("profile-preferences-btn").addEventListener("click", () => {
+        const mem = getActiveProfileMemory();
+        document.getElementById("profile-memory-mode").value = mem.preferredMode || "beginner";
+        const flags = mem.sensitivityFlags || [];
+        document.getElementById("pref-softer").checked = flags.some(f => /softer/i.test(f));
+        document.getElementById("pref-strengths").checked = flags.some(f => /strength/i.test(f));
+        document.getElementById("pref-no-prediction").checked = flags.some(f => /prediction/i.test(f));
+        document.getElementById("profile-preferences-modal").classList.remove("hidden");
+      });
+      document.getElementById("profile-preferences-cancel").addEventListener("click", () => {
+        document.getElementById("profile-preferences-modal").classList.add("hidden");
+      });
+      document.getElementById("profile-preferences-modal").addEventListener("click", (e) => {
+        if (e.target.id === "profile-preferences-modal") e.target.classList.add("hidden");
+      });
+      document.getElementById("profile-preferences-save").addEventListener("click", () => {
+        const mode = document.getElementById("profile-memory-mode").value;
+        const sensitivityFlags = [];
+        if (document.getElementById("pref-softer").checked) sensitivityFlags.push("softer language");
+        if (document.getElementById("pref-strengths").checked) sensitivityFlags.push("focus on strengths");
+        if (document.getElementById("pref-no-prediction").checked) sensitivityFlags.push("avoid prediction");
+        const profiles = getChartProfiles();
+        const id = getActiveProfileId();
+        const idx = profiles.findIndex((p) => p.id === id);
+        if (idx !== -1) {
+          const mem = profiles[idx].memory || getDefaultProfileMemory();
+          mem.preferredMode = mode;
+          mem.sensitivityFlags = sensitivityFlags;
+          profiles[idx].memory = mem;
+          setChartProfiles(profiles);
+        }
+        document.getElementById("profile-preferences-modal").classList.add("hidden");
+      });
+
       // Add profile form submit: geocode, birth-chart API, create profile, switch
       document.getElementById("add-profile-form").addEventListener("submit", async (e) => {
         e.preventDefault();
@@ -1171,6 +1351,7 @@
             birthPlace,
             birthChartData,
             conversationHistory: [],
+            memory: { preferredMode: "beginner", lifeThemesDiscussed: [], userGoals: [], sensitivityFlags: [], priorTopicsSummary: "" },
           };
           const profiles = getChartProfiles();
           profiles.push(newProfile);
@@ -1760,6 +1941,93 @@
           });
         }
 
+        // Draw all four angles (AC, DC, MC, IC) with wide hit areas so every angle is selectable (before planets so planets on angles remain clickable)
+        if (birthChart.angles) {
+          const ascDegree = ascendantDegree;
+          const mcDegree = birthChart.angles.midheaven?.degree;
+          const dcDegree = (ascDegree + 180) % 360;   // Descendant = opposite Ascendant
+          const icDegree = mcDegree !== undefined && mcDegree !== null ? (mcDegree + 180) % 360 : undefined;
+
+          function addAngleLine(displayDegree, innerPos, outerPos, labelRadius, color, labelText, queryText, groupClass) {
+            const g = svg.append("g")
+              .attr("class", groupClass)
+              .style("cursor", "pointer");
+            const hitLine = g.append("line")
+              .attr("x1", innerPos.x)
+              .attr("y1", innerPos.y)
+              .attr("x2", outerPos.x)
+              .attr("y2", outerPos.y)
+              .attr("stroke", "transparent")
+              .attr("stroke-width", 28)
+              .attr("opacity", 0);
+            const visLine = g.append("line")
+              .attr("x1", innerPos.x)
+              .attr("y1", innerPos.y)
+              .attr("x2", outerPos.x)
+              .attr("y2", outerPos.y)
+              .attr("stroke", color)
+              .attr("stroke-width", 3)
+              .attr("opacity", 0.9);
+            const labelPos = getPosition(displayDegree, labelRadius);
+            const label = g.append("text")
+              .attr("x", labelPos.x)
+              .attr("y", labelPos.y)
+              .attr("text-anchor", "middle")
+              .attr("dominant-baseline", "middle")
+              .attr("fill", color)
+              .attr("font-size", "16px")
+              .attr("font-weight", "bold")
+              .text(labelText);
+            g.on("mouseenter", function() {
+              visLine.attr("stroke-width", 4).attr("opacity", 1);
+              label.attr("font-size", "20px");
+            })
+            .on("mouseleave", function() {
+              visLine.attr("stroke-width", 3).attr("opacity", 0.9);
+              label.attr("font-size", "16px");
+            })
+            .on("click", function() {
+              queryChartElement(queryText);
+            });
+          }
+
+          const labelRadius = outerRadius + 18;
+
+          // Ascendant (AC)
+          const acDisplayDegree = chartToDisplayDegree(ascDegree);
+          const acPos = getPosition(acDisplayDegree, outerRadius);
+          const innerAcPos = getPosition(acDisplayDegree, innerRadius);
+          const ascSign = birthChart.angles?.ascendant?.sign || "";
+          addAngleLine(acDisplayDegree, innerAcPos, acPos, labelRadius, "#10b981", "AC", `Ascendant${ascSign ? ` ${ascSign}` : ''}`, "ac-group");
+
+          // Descendant (DC) - opposite AC
+          const dcDisplayDegree = chartToDisplayDegree(dcDegree);
+          const dcPos = getPosition(dcDisplayDegree, outerRadius);
+          const innerDcPos = getPosition(dcDisplayDegree, innerRadius);
+          const house7 = birthChart.houses && birthChart.houses.find ? birthChart.houses.find(function(h) { return h && h.number === 7; }) : birthChart.houses && birthChart.houses[6];
+          const dcSign = house7 ? (house7.sign || "") : "";
+          addAngleLine(dcDisplayDegree, innerDcPos, dcPos, labelRadius, "#34d399", "DC", `Descendant${dcSign ? ` ${dcSign}` : ''}`, "dc-group");
+
+          // Midheaven (MC)
+          if (mcDegree !== undefined && mcDegree !== null && !isNaN(mcDegree)) {
+            const mcDisplayDegree = chartToDisplayDegree(mcDegree);
+            const mcPos = getPosition(mcDisplayDegree, outerRadius);
+            const innerMcPos = getPosition(mcDisplayDegree, innerRadius);
+            const mcSign = birthChart.angles?.midheaven?.sign || "";
+            addAngleLine(mcDisplayDegree, innerMcPos, mcPos, labelRadius, "#3b82f6", "MC", `Midheaven${mcSign ? ` ${mcSign}` : ''}`, "mc-group");
+          }
+
+          // Imum Coeli (IC) - opposite MC
+          if (icDegree !== undefined && !isNaN(icDegree)) {
+            const icDisplayDegree = chartToDisplayDegree(icDegree);
+            const icPos = getPosition(icDisplayDegree, outerRadius);
+            const innerIcPos = getPosition(icDisplayDegree, innerRadius);
+            const house4 = birthChart.houses && birthChart.houses.find ? birthChart.houses.find(function(h) { return h && h.number === 4; }) : birthChart.houses && birthChart.houses[3];
+            const icSign = house4 ? (house4.sign || "") : "";
+            addAngleLine(icDisplayDegree, innerIcPos, icPos, labelRadius, "#60a5fa", "IC", `Imum Coeli${icSign ? ` ${icSign}` : ''}`, "ic-group");
+          }
+        }
+
         // Draw planets
         const planetColors = {
           sun: "#FFD700",
@@ -1788,7 +2056,11 @@
         };
 
         // Draw planets (positioned closer to outer edge to fill wheel)
+        // Precompute positions with conjunction spread so overlapping planets don't stack
+        const CONJUNCTION_THRESHOLD_DEG = 10;  // planets within this many degrees are "conjunct"
+        const CONJUNCTION_SPREAD_DEG = 8;       // spread conjunct planets by this many degrees so they don't overlap
         if (birthChart.planets && typeof birthChart.planets === 'object') {
+          const planetList = [];
           Object.entries(birthChart.planets).forEach(([planetName, planetData]) => {
             if (planetData && 
                 planetData.degree !== undefined && 
@@ -1796,18 +2068,54 @@
                 !isNaN(planetData.degree) &&
                 planetData.house !== undefined && 
                 planetData.house !== null) {
-              // Position planet closer to outer edge (use 85% of outer radius)
-              const planetRingRadius = outerRadius * 0.85;
               const displayDegree = chartToDisplayDegree(planetData.degree);
-              const pos = getPosition(displayDegree, planetRingRadius);
+              planetList.push({ planetName, planetData, displayDegree });
+            }
+          });
+          planetList.sort((a, b) => a.displayDegree - b.displayDegree);
+
+          // Cluster by angular proximity (conjunctions); assign angle offset so planets don't overlap
+          function angularDist(a, b) {
+            const d = Math.abs((a - b + 360) % 360);
+            return Math.min(d, 360 - d);
+          }
+          const clusters = [];
+          let cluster = planetList.length > 0 ? [planetList[0]] : [];
+          for (let i = 1; i < planetList.length; i++) {
+            const d = (planetList[i].displayDegree - planetList[i - 1].displayDegree + 360) % 360;
+            if (d <= CONJUNCTION_THRESHOLD_DEG) {
+              cluster.push(planetList[i]);
+            } else {
+              if (cluster.length) clusters.push(cluster);
+              cluster = [planetList[i]];
+            }
+          }
+          if (cluster.length) clusters.push(cluster);
+          if (clusters.length > 1 && cluster.length > 0) {
+            const firstDeg = clusters[0][0].displayDegree;
+            const lastDeg = cluster[cluster.length - 1].displayDegree;
+            if (angularDist(firstDeg, lastDeg) <= CONJUNCTION_THRESHOLD_DEG) {
+              clusters[0] = cluster.concat(clusters[0]);
+              clusters.pop();
+            }
+          }
+          clusters.forEach(c => {
+            const K = c.length;
+            const spread = CONJUNCTION_SPREAD_DEG;
+            const startOffset = -((K - 1) * spread) / 2;
+            c.forEach((p, i) => { p.angleOffset = startOffset + i * spread; });
+          });
+
+          planetList.forEach(({ planetName, planetData, displayDegree, angleOffset = 0 }) => {
+              const planetRingRadius = outerRadius * 0.85;
+              const effectiveDegree = displayDegree + angleOffset;
+              const pos = getPosition(effectiveDegree, planetRingRadius);
               const color = planetColors[planetName.toLowerCase()] || "#ffffff";
               
-              // Create planet group for interactivity
               const planetGroup = svg.append("g")
                 .attr("class", "planet-group")
                 .style("cursor", "pointer");
               
-              // Invisible larger circle for easier clicking (bubble out area)
               planetGroup.append("circle")
                 .attr("cx", pos.x)
                 .attr("cy", pos.y)
@@ -1815,7 +2123,6 @@
                 .attr("fill", "transparent")
                 .attr("opacity", 0);
               
-              // Planet circle (larger for visibility)
               const planetCircle = planetGroup.append("circle")
                 .attr("cx", pos.x)
                 .attr("cy", pos.y)
@@ -1824,7 +2131,6 @@
                 .attr("stroke", "#0f172a")
                 .attr("stroke-width", 2.5);
 
-              // Planet symbol (larger, more visible)
               const planetSymbol = planetGroup.append("text")
                 .attr("x", pos.x)
                 .attr("y", pos.y)
@@ -1835,9 +2141,8 @@
                 .attr("font-weight", "bold")
                 .text(planetSymbols[planetName.toLowerCase()] || planetName.charAt(0).toUpperCase());
 
-              // Planet name label (positioned outside planet circle, closer to edge)
               const labelRadius = planetRingRadius + 25;
-              const labelPos = getPosition(displayDegree, labelRadius);
+              const labelPos = getPosition(effectiveDegree, labelRadius);
               const planetLabel = planetGroup.append("text")
                 .attr("x", labelPos.x)
                 .attr("y", labelPos.y)
@@ -1848,9 +2153,8 @@
                 .attr("font-weight", "600")
                 .text(planetName.charAt(0).toUpperCase() + planetName.slice(1));
 
-              // House number indicator (inside, near planet)
               const houseLabelRadius = planetRingRadius - 18;
-              const houseLabelPos = getPosition(displayDegree, houseLabelRadius);
+              const houseLabelPos = getPosition(effectiveDegree, houseLabelRadius);
               const houseNumText = planetGroup.append("text")
                 .attr("x", houseLabelPos.x)
                 .attr("y", houseLabelPos.y)
@@ -1900,108 +2204,7 @@
                 const planetSign = planetData.sign || "";
                 queryChartElement(`${planetDisplayName}${planetSign ? ` ${planetSign}` : ''}`);
               });
-            }
           });
-        }
-
-        // Draw Ascendant (AC) and Midheaven (MC) - prominent lines
-        // Ascendant should be at 9 o'clock (left) = 180° in standard polar coordinates
-        if (birthChart.angles) {
-          // Ascendant line (at 180° = 9 o'clock = left) - clickable
-          const acDisplayDegree = chartToDisplayDegree(ascendantDegree); // Should be 180°
-          const acPos = getPosition(acDisplayDegree, outerRadius);
-          const innerAcPos = getPosition(acDisplayDegree, innerRadius);
-          const acGroup = svg.append("g")
-            .attr("class", "ac-group")
-            .style("cursor", "pointer");
-          
-          const acLine = acGroup.append("line")
-            .attr("x1", innerAcPos.x)
-            .attr("y1", innerAcPos.y)
-            .attr("x2", acPos.x)
-            .attr("y2", acPos.y)
-            .attr("stroke", "#10b981")
-            .attr("stroke-width", 3)
-            .attr("opacity", 0.9);
-
-          const acLabelPos = getPosition(acDisplayDegree, outerRadius + 18);
-          const acLabel = acGroup.append("text")
-            .attr("x", acLabelPos.x)
-            .attr("y", acLabelPos.y)
-            .attr("text-anchor", "middle")
-            .attr("dominant-baseline", "middle")
-            .attr("fill", "#10b981")
-            .attr("font-size", "16px")
-            .attr("font-weight", "bold")
-            .text("AC");
-          
-          acGroup.on("mouseenter", function() {
-            acLine
-              .attr("stroke-width", 4)
-              .attr("opacity", 1);
-            acLabel
-              .attr("font-size", "20px");
-          })
-          .on("mouseleave", function() {
-            acLine
-              .attr("stroke-width", 3)
-              .attr("opacity", 0.9);
-            acLabel
-              .attr("font-size", "16px");
-          })
-          .on("click", function() {
-            const ascSign = birthChart.angles?.ascendant?.sign || "";
-            queryChartElement(`Ascendant${ascSign ? ` ${ascSign}` : ''}`);
-          });
-
-          // Midheaven (MC) - relative to Ascendant - clickable
-          if (birthChart.angles.midheaven?.degree !== undefined) {
-            const mcDisplayDegree = chartToDisplayDegree(birthChart.angles.midheaven.degree);
-            const mcPos = getPosition(mcDisplayDegree, outerRadius);
-            const innerMcPos = getPosition(mcDisplayDegree, innerRadius);
-            const mcGroup = svg.append("g")
-              .attr("class", "mc-group")
-              .style("cursor", "pointer");
-            
-            const mcLine = mcGroup.append("line")
-              .attr("x1", innerMcPos.x)
-              .attr("y1", innerMcPos.y)
-              .attr("x2", mcPos.x)
-              .attr("y2", mcPos.y)
-              .attr("stroke", "#3b82f6")
-              .attr("stroke-width", 3)
-              .attr("opacity", 0.9);
-
-            const mcLabelPos = getPosition(mcDisplayDegree, outerRadius + 18);
-            const mcLabel = mcGroup.append("text")
-              .attr("x", mcLabelPos.x)
-              .attr("y", mcLabelPos.y)
-              .attr("text-anchor", "middle")
-              .attr("dominant-baseline", "middle")
-              .attr("fill", "#3b82f6")
-              .attr("font-size", "16px")
-              .attr("font-weight", "bold")
-              .text("MC");
-            
-            mcGroup.on("mouseenter", function() {
-              mcLine
-                .attr("stroke-width", 4)
-                .attr("opacity", 1);
-              mcLabel
-                .attr("font-size", "20px");
-            })
-            .on("mouseleave", function() {
-              mcLine
-                .attr("stroke-width", 3)
-                .attr("opacity", 0.9);
-              mcLabel
-                .attr("font-size", "16px");
-            })
-            .on("click", function() {
-              const mcSign = birthChart.angles?.midheaven?.sign || "";
-              queryChartElement(`Midheaven${mcSign ? ` ${mcSign}` : ''}`);
-            });
-          }
         }
 
         // Center remains empty - no label

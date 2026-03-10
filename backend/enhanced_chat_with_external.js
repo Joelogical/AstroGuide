@@ -6,9 +6,7 @@ const {
   getFunctionDefinitions,
   executeFunction,
 } = require("./external_resources");
-const {
-  generateSystemPrompt,
-} = require("./chatgpt_template");
+const { generateSystemPrompt } = require("./chatgpt_template");
 const {
   formatInterpretationForAI,
   generateChartInterpretation,
@@ -31,25 +29,56 @@ function isCasualMessage(message) {
     /^(ok|okay|k|sure|yep|yeah|yes|no|nope|alright|got it)$/i,
     /^(cool|nice|awesome|great|good|fine)$/i,
   ];
-  
+
   // Check if it matches casual patterns
-  if (casualPatterns.some(pattern => pattern.test(lowerMessage))) {
+  if (casualPatterns.some((pattern) => pattern.test(lowerMessage))) {
     return true;
   }
-  
+
   // Check if it's a very short message without astrological keywords
   const astroKeywords = [
-    'chart', 'birth', 'astrology', 'sign', 'planet', 'sun', 'moon', 'mercury', 
-    'venus', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto',
-    'aries', 'taurus', 'gemini', 'cancer', 'leo', 'virgo', 'libra', 
-    'scorpio', 'sagittarius', 'capricorn', 'aquarius', 'pisces',
-    'aspect', 'house', 'ascendant', 'midheaven', 'transit', 'interpretation'
+    "chart",
+    "birth",
+    "astrology",
+    "sign",
+    "planet",
+    "sun",
+    "moon",
+    "mercury",
+    "venus",
+    "mars",
+    "jupiter",
+    "saturn",
+    "uranus",
+    "neptune",
+    "pluto",
+    "aries",
+    "taurus",
+    "gemini",
+    "cancer",
+    "leo",
+    "virgo",
+    "libra",
+    "scorpio",
+    "sagittarius",
+    "capricorn",
+    "aquarius",
+    "pisces",
+    "aspect",
+    "house",
+    "ascendant",
+    "midheaven",
+    "transit",
+    "interpretation",
   ];
-  
-  if (lowerMessage.length < 20 && !astroKeywords.some(keyword => lowerMessage.includes(keyword))) {
+
+  if (
+    lowerMessage.length < 20 &&
+    !astroKeywords.some((keyword) => lowerMessage.includes(keyword))
+  ) {
     return true;
   }
-  
+
   return false;
 }
 
@@ -62,30 +91,63 @@ function isCasualMessage(message) {
 function wantsChartInterpretation(message, conversationHistory = []) {
   const lowerMessage = message.toLowerCase().trim();
   const interpretationKeywords = [
-    'tell me about', 'tell me about myself', 'interpret', 'interpretation',
-    'what does my chart', 'what does my birth chart', 'my chart', 'my birth chart',
-    'explain my', 'describe my', 'what am i', 'who am i', 'what are my',
-    'what about me', 'about myself', 'my personality', 'my traits',
-    'what are my strengths', 'what are my challenges', 'what are my weaknesses',
-    'sun', 'moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn', 
-    'uranus', 'neptune', 'pluto', 'ascendant', 'midheaven', 'rising',
-    'aspect', 'house', 'transit'
+    "tell me about",
+    "tell me about myself",
+    "interpret",
+    "interpretation",
+    "what does my chart",
+    "what does my birth chart",
+    "my chart",
+    "my birth chart",
+    "explain my",
+    "describe my",
+    "what am i",
+    "who am i",
+    "what are my",
+    "what about me",
+    "about myself",
+    "my personality",
+    "my traits",
+    "what are my strengths",
+    "what are my challenges",
+    "what are my weaknesses",
+    "sun",
+    "moon",
+    "mercury",
+    "venus",
+    "mars",
+    "jupiter",
+    "saturn",
+    "uranus",
+    "neptune",
+    "pluto",
+    "ascendant",
+    "midheaven",
+    "rising",
+    "aspect",
+    "house",
+    "transit",
   ];
-  
+
   // Check current message
-  if (interpretationKeywords.some(keyword => lowerMessage.includes(keyword))) {
+  if (
+    interpretationKeywords.some((keyword) => lowerMessage.includes(keyword))
+  ) {
     return true;
   }
-  
+
   // Check conversation history for context
-  const allMessages = [...conversationHistory, { role: 'user', content: message }]
-    .map(m => m.content?.toLowerCase() || '')
-    .join(' ');
-  
-  if (interpretationKeywords.some(keyword => allMessages.includes(keyword))) {
+  const allMessages = [
+    ...conversationHistory,
+    { role: "user", content: message },
+  ]
+    .map((m) => m.content?.toLowerCase() || "")
+    .join(" ");
+
+  if (interpretationKeywords.some((keyword) => allMessages.includes(keyword))) {
     return true;
   }
-  
+
   return false;
 }
 
@@ -96,7 +158,11 @@ function wantsChartInterpretation(message, conversationHistory = []) {
  * @param {Array} conversationHistory - Previous conversation messages
  * @returns {Promise<object>} Response with answer and metadata
  */
-async function enhancedChatWithExternal(message, birthChart, conversationHistory = []) {
+async function enhancedChatWithExternal(
+  message,
+  birthChart,
+  conversationHistory = [],
+) {
   try {
     // Check if this is a factual question first
     if (isFactualQuestion(message)) {
@@ -112,8 +178,11 @@ async function enhancedChatWithExternal(message, birthChart, conversationHistory
 
     // Determine if we should include full chart interpretation template
     const isCasual = isCasualMessage(message);
-    const wantsInterpretation = wantsChartInterpretation(message, conversationHistory);
-    
+    const wantsInterpretation = wantsChartInterpretation(
+      message,
+      conversationHistory,
+    );
+
     // Only generate interpretation template if user is asking about their chart
     let interpretationTemplate = null;
     if (wantsInterpretation && !isCasual) {
@@ -123,13 +192,14 @@ async function enhancedChatWithExternal(message, birthChart, conversationHistory
         const { formatInterpretationForAI } = require("./chart_interpreter");
         interpretationTemplate = formatInterpretationForAI(
           birthChart.deterministicInterpretation,
-          birthChart
+          birthChart,
         );
       } else {
-        const deterministicInterpretation = generateChartInterpretation(birthChart);
+        const deterministicInterpretation =
+          generateChartInterpretation(birthChart);
         interpretationTemplate = formatInterpretationForAI(
           deterministicInterpretation,
-          birthChart
+          birthChart,
         );
       }
     }
@@ -138,7 +208,12 @@ async function enhancedChatWithExternal(message, birthChart, conversationHistory
     const messages = [
       {
         role: "system",
-        content: generateSystemPrompt(interpretationTemplate, isCasual, wantsInterpretation) + 
+        content:
+          generateSystemPrompt(
+            interpretationTemplate,
+            isCasual,
+            wantsInterpretation,
+          ) +
           "\n\nYou have access to external resources through function calling. " +
           "If you need more detailed information about astrology concepts, current transits, " +
           "or specific interpretations, you can use the available functions to fetch this information.",
@@ -176,33 +251,40 @@ async function enhancedChatWithExternal(message, birthChart, conversationHistory
 
     // Check if AI wants to call a function
     const messageResponse = completion.choices[0].message;
-    
+
     // Handle function calls if any
     if (messageResponse.function_call) {
       usedExternalResources = true;
       const functionName = messageResponse.function_call.name;
       const functionArgs = JSON.parse(messageResponse.function_call.arguments);
-      
-      console.log(`[EXTERNAL] AI requested function call: ${functionName}`, functionArgs);
-      
+
+      console.log(
+        `[EXTERNAL] AI requested function call: ${functionName}`,
+        functionArgs,
+      );
+
       // Execute the function
       const functionResult = await executeFunction(functionName, functionArgs);
-      
+
       // Add function call and result to messages
       messages.push({
         role: "assistant",
         content: null,
         function_call: messageResponse.function_call,
       });
-      
+
       messages.push({
         role: "function",
         name: functionName,
         content: JSON.stringify(functionResult),
       });
-      
-      functionCalls.push({ name: functionName, args: functionArgs, result: functionResult });
-      
+
+      functionCalls.push({
+        name: functionName,
+        args: functionArgs,
+        result: functionResult,
+      });
+
       // Make another API call with the function result
       completion = await openai.chat.completions.create({
         model: "gpt-3.5-turbo",
