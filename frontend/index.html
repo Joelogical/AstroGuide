@@ -1121,6 +1121,45 @@
             // Get conversation history for the active profile
             let conversationHistory = getActiveProfileConversation().slice();
 
+            // If user is repeating a prompt/topic, show a brief "thinking" cue (deeper answer + more specific sources)
+            function isRepeatPrompt(currentMsg, history) {
+              const text = String(currentMsg || "").toLowerCase();
+              if (text.length < 8) return false;
+              const stop = new Set(["the","a","an","and","or","but","to","of","in","on","for","with","at","from","by","about","as","is","are","was","were","be","been","being","i","me","my","you","your","we","our","it","this","that","these","those","what","why","how","when","where","tell","explain","please"]);
+              function tokens(s) {
+                return String(s || "")
+                  .toLowerCase()
+                  .replace(/[^a-z0-9\s]/g, " ")
+                  .split(/\s+/)
+                  .filter((w) => w && w.length > 2 && !stop.has(w));
+              }
+              function jaccard(a, b) {
+                const A = new Set(a);
+                const B = new Set(b);
+                if (A.size === 0 || B.size === 0) return 0;
+                let inter = 0;
+                for (const x of A) if (B.has(x)) inter++;
+                const union = A.size + B.size - inter;
+                return union ? inter / union : 0;
+              }
+              const curTok = tokens(text);
+              const recentUser = (history || []).filter((m) => m && m.role === "user" && m.content).slice(-8);
+              for (const m of recentUser) {
+                const prev = String(m.content || "").toLowerCase();
+                if (!prev) continue;
+                if (prev === text) return true;
+                if (prev.length > 0 && (prev.includes(text) || text.includes(prev)) && Math.min(prev.length, text.length) > 18) return true;
+                const sim = jaccard(curTok, tokens(prev));
+                if (sim >= 0.45) return true;
+              }
+              return false;
+            }
+            if (isRepeatPrompt(message, conversationHistory)) {
+              await queueBotMessage("Give me a second—I'm going to think about this from a deeper angle and pull more specific sources.");
+              // queueBotMessage() hides the spinner while it renders; re-show spinner so the user sees ongoing work during the API call
+              showSpinner();
+            }
+
             // Add the user's message to the conversation history
             conversationHistory.push({
               role: "user",

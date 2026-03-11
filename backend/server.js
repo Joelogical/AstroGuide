@@ -1709,8 +1709,46 @@ app.post("/api/chat", (req, res) => {
     }
 
     // Add the current message with a format reminder so every turn enforces prose-only and web use (avoids checklist slip on follow-ups)
+    // Detect repeated prompts so the model deepens instead of repeating basics (topic-agnostic)
+    function isRepeatPrompt(currentMsg, history) {
+      const text = String(currentMsg || "").toLowerCase();
+      if (text.length < 8) return false;
+      const stop = new Set(["the","a","an","and","or","but","to","of","in","on","for","with","at","from","by","about","as","is","are","was","were","be","been","being","i","me","my","you","your","we","our","it","this","that","these","those","what","why","how","when","where","tell","explain","please"]);
+      function tokens(s) {
+        return String(s || "")
+          .toLowerCase()
+          .replace(/[^a-z0-9\\s]/g, " ")
+          .split(/\\s+/)
+          .filter((w) => w && w.length > 2 && !stop.has(w));
+      }
+      function jaccard(a, b) {
+        const A = new Set(a);
+        const B = new Set(b);
+        if (A.size === 0 || B.size === 0) return 0;
+        let inter = 0;
+        for (const x of A) if (B.has(x)) inter++;
+        const union = A.size + B.size - inter;
+        return union ? inter / union : 0;
+      }
+      const curTok = tokens(text);
+      const recentUser = (history || []).filter((m) => m && m.role === "user" && m.content).slice(-10);
+      for (const m of recentUser) {
+        const prev = String(m.content || "").toLowerCase();
+        if (!prev) continue;
+        if (prev === text) return true;
+        if ((prev.includes(text) || text.includes(prev)) && Math.min(prev.length, text.length) > 18) return true;
+        const sim = jaccard(curTok, tokens(prev));
+        if (sim >= 0.45) return true;
+      }
+      return false;
+    }
+    const isRepeatedPrompt = isRepeatPrompt(message, conversationHistory);
+
     const userContent =
       message +
+      (isRepeatedPrompt
+        ? "\n\n[NOTE: The user is repeating or re-asking a similar question. Do NOT repeat prior basic explanations. Go deeper: add new angles (rulership chains, dispositors, aspect networks/patterns, dignity/retrograde, dominant planets/houses, repeating themes). Use MORE targeted web searches (search_astrology_info/search_web_astrology) based on the exact wording of this question so the answer adds new insight instead of rephrasing the same content.]"
+        : "") +
       "\n\n[Reply in plain paragraphs only—no numbers (1. 2. 3.), no ### or **headers**, no one topic per paragraph. Weave themes together. When interpreting the chart, use web search (search_astrology_info) for placements you discuss so the reply stays varied and non-generic.]";
     messages.push({
       role: "user",
