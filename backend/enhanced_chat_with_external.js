@@ -241,7 +241,7 @@ async function enhancedChatWithExternal(
 
     // First call - AI may request function calls
     completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo", // or "gpt-4" for better function calling
+      model: "gpt-4o", // current flagship chat model
       messages: messages,
       functions: functions,
       function_call: "auto", // Let AI decide when to call functions
@@ -287,7 +287,7 @@ async function enhancedChatWithExternal(
 
       // Make another API call with the function result
       completion = await openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
+        model: "gpt-4o",
         messages: messages,
         functions: functions,
         function_call: "auto",

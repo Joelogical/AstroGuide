@@ -31,7 +31,7 @@ async function getBirthChartInterpretation(birthChart) {
 
     // Make the API call to OpenAI
     const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: "gpt-4o",
       messages: messages,
       temperature: 0.7, // Balanced between creativity and accuracy
       max_tokens: 2000, // Adjust based on your needs

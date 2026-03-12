@@ -1424,7 +1424,7 @@ app.post("/api/chat", (req, res) => {
         // Create response with ONLY the function result, NO chart data
         // DO NOT include conversation history for general questions
         const completion = await openai.chat.completions.create({
-          model: "gpt-3.5-turbo",
+          model: "gpt-4o",
           messages: [
             {
               role: "system",
@@ -1589,7 +1589,7 @@ app.post("/api/chat", (req, res) => {
       let completion;
       try {
         completion = await openai.chat.completions.create({
-          model: "gpt-3.5-turbo",
+          model: "gpt-4o",
           messages: messages,
           functions: functions,
           function_call: "auto",
@@ -1764,7 +1764,7 @@ app.post("/api/chat", (req, res) => {
 
     try {
       completion = await openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
+        model: "gpt-4o",
         messages: messages,
         functions: functions,
         function_call: "auto",
@@ -1826,7 +1826,7 @@ app.post("/api/chat", (req, res) => {
       });
 
       completion = await openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
+        model: "gpt-4o",
         messages: messages,
         functions: functions,
         function_call: "auto",

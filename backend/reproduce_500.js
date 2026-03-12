@@ -91,7 +91,7 @@ async function run() {
 
   console.log("7. openai.chat.completions.create...");
   const completion = await openai.chat.completions.create({
-    model: "gpt-3.5-turbo",
+    model: "gpt-4o",
     messages: messages,
     tools: tools,
     tool_choice: "auto",
