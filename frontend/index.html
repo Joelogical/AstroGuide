@@ -2680,17 +2680,18 @@
                     .attr("class", "aspect-group")
                     .style("cursor", "pointer");
 
-                  // Invisible wider hit area for the aspect line (inserted before planets for proper z-order)
+                  // Invisible wider hit area for the aspect line (appended last so it sits on top for interaction)
                   const hitArea = svg
-                    .insert("line", "circle")
+                    .append("line")
                     .attr("x1", pos1.x)
                     .attr("y1", pos1.y)
                     .attr("x2", pos2.x)
                     .attr("y2", pos2.y)
                     .attr("stroke", "transparent")
-                    .attr("stroke-width", 60) // Very broad invisible hit area for easier hovering/clicking
+                    .attr("stroke-width", 32) // Moderately wide invisible hit area for accurate but forgiving selection
                     .attr("opacity", 0)
-                    .style("cursor", "pointer");
+                    .style("cursor", "pointer")
+                    .style("pointer-events", "stroke");
 
                   // Draw aspect line (behind planets) - append directly since aspects are drawn before planets
                   const aspectLine = svg
@@ -2727,22 +2728,6 @@
                     .attr("stroke-width", 2.5)
                     .attr("opacity", 0.6);
 
-                  // Add aspect label at midpoint for better visibility
-                  const aspectName =
-                    aspect.aspect.charAt(0).toUpperCase() +
-                    aspect.aspect.slice(1);
-                  const aspectLabel = aspectGroup
-                    .append("text")
-                    .attr("x", midX)
-                    .attr("y", midY)
-                    .attr("text-anchor", "middle")
-                    .attr("dominant-baseline", "middle")
-                    .attr("fill", color)
-                    .attr("font-size", "10px")
-                    .attr("font-weight", "bold")
-                    .attr("opacity", 0)
-                    .text(aspectName.substring(0, 3)); // Abbreviated aspect name
-
                   // Helper to bump a planet glyph (used from planet hover and aspect hover)
                   function bumpPlanet(planetKey, active) {
                     const entry = planetGroupsByName[planetKey?.toLowerCase()];
@@ -2763,12 +2748,6 @@
                       .attr("stroke", hoverStroke)
                       .transition()
                       .duration(200);
-                    aspectLabel
-                      .attr("opacity", 0.8)
-                      .attr("font-size", "12px")
-                      .attr("fill", hoverStroke)
-                      .transition()
-                      .duration(200);
                     tick1
                       .attr("stroke", "#10b981")
                       .attr("stroke-width", 3)
@@ -2777,7 +2756,7 @@
                       .attr("stroke", "#10b981")
                       .attr("stroke-width", 3)
                       .attr("opacity", 0.9);
-                    hitArea.attr("stroke-width", 80); // Expand hit area even more on hover
+                    hitArea.attr("stroke-width", 48); // Slightly expand hit area on hover
                     bumpPlanet(aspect.planet1, true);
                     bumpPlanet(aspect.planet2, true);
                   }
@@ -2788,12 +2767,6 @@
                       .attr("stroke", color)
                       .transition()
                       .duration(200);
-                    aspectLabel
-                      .attr("opacity", 0)
-                      .attr("font-size", "10px")
-                      .attr("fill", color)
-                      .transition()
-                      .duration(200);
                     tick1
                       .attr("stroke", color)
                       .attr("stroke-width", 2.5)
@@ -2802,7 +2775,7 @@
                       .attr("stroke", color)
                       .attr("stroke-width", 2.5)
                       .attr("opacity", 0.6);
-                    hitArea.attr("stroke-width", 60); // Reset hit area to broader size
+                    hitArea.attr("stroke-width", 32); // Reset hit area to base size
                     bumpPlanet(aspect.planet1, false);
                     bumpPlanet(aspect.planet2, false);
                   }

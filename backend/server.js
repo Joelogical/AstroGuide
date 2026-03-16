@@ -2041,11 +2041,11 @@ app.post("/api/chat", (req, res) => {
           content: JSON.stringify(functionResult),
         });
 
+        // Second call: now that we have real function results in the context,
+        // force a plain natural-language response (no more tool calls).
         completion = await openai.chat.completions.create({
           model: "gpt-4o",
           messages: messages,
-          functions: functions,
-          function_call: "auto",
           temperature: 0.7,
           max_tokens: 1400,
           presence_penalty: 0.1,
