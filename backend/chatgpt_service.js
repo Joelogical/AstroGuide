@@ -24,7 +24,7 @@ async function getBirthChartInterpretation(birthChart) {
         role: "user",
         content: chatGPTTemplate.user.replace(
           "{{BIRTH_CHART_DATA}}",
-          formattedData
+          formattedData,
         ),
       },
     ];

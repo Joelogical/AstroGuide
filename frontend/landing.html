@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -150,16 +150,21 @@
           }
         } catch (error) {
           console.error("Login error:", error);
-          
+
           // Provide more specific error messages
           if (error.name === "TypeError" && error.message.includes("fetch")) {
-            alert("Cannot connect to server. Please make sure the backend server is running on http://localhost:3000");
-          } else if (error.name === "NetworkError" || error.message.includes("network")) {
+            alert(
+              "Cannot connect to server. Please make sure the backend server is running on http://localhost:3000",
+            );
+          } else if (
+            error.name === "NetworkError" ||
+            error.message.includes("network")
+          ) {
             alert("Network error. Please check your internet connection.");
           } else {
             alert(`An error occurred during login: ${error.message}`);
           }
-          
+
           submitButton.disabled = false;
           submitButton.textContent = originalButtonText;
         }
@@ -176,12 +181,21 @@
           const password = document.getElementById("signup-password").value;
           const birthDate = document.getElementById("signup-birth-date").value;
           const birthTime = document.getElementById("signup-birth-time").value;
-          const birthPlace = document.getElementById("signup-birth-place").value.trim();
+          const birthPlace = document
+            .getElementById("signup-birth-place")
+            .value.trim();
           const submitButton = e.target.querySelector('button[type="submit"]');
           const originalButtonText = submitButton.textContent;
 
           // Validate inputs
-          if (!name || !email || !password || !birthDate || !birthTime || !birthPlace) {
+          if (
+            !name ||
+            !email ||
+            !password ||
+            !birthDate ||
+            !birthTime ||
+            !birthPlace
+          ) {
             alert("Please fill in all fields");
             return;
           }
@@ -246,16 +260,21 @@
             }
           } catch (error) {
             console.error("Signup error:", error);
-            
+
             // Provide more specific error messages
             if (error.name === "TypeError" && error.message.includes("fetch")) {
-              alert("Cannot connect to server. Please make sure the backend server is running on http://localhost:3000");
-            } else if (error.name === "NetworkError" || error.message.includes("network")) {
+              alert(
+                "Cannot connect to server. Please make sure the backend server is running on http://localhost:3000",
+              );
+            } else if (
+              error.name === "NetworkError" ||
+              error.message.includes("network")
+            ) {
               alert("Network error. Please check your internet connection.");
             } else {
               alert(`An error occurred during signup: ${error.message}`);
             }
-            
+
             submitButton.disabled = false;
             submitButton.textContent = originalButtonText;
           }

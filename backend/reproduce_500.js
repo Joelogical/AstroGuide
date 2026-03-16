@@ -7,14 +7,31 @@
 require("dotenv").config();
 
 const openai = require("./openai_service");
-const { getFunctionDefinitions, executeFunction, gatherChartInterpretationsFromWeb } = require("./external_resources");
+const {
+  getFunctionDefinitions,
+  executeFunction,
+  gatherChartInterpretationsFromWeb,
+} = require("./external_resources");
 const { formatBirthChartForChatGPT } = require("./chatgpt_template");
-const { generateChartInterpretation, formatInterpretationForAI } = require("./chart_interpreter");
-const { isFactualQuestion, answerFactualQuestion } = require("./factual_questions");
+const {
+  generateChartInterpretation,
+  formatInterpretationForAI,
+} = require("./chart_interpreter");
+const {
+  isFactualQuestion,
+  answerFactualQuestion,
+} = require("./factual_questions");
 
 const birthChart = {
-  birthData: { date: "1990-01-01", time: "12:00", location: { latitude: 40, longitude: -74, timezone: -5 } },
-  angles: { ascendant: { sign: "Leo", degree: 10, element: "Fire" }, midheaven: { sign: "Taurus", degree: 5, element: "Earth" } },
+  birthData: {
+    date: "1990-01-01",
+    time: "12:00",
+    location: { latitude: 40, longitude: -74, timezone: -5 },
+  },
+  angles: {
+    ascendant: { sign: "Leo", degree: 10, element: "Fire" },
+    midheaven: { sign: "Taurus", degree: 5, element: "Earth" },
+  },
   planets: {
     sun: { sign: "Capricorn", degree: 25, element: "Earth", house: 10 },
     moon: { sign: "Cancer", degree: 12, element: "Water", house: 4 },
@@ -27,7 +44,7 @@ const message = "hello";
 const conversationHistory = Array.from({ length: 11 }, (_, i) =>
   i % 2 === 0
     ? { role: "user", content: `user message ${i}` }
-    : { role: "assistant", content: `assistant message ${i}` }
+    : { role: "assistant", content: `assistant message ${i}` },
 );
 
 async function run() {
@@ -36,10 +53,16 @@ async function run() {
   if (birthChart.interpretationTemplate) {
     interpretationTemplate = birthChart.interpretationTemplate;
   } else if (birthChart.deterministicInterpretation) {
-    interpretationTemplate = formatInterpretationForAI(birthChart.deterministicInterpretation, birthChart);
+    interpretationTemplate = formatInterpretationForAI(
+      birthChart.deterministicInterpretation,
+      birthChart,
+    );
   } else {
     const deterministicInterpretation = generateChartInterpretation(birthChart);
-    interpretationTemplate = formatInterpretationForAI(deterministicInterpretation, birthChart);
+    interpretationTemplate = formatInterpretationForAI(
+      deterministicInterpretation,
+      birthChart,
+    );
   }
   console.log("   OK");
 
@@ -67,17 +90,19 @@ async function run() {
 
   console.log("5. Build systemContent & messages...");
   const maxWebLen = 12000;
-  const webBlock = webInterpretations && webInterpretations.length > maxWebLen
-    ? webInterpretations.slice(0, maxWebLen) + "\n[...]"
-    : (webInterpretations || "");
+  const webBlock =
+    webInterpretations && webInterpretations.length > maxWebLen
+      ? webInterpretations.slice(0, maxWebLen) + "\n[...]"
+      : webInterpretations || "";
   const webSection = webInterpretations
     ? "--- WEB ---\n" + webBlock + "\n---"
     : "--- No web ---";
   const systemContent =
-    "You are AstroGuide.\n\n--- CHART ---\n" + chartFactsOnly + "\n---\n\n" + webSection;
-  const messages = [
-    { role: "system", content: systemContent },
-  ];
+    "You are AstroGuide.\n\n--- CHART ---\n" +
+    chartFactsOnly +
+    "\n---\n\n" +
+    webSection;
+  const messages = [{ role: "system", content: systemContent }];
   if (conversationHistory && conversationHistory.length > 0) {
     messages.push(...conversationHistory);
   }
@@ -104,7 +129,9 @@ async function run() {
 
   const finalResponse = completion.choices[0].message.content ?? "";
   console.log("8. finalResponse length:", finalResponse.length);
-  console.log("\nSuccess – no error in this flow. Error may be in generateFollowUpQuestion or elsewhere.");
+  console.log(
+    "\nSuccess – no error in this flow. Error may be in generateFollowUpQuestion or elsewhere.",
+  );
 }
 
 run().catch((err) => {
