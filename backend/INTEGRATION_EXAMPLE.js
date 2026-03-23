@@ -25,16 +25,11 @@ app.post("/api/chat-with-external", async (req, res) => {
       conversationHistory || []
     );
 
-    // Generate follow-up question (using your existing function)
-    const followUpQuestion = generateFollowUpQuestion(
-      message,
-      result.response,
-      birthChart
-    );
+    // Follow-ups: use generateFollowUpSuggestionsLLM from ./followup_suggestions.js (see server.js)
 
     return res.json({
       response: result.response,
-      followUpQuestion: followUpQuestion,
+      followUpSuggestions: [],
       usedExternalResources: result.usedExternalResources,
       // Optional: include function calls for debugging
       // functionCalls: result.functionCalls,
@@ -69,15 +64,10 @@ app.post("/api/chat", async (req, res) => {
       const factualAnswer = answerFactualQuestion(message, birthChart);
       if (factualAnswer) {
         console.log("[FACTUAL] Answered factual question deterministically");
-        const followUpQuestion = generateFollowUpQuestion(
-          message,
-          factualAnswer,
-          birthChart
-        );
         return res.json({
           response: factualAnswer,
           isFactual: true,
-          followUpQuestion: followUpQuestion,
+          followUpSuggestions: [],
         });
       }
     }
@@ -90,13 +80,6 @@ app.post("/api/chat", async (req, res) => {
       conversationHistory || []
     );
 
-    // Generate follow-up question
-    const followUpQuestion = generateFollowUpQuestion(
-      message,
-      result.response,
-      birthChart
-    );
-
     // Log if external resources were used (for monitoring)
     if (result.usedExternalResources) {
       console.log("[EXTERNAL] Used external resources:", result.functionCalls);
@@ -104,7 +87,7 @@ app.post("/api/chat", async (req, res) => {
 
     return res.json({
       response: result.response,
-      followUpQuestion: followUpQuestion,
+      followUpSuggestions: [],
       // Optional: include metadata
       // usedExternalResources: result.usedExternalResources,
     });
@@ -156,15 +139,10 @@ app.post("/api/chat", async (req, res) => {
     if (isFactualQuestion(message)) {
       const factualAnswer = answerFactualQuestion(message, birthChart);
       if (factualAnswer) {
-        const followUpQuestion = generateFollowUpQuestion(
-          message,
-          factualAnswer,
-          birthChart
-        );
         return res.json({
           response: factualAnswer,
           isFactual: true,
-          followUpQuestion: followUpQuestion,
+          followUpSuggestions: [],
         });
       }
     }
@@ -181,15 +159,9 @@ app.post("/api/chat", async (req, res) => {
         conversationHistory || []
       );
 
-      const followUpQuestion = generateFollowUpQuestion(
-        message,
-        result.response,
-        birthChart
-      );
-
       return res.json({
         response: result.response,
-        followUpQuestion: followUpQuestion,
+        followUpSuggestions: [],
       });
     } else {
       // Use existing chat endpoint (no external resources)

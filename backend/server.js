@@ -37,6 +37,7 @@ const {
   buildProfileMemoryBlock,
   composeSystemContent,
 } = require("./prompt_layers");
+const { generateFollowUpSuggestionsLLM } = require("./followup_suggestions");
 
 // Debug logging for environment variables
 console.log("Environment variables loaded:");
@@ -708,573 +709,6 @@ app.post("/api/birth-chart", async (req, res) => {
 });
 
 /**
- * Generate contextually relevant follow-up question based on user's message and response
- * @param {string} userMessage - The user's original message
- * @param {string} aiResponse - The AI's response
- * @param {object} birthChart - The birth chart data
- * @returns {string|null} Follow-up question (null if not needed)
- */
-function generateFollowUpQuestion(userMessage, aiResponse, birthChart) {
-  const message = userMessage.toLowerCase();
-  const response = aiResponse.toLowerCase();
-
-  console.log("[FOLLOWUP] Generating follow-up for:", {
-    userMessage: userMessage.substring(0, 50),
-    responseLength: aiResponse.length,
-    messageLength: message.length,
-  });
-
-  // Don't generate follow-up for very short responses or simple acknowledgments
-  // But be more lenient - if it's a substantial question, always provide a follow-up
-  const isSubstantialQuestion =
-    message.length > 20 &&
-    (message.includes("tell me") ||
-      message.includes("what") ||
-      message.includes("how") ||
-      message.includes("why") ||
-      message.includes("explain") ||
-      message.includes("describe") ||
-      message.includes("about") ||
-      message.includes("myself") ||
-      message.includes("about me"));
-
-  console.log("[FOLLOWUP] Is substantial question:", isSubstantialQuestion);
-
-  // For substantial questions, always provide a follow-up (be more lenient)
-  // NEVER return null early for substantial questions - let the safety nets handle it
-  if (!isSubstantialQuestion && aiResponse.length < 100) {
-    // For non-substantial questions, require longer responses
-    console.log("[FOLLOWUP] Skipping - response too short and not substantial");
-    return null;
-  }
-
-  // For substantial questions, continue even if response is short (safety nets will handle it)
-  if (isSubstantialQuestion && aiResponse.length < 30) {
-    console.log(
-      "[FOLLOWUP] Warning - substantial question but response extremely short, will use safety net",
-    );
-    // Don't return null - let the safety nets generate a question
-  }
-
-  // Don't generate follow-up if user's message was very short (like "thanks" or "ok")
-  if (message.length < 10) {
-    return null;
-  }
-
-  // Don't generate follow-up for simple yes/no responses or acknowledgments
-  const shortResponses = [
-    "thanks",
-    "thank you",
-    "ok",
-    "okay",
-    "got it",
-    "i see",
-    "cool",
-    "nice",
-  ];
-  if (
-    shortResponses.some(
-      (short) => message === short || message.startsWith(short + " "),
-    )
-  ) {
-    return null;
-  }
-
-  // Extract topic keywords from user message with more specific patterns
-  const topicKeywords = {
-    sun: [
-      "sun",
-      "identity",
-      "ego",
-      "self",
-      "who am i",
-      "personality",
-      "tell me about myself",
-      "about me",
-      "who i am",
-    ],
-    moon: ["moon", "emotion", "feeling", "mood", "nurturing", "mother"],
-    mercury: [
-      "mercury",
-      "communication",
-      "thinking",
-      "mind",
-      "intellect",
-      "learning",
-    ],
-    venus: [
-      "venus",
-      "love",
-      "relationship",
-      "romance",
-      "beauty",
-      "values",
-      "attraction",
-    ],
-    mars: ["mars", "action", "drive", "passion", "anger", "aggression", "sex"],
-    jupiter: [
-      "jupiter",
-      "luck",
-      "expansion",
-      "philosophy",
-      "growth",
-      "optimism",
-    ],
-    saturn: [
-      "saturn",
-      "discipline",
-      "responsibility",
-      "challenge",
-      "limitation",
-      "structure",
-    ],
-    uranus: [
-      "uranus",
-      "change",
-      "innovation",
-      "rebellion",
-      "freedom",
-      "unpredictable",
-    ],
-    neptune: [
-      "neptune",
-      "dream",
-      "illusion",
-      "spirituality",
-      "creativity",
-      "confusion",
-    ],
-    pluto: [
-      "pluto",
-      "transformation",
-      "power",
-      "intensity",
-      "control",
-      "obsession",
-    ],
-    ascendant: [
-      "ascendant",
-      "rising",
-      "appearance",
-      "first impression",
-      "outer self",
-    ],
-    midheaven: [
-      "midheaven",
-      "career",
-      "public",
-      "reputation",
-      "vocation",
-      "10th house",
-    ],
-    aspects: [
-      "aspect",
-      "square",
-      "trine",
-      "opposition",
-      "conjunction",
-      "sextile",
-    ],
-    houses: [
-      "house",
-      "1st",
-      "2nd",
-      "3rd",
-      "4th",
-      "5th",
-      "6th",
-      "7th",
-      "8th",
-      "9th",
-      "10th",
-      "11th",
-      "12th",
-    ],
-    relationships: [
-      "relationship",
-      "partner",
-      "marriage",
-      "compatibility",
-      "love life",
-      "dating",
-      "romance",
-      "boyfriend",
-      "girlfriend",
-      "spouse",
-      "attraction",
-      "what i want in a partner",
-      "my ideal partner",
-    ],
-    career: [
-      "career",
-      "work",
-      "job",
-      "profession",
-      "vocation",
-      "success",
-      "workplace",
-      "colleagues",
-      "boss",
-      "employment",
-    ],
-    challenges: [
-      "challenge",
-      "difficulty",
-      "problem",
-      "struggle",
-      "weakness",
-      "negative",
-      "issue",
-      "trouble",
-    ],
-    strengths: ["strength", "talent", "gift", "positive", "good", "strong"],
-    family: [
-      "family",
-      "parents",
-      "mother",
-      "father",
-      "siblings",
-      "children",
-      "home",
-    ],
-    friends: ["friends", "friendship", "social", "group", "community"],
-    money: [
-      "money",
-      "financial",
-      "finances",
-      "wealth",
-      "income",
-      "savings",
-      "budget",
-    ],
-    health: ["health", "wellness", "physical", "body", "illness", "healing"],
-  };
-
-  // Determine primary topic - check for multiple matches and prioritize
-  let primaryTopic = null;
-  let topicName = null;
-  let matchedKeywords = [];
-
-  for (const [topic, keywords] of Object.entries(topicKeywords)) {
-    const matches = keywords.filter((keyword) => message.includes(keyword));
-    if (matches.length > 0) {
-      matchedKeywords.push({ topic, matches, count: matches.length });
-    }
-  }
-
-  // Sort by number of matches and select the most relevant topic
-  if (matchedKeywords.length > 0) {
-    matchedKeywords.sort((a, b) => b.count - a.count);
-    primaryTopic = matchedKeywords[0].topic;
-    topicName = primaryTopic.charAt(0).toUpperCase() + primaryTopic.slice(1);
-  }
-
-  // Follow-up questions: conversational, short, human—like a natural next turn in chat
-  const followUpQuestions = {
-    sun: [
-      "Want to go deeper on how that shows up in relationships or at work?",
-      "Curious about how your core self plays out in day-to-day life?",
-      "Want to explore the shadow side of that placement?",
-      "Anything specific about your identity you'd like to dig into?",
-    ],
-    moon: [
-      "Want to talk about how that plays out in relationships or at home?",
-      "Curious how your emotional patterns show up when you're stressed?",
-      "Want to explore what you need to feel safe and nurtured?",
-      "Want to go deeper on how you process feelings?",
-    ],
-    mercury: [
-      "Want to explore how that shows up in communication or learning?",
-      "Curious how your mind works under pressure?",
-      "Want to dig into how you think through decisions?",
-      "Anything about the way you communicate you'd like to explore?",
-    ],
-    venus: [
-      "Want to go deeper on what you need in love and partnership?",
-      "Curious how that shows up in your taste or values?",
-      "Want to explore your attraction patterns or relationship style?",
-      "Want to talk about how this plays out in romance or creativity?",
-    ],
-    mars: [
-      "Want to explore how you handle conflict or take action?",
-      "Curious where your drive shows up—or where it gets stuck?",
-      "Want to go deeper on motivation or anger?",
-      "Anything about how you assert yourself you'd like to dig into?",
-    ],
-    jupiter: [
-      "Want to explore where you find luck or expansion?",
-      "Curious how your beliefs or philosophy shape your choices?",
-      "Want to go deeper on growth or opportunity in your chart?",
-      "Anything about your optimistic side—or overdoing it—you'd like to explore?",
-    ],
-    saturn: [
-      "Want to talk about how to work with those challenges rather than against them?",
-      "Curious where structure or discipline helps you—or holds you back?",
-      "Want to explore the lessons your Saturn is asking you to learn?",
-      "Anything about responsibility or limitation you'd like to dig into?",
-    ],
-    uranus: [
-      "Want to explore your need for freedom or change?",
-      "Curious how your rebellious or unconventional side shows up?",
-      "Want to go deeper on innovation or unpredictability in your life?",
-      "Anything about where you break the mold you'd like to explore?",
-    ],
-    neptune: [
-      "Want to explore your intuition or creative side?",
-      "Curious how you navigate dreams vs. reality?",
-      "Want to go deeper on spirituality or sensitivity?",
-      "Anything about imagination or boundaries you'd like to dig into?",
-    ],
-    pluto: [
-      "Want to explore how you handle power or deep change?",
-      "Curious where transformation shows up in your life?",
-      "Want to go deeper on intensity or regeneration?",
-      "Anything about control or surrender you'd like to talk about?",
-    ],
-    ascendant: [
-      "Want to explore how others see you vs. how you feel inside?",
-      "Curious how your first impression or style ties into your chart?",
-      "Want to go deeper on your outer personality?",
-      "Anything about your public face you'd like to dig into?",
-    ],
-    midheaven: [
-      "Want to explore your calling or how you're seen professionally?",
-      "Curious how your career path fits your chart?",
-      "Want to go deeper on reputation or life direction?",
-      "Anything about work or public image you'd like to explore?",
-    ],
-    aspects: [
-      "Want to go deeper on how those planets work together—or clash?",
-      "Curious how that aspect shows up in real life?",
-      "Want to explore how to work with that tension or flow?",
-      "Anything about the way your placements interact you'd like to dig into?",
-    ],
-    houses: [
-      "Want to explore how that area of life plays out for you?",
-      "Curious how this house shows up in your day-to-day?",
-      "Want to go deeper on the themes of this life area?",
-      "Anything specific about this part of your chart you'd like to explore?",
-    ],
-    relationships: [
-      "Want to go deeper on what you need in a partner?",
-      "Curious how your relationship patterns show up?",
-      "Want to explore compatibility or attachment style?",
-      "Anything about love or partnership you'd like to dig into?",
-    ],
-    career: [
-      "Want to explore work style or paths that might fit you?",
-      "Curious how your chart shows up in your profession?",
-      "Want to go deeper on strengths—or blocks—at work?",
-      "Anything about career or calling you'd like to explore?",
-    ],
-    challenges: [
-      "Want to talk about how to work with that rather than against it?",
-      "Curious where the growth opportunity is in that challenge?",
-      "Want to explore how that pattern shows up—and how it could shift?",
-      "Anything about navigating that difficulty you'd like to dig into?",
-    ],
-    strengths: [
-      "Want to explore how that strength shows up in your life?",
-      "Curious how to lean into that gift more?",
-      "Want to go deeper on how that talent manifests?",
-      "Anything about developing that strength you'd like to explore?",
-    ],
-    family: [
-      "Want to explore how that shows up at home or with family?",
-      "Curious about family patterns or your roots?",
-      "Want to go deeper on home life or early conditioning?",
-      "Anything about family dynamics you'd like to dig into?",
-    ],
-    friends: [
-      "Want to explore how you show up in friendship or groups?",
-      "Curious about your social style or community?",
-      "Want to go deeper on friendships or your role in a circle?",
-      "Anything about your social life you'd like to explore?",
-    ],
-    money: [
-      "Want to explore your relationship with money or security?",
-      "Curious how your chart shows up around resources or values?",
-      "Want to go deeper on financial patterns or what you value?",
-      "Anything about money or material life you'd like to dig into?",
-    ],
-    health: [
-      "Want to explore how your chart might show up in your body or habits?",
-      "Curious about wellness or energy patterns?",
-      "Want to go deeper on physical or mental well-being in your chart?",
-      "Anything about health or self-care you'd like to explore?",
-    ],
-  };
-
-  // Select appropriate follow-up question - make it more specific to the user's question
-  let question;
-
-  // PRIORITY: Check for "about me" type questions first, regardless of primaryTopic
-  if (
-    message.includes("about me") ||
-    message.includes("tell me about") ||
-    message.includes("myself") ||
-    (message.includes("tell me") && message.includes("about"))
-  ) {
-    const generalQuestions = [
-      "Want to go deeper on your personality, relationships, or career?",
-      "Curious about a specific area—love, work, challenges, or growth?",
-      "Anything in particular you'd like to explore next?",
-      "Want to dig into your strengths, challenges, or how your planets work together?",
-    ];
-    question =
-      generalQuestions[Math.floor(Math.random() * generalQuestions.length)];
-    console.log("[FOLLOWUP] Using 'about me' question (priority)");
-  } else if (primaryTopic && followUpQuestions[primaryTopic]) {
-    // Select from topic-specific questions - use the first one as it's most relevant
-    const questions = followUpQuestions[primaryTopic];
-    question = questions[Math.floor(Math.random() * questions.length)];
-    console.log("[FOLLOWUP] Using topic-specific question for:", primaryTopic);
-  } else {
-    // Only use generic questions if we truly can't determine the topic
-    // And make them more specific based on response content
-    if (
-      response.includes("relationship") ||
-      response.includes("love") ||
-      response.includes("partner")
-    ) {
-      question =
-        "Want to go deeper on your relationships or what you need in a partner?";
-    } else if (
-      response.includes("career") ||
-      response.includes("work") ||
-      response.includes("professional")
-    ) {
-      question =
-        "Want to explore your career or how your chart shows up at work?";
-    } else if (
-      response.includes("challenge") ||
-      response.includes("difficulty") ||
-      response.includes("struggle")
-    ) {
-      question =
-        "Want to talk about how to work with that challenge—or where the growth is in it?";
-    } else if (
-      response.includes("strength") ||
-      response.includes("talent") ||
-      response.includes("gift")
-    ) {
-      question =
-        "Want to go deeper on how that strength shows up—or how to lean into it more?";
-    } else {
-      if (
-        message.includes("about me") ||
-        message.includes("tell me about") ||
-        message.includes("myself")
-      ) {
-        const generalQuestions = [
-          "Want to go deeper on your personality, relationships, or career?",
-          "Curious about a specific area—love, work, challenges, or growth?",
-          "Anything in particular you'd like to explore next?",
-          "Want to dig into your strengths, challenges, or how your planets work together?",
-        ];
-        question =
-          generalQuestions[Math.floor(Math.random() * generalQuestions.length)];
-      } else {
-        const genericQuestions = [
-          "Want to go deeper on any of that?",
-          "Anything specific you'd like to explore next?",
-          "Curious about another angle on this?",
-        ];
-        question =
-          genericQuestions[Math.floor(Math.random() * genericQuestions.length)];
-      }
-    }
-  }
-
-  // For substantial questions, ALWAYS provide a follow-up (this should have been handled above, but double-check)
-  if (!question && isSubstantialQuestion) {
-    if (
-      message.includes("about me") ||
-      message.includes("tell me about") ||
-      message.includes("myself") ||
-      (message.includes("tell me") && message.includes("about"))
-    ) {
-      const generalQuestions = [
-        "Want to go deeper on your personality, relationships, or career?",
-        "Curious about a specific area—love, work, challenges, or growth?",
-        "Anything in particular you'd like to explore next?",
-        "Want to dig into your strengths, challenges, or how your planets work together?",
-      ];
-      question =
-        generalQuestions[Math.floor(Math.random() * generalQuestions.length)];
-      console.log("[FOLLOWUP] Using 'about me' fallback question (safety net)");
-    } else {
-      question = "Want to go deeper on any of that?";
-      console.log(
-        "[FOLLOWUP] Using generic fallback for substantial question (safety net)",
-      );
-    }
-  }
-
-  // Ensure we always return a question for substantial responses (backup)
-  if (!question && aiResponse.length >= 100) {
-    question = "Want to go deeper on any of that?";
-    console.log("[FOLLOWUP] Using length-based fallback");
-  }
-
-  console.log("[FOLLOWUP] Final question before final check:", question);
-
-  // ABSOLUTE FINAL SAFETY: if we have a substantial question and no follow-up yet, create one
-  if (!question && isSubstantialQuestion) {
-    if (
-      message.includes("about me") ||
-      message.includes("tell me about") ||
-      message.includes("myself") ||
-      (message.includes("tell me") && message.includes("about"))
-    ) {
-      question =
-        "Want to dig into your strengths, challenges, or how your planets work together?";
-      console.log(
-        "[FOLLOWUP] ABSOLUTE FINAL SAFETY: Using 'about me' question",
-      );
-    } else {
-      question = "Want to go deeper on any of that?";
-      console.log("[FOLLOWUP] ABSOLUTE FINAL SAFETY: Using generic question");
-    }
-  }
-
-  // If STILL no question and response is substantial, create a generic one
-  if (!question && aiResponse.length >= 50) {
-    question =
-      "Would you like me to elaborate on anything specific about this?";
-    console.log(
-      "[FOLLOWUP] FINAL FALLBACK: Using generic question based on response length",
-    );
-  }
-
-  console.log("[FOLLOWUP] Final question:", question);
-  console.log("[FOLLOWUP] Returning:", question ? "QUESTION" : "NULL");
-  console.log("[FOLLOWUP] isSubstantialQuestion:", isSubstantialQuestion);
-  console.log("[FOLLOWUP] aiResponse.length:", aiResponse.length);
-
-  // ABSOLUTE GUARANTEE: For substantial questions, NEVER return null
-  if (!question && isSubstantialQuestion) {
-    console.log(
-      "[FOLLOWUP] ERROR: Substantial question but no follow-up generated! Creating emergency fallback.",
-    );
-    question =
-      "Would you like me to elaborate on anything specific about this?";
-  }
-
-  // Final check - if we somehow still don't have a question for a substantial response, create one
-  if (!question && aiResponse.length >= 30) {
-    console.log(
-      "[FOLLOWUP] ERROR: No question generated but response is substantial! Creating emergency fallback.",
-    );
-    question =
-      "Would you like me to elaborate on anything specific about this?";
-  }
-
-  console.log("[FOLLOWUP] Final return value:", question);
-  return question || null;
-}
-
-/**
  * Detect if a message is a casual greeting or simple acknowledgment
  * @param {string} message - User's message
  * @returns {boolean} True if message is casual/simple
@@ -1577,13 +1011,29 @@ app.post("/api/chat", (req, res) => {
           );
 
           // IMPORTANT: Return early - don't fall through to chart processing
+          let followUpSuggestions = [];
+          try {
+            followUpSuggestions = await generateFollowUpSuggestionsLLM(
+              openai,
+              {
+                userMessage: message,
+                assistantResponse: response,
+                birthChart,
+                chartSummary,
+                conversationHistory,
+                isGeneralQuestion: true,
+              },
+            );
+          } catch (fuErr) {
+            console.warn(
+              "[CHAT] Follow-up suggestions (general) failed:",
+              fuErr.message,
+            );
+          }
           return res.json({
             response: response,
-            followUpQuestion: generateFollowUpQuestion(
-              message,
-              response,
-              birthChart,
-            ),
+            followUpSuggestions,
+            followUpQuestion: followUpSuggestions[0] || null,
             usedExternalResources: true,
           });
         } else {
@@ -1632,9 +1082,30 @@ app.post("/api/chat", (req, res) => {
         const factualAnswer = answerFactualQuestion(message, birthChart);
         if (factualAnswer) {
           console.log("[FACTUAL] Answered factual question deterministically");
+          let followUpSuggestions = [];
+          try {
+            followUpSuggestions = await generateFollowUpSuggestionsLLM(
+              openai,
+              {
+                userMessage: message,
+                assistantResponse: factualAnswer,
+                birthChart,
+                chartSummary,
+                conversationHistory,
+                isGeneralQuestion: false,
+              },
+            );
+          } catch (fuErr) {
+            console.warn(
+              "[CHAT] Follow-up suggestions (factual) failed:",
+              fuErr.message,
+            );
+          }
           return res.json({
             response: factualAnswer,
             isFactual: true,
+            followUpSuggestions,
+            followUpQuestion: followUpSuggestions[0] || null,
           });
         }
         // If it matched a pattern but couldn't answer, fall through to AI
@@ -1652,13 +1123,10 @@ app.post("/api/chat", (req, res) => {
       // For casual messages, use a simpler system prompt that doesn't push chart information
       if (isCasual && !wantsInterpretation) {
         const casualSystemContent =
-          "You are AstroGuide, an astrological guide. Your communication style is warm, conversational, and matches the user's tone.\n\n" +
-          "CRITICAL RULES FOR CASUAL CONVERSATION:\n" +
-          '1. MATCH THE USER\'S TONE: If they say "hello" or "hi", respond with a friendly greeting and ask how you can help. If they\'re casual, be casual. If they\'re formal, be formal.\n' +
-          "2. WAIT FOR THE USER TO ASK: Don't dive into chart interpretations unless they explicitly ask. Don't volunteer chart information. Don't start listing aspects, planets, or chart details unprompted.\n" +
-          "3. BE CONVERSATIONAL: Respond naturally, like a helpful friend who knows astrology. Keep it simple for casual messages. Don't use astrological jargon unless the user introduces it.\n" +
-          "4. KEEP IT BRIEF: For simple greetings or acknowledgments, keep responses brief and natural.\n\n" +
-          "Remember: Match the user's energy. If they're just saying hello, say hello back and ask how you can help. Don't overwhelm them with information they didn't ask for.";
+          "You are AstroGuide. Stay generally neutral and professional; otherwise respond in a natural, helpful way—no fixed persona script.\n\n" +
+          "CASUAL MESSAGES:\n" +
+          "Match the user's tone loosely (brief if they're brief). Don't volunteer chart interpretations, aspects, or placements unless they ask.\n" +
+          "Keep greetings and small talk short. Avoid astrology jargon unless the user uses it first.";
 
         const messages = [
           {
@@ -1710,7 +1178,8 @@ app.post("/api/chat", (req, res) => {
         const finalResponse = completion.choices[0].message.content || "";
         return res.json({
           response: String(finalResponse),
-          followUpQuestion: null, // No follow-up for casual messages
+          followUpSuggestions: [],
+          followUpQuestion: null,
         });
       }
 
@@ -2069,8 +1538,27 @@ app.post("/api/chat", (req, res) => {
         messagePreview: message.substring(0, 50),
       });
 
+      let followUpSuggestions = [];
+      try {
+        followUpSuggestions = await generateFollowUpSuggestionsLLM(openai, {
+          userMessage: message,
+          assistantResponse: finalResponse,
+          birthChart,
+          chartSummary,
+          conversationHistory,
+          isGeneralQuestion: false,
+        });
+      } catch (fuErr) {
+        console.warn(
+          "[CHAT] Follow-up suggestions (chart reply) failed:",
+          fuErr.message,
+        );
+      }
+
       return res.json({
         response: String(finalResponse),
+        followUpSuggestions,
+        followUpQuestion: followUpSuggestions[0] || null,
         ...(memoryUpdate != null && Object.keys(memoryUpdate).length > 0
           ? { memoryUpdate }
           : {}),

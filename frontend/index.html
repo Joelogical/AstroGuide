@@ -319,6 +319,11 @@
         border-color: #4a4a6a;
         color: #c7d2fe;
       }
+      .follow-up-chip:disabled {
+        opacity: 0.55;
+        cursor: wait;
+        pointer-events: none;
+      }
       .follow-up-suggestions .suggestion-label {
         font-size: 0.85em;
         color: #888ca3;
@@ -407,7 +412,9 @@
       }
       .chart-table .col-planet {
         white-space: nowrap;
-        font-family: "Symbola", "Segoe UI Symbol", "Apple Symbols", "Noto Sans Symbols", "Arial Unicode MS", sans-serif;
+        font-family:
+          "Symbola", "Segoe UI Symbol", "Apple Symbols", "Noto Sans Symbols",
+          "Arial Unicode MS", sans-serif;
       }
       .chart-table .col-longitude {
         color: #a5b4fc;
@@ -441,11 +448,29 @@
           max-height: none;
         }
       }
+      .chart-wheel-container {
+        position: relative;
+      }
       .chart-wheel-container svg {
         background: rgba(15, 23, 42, 0.3);
         border-radius: 8px;
         display: block;
         margin: 0 auto;
+      }
+      .chart-tooltip {
+        position: absolute;
+        max-width: 220px;
+        background: rgba(15, 23, 42, 0.95);
+        border-radius: 6px;
+        padding: 8px 10px;
+        font-size: 0.8rem;
+        color: #e2e8f0;
+        border: 1px solid #475569;
+        pointer-events: none;
+        z-index: 10;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        opacity: 0;
+        transition: opacity 0.15s ease;
       }
       /* Interactive chart elements - hover effects */
       .chart-wheel-container svg .planet-group,
@@ -461,11 +486,15 @@
       .chart-wheel-container svg .planet-group:hover,
       .chart-wheel-container svg .house-group:hover,
       .chart-wheel-container svg .sign-group text {
-        font-family: "Symbola", "Segoe UI Symbol", "Apple Symbols", "Noto Sans Symbols", "Arial Unicode MS", sans-serif;
+        font-family:
+          "Symbola", "Segoe UI Symbol", "Apple Symbols", "Noto Sans Symbols",
+          "Arial Unicode MS", sans-serif;
         font-variant-emoji: none;
       }
       .chart-wheel-container svg .planet-group text {
-        font-family: "Symbola", "Segoe UI Symbol", "Apple Symbols", "Noto Sans Symbols", "Arial Unicode MS", sans-serif;
+        font-family:
+          "Symbola", "Segoe UI Symbol", "Apple Symbols", "Noto Sans Symbols",
+          "Arial Unicode MS", sans-serif;
         font-variant-emoji: none;
         font-weight: normal;
       }
@@ -824,7 +853,9 @@
       const sendButton = document.getElementById("send-button");
       const chatMessages = document.getElementById("chat-messages");
       const logoutSettingsBtn = document.getElementById("logout-settings-btn");
-      const clearDropdownBtn = document.getElementById("clear-chat-dropdown-btn");
+      const clearDropdownBtn = document.getElementById(
+        "clear-chat-dropdown-btn",
+      );
       const viewRawDataSettingsBtn = document.getElementById(
         "view-raw-data-settings-btn",
       );
@@ -1088,13 +1119,19 @@
         editingProfileId = null;
         document.getElementById("add-profile-modal-title").textContent =
           "Add chart profile";
-        document.getElementById("add-profile-submit").textContent = "Add & switch";
+        document.getElementById("add-profile-submit").textContent =
+          "Add & switch";
         document.getElementById("add-profile-form").reset();
         document.getElementById("add-profile-modal").classList.remove("hidden");
       }
 
       function deleteProfile(profileId) {
-        if (!confirm("Delete this profile? Its chart and chat history will be removed.")) return;
+        if (
+          !confirm(
+            "Delete this profile? Its chart and chat history will be removed.",
+          )
+        )
+          return;
         const profiles = getChartProfiles().filter((p) => p.id !== profileId);
         setChartProfiles(profiles);
         const wasActive = getActiveProfileId() === profileId;
@@ -1328,21 +1365,54 @@
       }
 
       // Chart table (astro.com style) – planets + house cusps, dark theme
-      const CHART_TABLE_SIGN_ABBR = { Aries: "Ari", Taurus: "Tau", Gemini: "Gem", Cancer: "Can", Leo: "Leo", Virgo: "Vir", Libra: "Lib", Scorpio: "Sco", Sagittarius: "Sag", Capricorn: "Cap", Aquarius: "Aqu", Pisces: "Pis" };
-      const CHART_TABLE_PLANET_ORDER = ["sun", "moon", "mercury", "venus", "mars", "jupiter", "saturn", "uranus", "neptune", "pluto"];
+      const CHART_TABLE_SIGN_ABBR = {
+        Aries: "Ari",
+        Taurus: "Tau",
+        Gemini: "Gem",
+        Cancer: "Can",
+        Leo: "Leo",
+        Virgo: "Vir",
+        Libra: "Lib",
+        Scorpio: "Sco",
+        Sagittarius: "Sag",
+        Capricorn: "Cap",
+        Aquarius: "Aqu",
+        Pisces: "Pis",
+      };
+      const CHART_TABLE_PLANET_ORDER = [
+        "sun",
+        "moon",
+        "mercury",
+        "venus",
+        "mars",
+        "jupiter",
+        "saturn",
+        "uranus",
+        "neptune",
+        "pluto",
+      ];
       const CHART_TABLE_PLANET_CHARS = {};
-      [0x2609, 0x263d, 0x263f, 0x2640, 0x2642, 0x2643, 0x2644, 0x2645, 0x2646, 0x2647].forEach((code, i) => {
-        CHART_TABLE_PLANET_CHARS[CHART_TABLE_PLANET_ORDER[i]] = String.fromCodePoint(code, 0xfe0e);
+      [
+        0x2609, 0x263d, 0x263f, 0x2640, 0x2642, 0x2643, 0x2644, 0x2645, 0x2646,
+        0x2647,
+      ].forEach((code, i) => {
+        CHART_TABLE_PLANET_CHARS[CHART_TABLE_PLANET_ORDER[i]] =
+          String.fromCodePoint(code, 0xfe0e);
       });
       function formatLongitude(degree, sign, isRetrograde) {
-        if (degree === undefined || degree === null || isNaN(degree)) return "—";
+        if (degree === undefined || degree === null || isNaN(degree))
+          return "—";
         const degInSign = ((degree % 360) + 360) % 30;
         const d = Math.floor(degInSign);
         const minFrac = (degInSign - d) * 60;
         const m = Math.floor(minFrac);
         const s = Math.round((minFrac - m) * 60);
-        const signAbbr = (sign && CHART_TABLE_SIGN_ABBR[sign]) ? CHART_TABLE_SIGN_ABBR[sign] : "?";
-        let out = d + " " + signAbbr + " " + m + "'" + (s < 10 ? "0" : "") + s + '"';
+        const signAbbr =
+          sign && CHART_TABLE_SIGN_ABBR[sign]
+            ? CHART_TABLE_SIGN_ABBR[sign]
+            : "?";
+        let out =
+          d + " " + signAbbr + " " + m + "'" + (s < 10 ? "0" : "") + s + '"';
         if (isRetrograde) out += " r";
         return out;
       }
@@ -1355,45 +1425,60 @@
         const planets = birthChart.planets;
         const angles = birthChart.angles || {};
         const houses = birthChart.houses || [];
-        let html = '<table class="chart-table"><thead><tr><th class="col-planet">Planet</th><th class="col-longitude">Longitude</th><th class="col-house">H</th></tr></thead><tbody>';
+        let html =
+          '<table class="chart-table"><thead><tr><th class="col-planet">Planet</th><th class="col-longitude">Longitude</th><th class="col-house">H</th></tr></thead><tbody>';
         CHART_TABLE_PLANET_ORDER.forEach(function (key) {
           const p = planets[key];
           if (!p || p.degree === undefined) return;
           const name = key.charAt(0).toUpperCase() + key.slice(1);
           const glyph = CHART_TABLE_PLANET_CHARS[key] || "";
           const lon = formatLongitude(p.degree, p.sign, p.isRetrograde);
-          const house = (p.house != null && p.house !== undefined) ? p.house : "—";
-          html += '<tr><td class="col-planet">' + glyph + ' ' + name + '</td><td class="col-longitude">' + lon + '</td><td class="col-house">' + house + '</td></tr>';
+          const house =
+            p.house != null && p.house !== undefined ? p.house : "—";
+          html +=
+            '<tr><td class="col-planet">' +
+            glyph +
+            " " +
+            name +
+            '</td><td class="col-longitude">' +
+            lon +
+            '</td><td class="col-house">' +
+            house +
+            "</td></tr>";
         });
-        html += '</tbody></table>';
+        html += "</tbody></table>";
         const houseByNumber = {};
-        houses.forEach(function (h) { if (h && h.number != null) houseByNumber[h.number] = h; });
+        houses.forEach(function (h) {
+          if (h && h.number != null) houseByNumber[h.number] = h;
+        });
         // House cusps block – only AC (1), 2, 3, and MC (10), 11, 12, like astro.com.
         // Opposite houses are implied and not repeated.
         html += '<table class="chart-table"><tbody>';
         function cuspLabel(num) {
-          if (num === 1) return 'AC';
-          if (num === 10) return 'MC';
+          if (num === 1) return "AC";
+          if (num === 10) return "MC";
           return String(num);
         }
         function cuspCellContent(num) {
           const h = houseByNumber[num];
-          if (!h) return cuspLabel(num) + ': —';
-          return cuspLabel(num) + ': ' + formatLongitude(h.degree, h.sign, false);
+          if (!h) return cuspLabel(num) + ": —";
+          return (
+            cuspLabel(num) + ": " + formatLongitude(h.degree, h.sign, false)
+          );
         }
         // First row: AC (1), 2, 3
         html += '<tr class="house-cusps-row">';
         [1, 2, 3].forEach(function (n) {
-          html += '<td class="col-planet">' + cuspCellContent(n) + '</td>';
+          html += '<td class="col-planet">' + cuspCellContent(n) + "</td>";
         });
-        html += '</tr>';
+        html += "</tr>";
         // Second row: MC (10), 11, 12
         html += '<tr class="house-cusps-row">';
         [10, 11, 12].forEach(function (n) {
-          html += '<td class="col-planet">' + cuspCellContent(n) + '</td>';
+          html += '<td class="col-planet">' + cuspCellContent(n) + "</td>";
         });
-        html += '</tr>';
-        html += '</tbody></table>';
+        html += "</tr>";
+        html += "</tbody></table>";
         container.innerHTML = html;
       }
       function clearChartTable() {
@@ -1518,6 +1603,9 @@
         const message = messageInput.value.trim();
         if (message) {
           console.log("[HANDLE] User sent message:", message);
+          chatMessages
+            .querySelectorAll(".follow-up-suggestions")
+            .forEach((el) => el.remove());
           await addMessage(message, true);
           messageInput.value = "";
 
@@ -1767,6 +1855,14 @@
               saveActiveProfileConversation(conversationHistory);
 
               await queueBotMessage(data.response);
+              const followUps =
+                Array.isArray(data.followUpSuggestions) &&
+                data.followUpSuggestions.length
+                  ? data.followUpSuggestions
+                  : data.followUpQuestion
+                    ? [data.followUpQuestion]
+                    : [];
+              appendFollowUpSuggestionChips(followUps);
             } catch (error) {
               console.error("Error:", error);
               await queueBotMessage(
@@ -1784,13 +1880,46 @@
         }
       }
 
+      /** LLM-written “next step” lines (ChatGPT-style); tap sends the message automatically. */
+      function appendFollowUpSuggestionChips(suggestions) {
+        const list = Array.isArray(suggestions)
+          ? suggestions.filter((s) => s && String(s).trim())
+          : [];
+        if (!list.length || !chatMessages) return;
+        chatMessages
+          .querySelectorAll(".follow-up-suggestions")
+          .forEach((el) => el.remove());
+        const wrap = document.createElement("div");
+        wrap.className = "follow-up-suggestions";
+        const label = document.createElement("div");
+        label.className = "suggestion-label";
+        label.textContent = "Continue the conversation";
+        wrap.appendChild(label);
+        list.forEach((text) => {
+          const chip = document.createElement("button");
+          chip.type = "button";
+          chip.className = "follow-up-chip";
+          chip.textContent = String(text).trim();
+          chip.addEventListener("click", async () => {
+            const t = String(chip.textContent || "").trim();
+            if (!t) return;
+            wrap.querySelectorAll(".follow-up-chip").forEach((c) => {
+              c.disabled = true;
+            });
+            messageInput.value = t;
+            await handleSendMessage();
+          });
+          wrap.appendChild(chip);
+        });
+        chatMessages.appendChild(wrap);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      }
+
       // Add a function to clear conversation history for the active profile only
       function clearConversationHistory() {
-        const profile = getActiveProfile();
-        if (profile) {
-          profile.conversationHistory = [];
+        if (getActiveProfile()) {
           saveActiveProfileConversation([]);
-          renderConversation(profile);
+          renderConversation(getActiveProfile());
         }
         addMessage(
           "Conversation history cleared. Feel free to start a new conversation!",
@@ -2057,13 +2186,20 @@
           }
         });
 
-      // Clear chat: clear active profile conversation and re-render
-      clearDropdownBtn.addEventListener("click", () => {
-        const profile = getActiveProfile();
-        if (!profile) return;
+      // Clear chat: confirm, then clear active profile conversation and re-render
+      // Must call getActiveProfile() AFTER save — each getChartProfiles() parses JSON,
+      // so a profile captured before save still holds stale conversationHistory.
+      clearDropdownBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        if (!getActiveProfile()) return;
         document.getElementById("profile-dropdown").classList.add("hidden");
+        const confirmed = window.confirm(
+          "Are you sure you want to clear this chat? This only clears the conversation for the current profile.",
+        );
+        if (!confirmed) return;
         saveActiveProfileConversation([]);
-        renderConversation(profile);
+        renderConversation(getActiveProfile());
       });
 
       // Logout handler (in Settings dropdown)
@@ -2204,6 +2340,11 @@
           container.innerHTML = ""; // Clear previous render
           clearChartTable();
 
+          // Shared tooltip for planets and signs (lazy-created per render)
+          const tooltipEl = document.createElement("div");
+          tooltipEl.className = "chart-tooltip";
+          container.appendChild(tooltipEl);
+
           const width = 700;
           const height = 700;
           // Zodiac surrounds houses: total radius, then house wheel, notch band, zodiac ring
@@ -2211,7 +2352,8 @@
           const innerRadius = totalRadius * 0.125; // center circle ~50% smaller than before (was 0.25)
           const zodiacBandHeight = 40;
           const notchBandHeight = 12;
-          const houseOuterRadius = totalRadius - zodiacBandHeight - notchBandHeight;
+          const houseOuterRadius =
+            totalRadius - zodiacBandHeight - notchBandHeight;
           const notchInnerRadius = houseOuterRadius;
           const notchOuterRadius = houseOuterRadius + notchBandHeight;
           const zodiacRingInner = notchOuterRadius;
@@ -2293,26 +2435,42 @@
             };
           }
 
-          // House wheel fill (stops at house outer edge)
-          svg.append("circle")
+          // House wheel shading using two solid bands split at the aspect-line radius:
+          // - Outer band (aspectLineRadius → houseOuterRadius): lighter gray
+          // - Inner band (innerRadius → aspectLineRadius): darker gray
+          const aspectBandRadius = houseOuterRadius * 0.65;
+
+          // Outer house band
+          svg
+            .append("circle")
             .attr("r", houseOuterRadius)
-            .attr("fill", "rgba(30, 41, 59, 0.3)")
+            .attr("fill", "#1f2937")
             .attr("stroke", "none");
 
-          // Draw inner circle
-          svg.append("circle")
+          // Inner darker band up to the aspect-line radius (house interior)
+          svg
+            .append("circle")
+            .attr("r", aspectBandRadius)
+            .attr("fill", "#020617")
+            .attr("stroke", "none");
+
+          // New inner circle: slightly lighter rim so the edge is more visible
+          svg
+            .append("circle")
             .attr("r", innerRadius)
-            .attr("fill", "none")
-            .attr("stroke", "#475569")
-            .attr("stroke-width", 1)
-            .attr("opacity", 0.5);
+            .attr("fill", "#0b1120") // lighter than pure black, so the edge reads more clearly
+            .attr("stroke", "#ffffff") // same color as AC/DC/MC/IC base lines
+            .attr("stroke-width", 2.5)
+            .attr("opacity", 1);
 
           // Zodiac ring (band surrounding houses) – dark theme
-          svg.append("circle")
+          svg
+            .append("circle")
             .attr("r", zodiacRingOuter)
             .attr("fill", "rgba(51, 65, 85, 0.7)")
             .attr("stroke", "none");
-          svg.append("circle")
+          svg
+            .append("circle")
             .attr("r", zodiacRingInner)
             .attr("fill", "rgba(30, 41, 59, 0.3)")
             .attr("stroke", "none");
@@ -2326,12 +2484,23 @@
             let tickLen = 3;
             let strokeW = 0.7;
             let opacity = 0.5;
-            if (isSignStart) { tickLen = notchBandHeight; strokeW = 2; opacity = 1; }
-            else if (isTen) { tickLen = 8; strokeW = 1.2; opacity = 0.9; }
-            else if (isFive) { tickLen = 5; strokeW = 1; opacity = 0.75; }
+            if (isSignStart) {
+              tickLen = notchBandHeight;
+              strokeW = 2;
+              opacity = 1;
+            } else if (isTen) {
+              tickLen = 8;
+              strokeW = 1.2;
+              opacity = 0.9;
+            } else if (isFive) {
+              tickLen = 5;
+              strokeW = 1;
+              opacity = 0.75;
+            }
             const inner = getPosition(displayDeg, notchInnerRadius);
             const outer = getPosition(displayDeg, notchInnerRadius + tickLen);
-            svg.append("line")
+            svg
+              .append("line")
               .attr("x1", inner.x)
               .attr("y1", inner.y)
               .attr("x2", outer.x)
@@ -2347,7 +2516,8 @@
             const displayDeg = chartToDisplayDegree(signDegree);
             const innerPos = getPosition(displayDeg, zodiacRingInner);
             const outerPos = getPosition(displayDeg, totalRadius);
-            svg.append("line")
+            svg
+              .append("line")
               .attr("x1", innerPos.x)
               .attr("y1", innerPos.y)
               .attr("x2", outerPos.x)
@@ -2358,7 +2528,8 @@
           }
 
           // Outer circle stroke (edge of zodiac ring)
-          svg.append("circle")
+          svg
+            .append("circle")
             .attr("r", totalRadius)
             .attr("fill", "none")
             .attr("stroke", "#cbd5e1")
@@ -2496,14 +2667,20 @@
               // Hover effects for house number
               houseGroup
                 .on("mouseenter", function () {
-                  houseText.attr("font-size", "15px").attr("fill", "#10b981").attr("font-weight", "200");
+                  houseText
+                    .attr("font-size", "15px")
+                    .attr("fill", "#10b981")
+                    .attr("font-weight", "200");
                   houseLine
                     .attr("stroke-width", 3)
                     .attr("opacity", 1)
                     .attr("stroke", "#10b981");
                 })
                 .on("mouseleave", function () {
-                  houseText.attr("font-size", "11px").attr("fill", "#e2e8f0").attr("font-weight", "200");
+                  houseText
+                    .attr("font-size", "11px")
+                    .attr("fill", "#e2e8f0")
+                    .attr("font-weight", "200");
                   houseLine
                     .attr("stroke-width", 1.5)
                     .attr("opacity", 0.6)
@@ -2519,9 +2696,11 @@
           });
 
           // Planet ticks inside houses: from zodiac inner edge inward (extend 2/3 toward planet ring)
-          const tickMid = (houseOuterRadius - 1 + (houseOuterRadius * 1.1 + 10)) / 2 + 14;
+          const tickMid =
+            (houseOuterRadius - 1 + (houseOuterRadius * 1.1 + 10)) / 2 + 14;
           const tickInward = houseOuterRadius * 0.85 + 10;
-          const planetTickInnerRadius = tickMid * (1 / 3) + tickInward * (2 / 3);
+          const planetTickInnerRadius =
+            tickMid * (1 / 3) + tickInward * (2 / 3);
           if (birthChart.planets && typeof birthChart.planets === "object") {
             Object.values(birthChart.planets).forEach((planetData) => {
               if (
@@ -2533,7 +2712,8 @@
                 const displayDeg = chartToDisplayDegree(planetData.degree);
                 const inner = getPosition(displayDeg, planetTickInnerRadius);
                 const outer = getPosition(displayDeg, zodiacRingInner);
-                svg.append("line")
+                svg
+                  .append("line")
                   .attr("x1", inner.x)
                   .attr("y1", inner.y)
                   .attr("x2", outer.x)
@@ -2550,28 +2730,76 @@
           // U+2648–U+2653 = zodiac symbols; U+FE0E = variation selector (force text/symbol, not emoji)
           const zodiacChars = [];
           for (let k = 0; k < 12; k++) {
-            zodiacChars.push(String.fromCodePoint(0x2648 + k, 0xFE0E));
+            zodiacChars.push(String.fromCodePoint(0x2648 + k, 0xfe0e));
           }
           const signFullNames = [
-            "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
-            "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces",
+            "Aries",
+            "Taurus",
+            "Gemini",
+            "Cancer",
+            "Leo",
+            "Virgo",
+            "Libra",
+            "Scorpio",
+            "Sagittarius",
+            "Capricorn",
+            "Aquarius",
+            "Pisces",
           ];
+          const signTooltipText = {
+            Aries:
+              "Aries is direct, bold, and forward-moving—driven by instinct and a need to take action.",
+            Taurus:
+              "Taurus is steady, sensual, and grounded—values stability, comfort, and what feels real.",
+            Gemini:
+              "Gemini is curious, quick, and versatile—lives in questions, ideas, and conversations.",
+            Cancer:
+              "Cancer is sensitive, protective, and nurturing—tunes into moods, memories, and emotional safety.",
+            Leo: "Leo is expressive, proud, and warm—wants to be seen, appreciated, and creatively alive.",
+            Virgo:
+              "Virgo is precise, thoughtful, and service-oriented—focused on what can be improved or made useful.",
+            Libra:
+              "Libra is relational, diplomatic, and aesthetic—seeks balance, fairness, and harmony between people.",
+            Scorpio:
+              "Scorpio is intense, private, and perceptive—drawn to depth, truth, and emotional honesty.",
+            Sagittarius:
+              "Sagittarius is adventurous, opinionated, and hopeful—seeks meaning through experience and exploration.",
+            Capricorn:
+              "Capricorn is disciplined, strategic, and realistic—plays the long game and cares about lasting results.",
+            Aquarius:
+              "Aquarius is independent, unconventional, and future-focused—cares about systems, communities, and ideas.",
+            Pisces:
+              "Pisces is intuitive, porous, and imaginative—moves through life by feeling and symbolic meaning.",
+          };
           // Hover color by element: Fire=red, Earth=green, Air=yellow, Water=blue (index = sign 0..11)
           const signHoverColors = [
-            "#ef4444", "#10b981", "#eab308", "#3b82f6", "#ef4444", "#10b981",
-            "#eab308", "#3b82f6", "#ef4444", "#10b981", "#eab308", "#3b82f6",
+            "#ef4444",
+            "#10b981",
+            "#eab308",
+            "#3b82f6",
+            "#ef4444",
+            "#10b981",
+            "#eab308",
+            "#3b82f6",
+            "#ef4444",
+            "#10b981",
+            "#eab308",
+            "#3b82f6",
           ];
           const zodiacLabelRadius = (zodiacRingInner + zodiacRingOuter) / 2;
           // Symbol fonts that render zodiac as line-art (not emoji): Symbola, Segoe UI Symbol, Apple Symbols
-          const symbolFont = '"Symbola", "Segoe UI Symbol", "Apple Symbols", "Noto Sans Symbols", "Arial Unicode MS", sans-serif';
+          const symbolFont =
+            '"Symbola", "Segoe UI Symbol", "Apple Symbols", "Noto Sans Symbols", "Arial Unicode MS", sans-serif';
           for (let i = 0; i < 12; i++) {
             const signMidDegree = i * 30 + 15;
             const signMidDisplayDegree = chartToDisplayDegree(signMidDegree);
             const pos = getPosition(signMidDisplayDegree, zodiacLabelRadius);
-            const signGroup = svg.append("g")
+            const signGroup = svg
+              .append("g")
               .attr("class", "sign-group")
               .style("cursor", "pointer");
-            signGroup.append("circle")
+            signGroup
+              .append("circle")
               .attr("cx", pos.x)
               .attr("cy", pos.y)
               .attr("r", 20)
@@ -2579,7 +2807,8 @@
               .attr("opacity", 0);
             const char = zodiacChars[i];
             const hoverColor = signHoverColors[i];
-            const textEl = signGroup.append("text")
+            const textEl = signGroup
+              .append("text")
               .attr("x", pos.x)
               .attr("y", pos.y)
               .attr("text-anchor", "middle")
@@ -2590,15 +2819,32 @@
               .attr("font-family", symbolFont)
               .attr("style", "font-variant-emoji: none;")
               .text(char);
-            signGroup.on("mouseenter", function () {
-              textEl.attr("fill", hoverColor).attr("font-size", "32px");
-            })
-            .on("mouseleave", function () {
-              textEl.attr("fill", "#e2e8f0").attr("font-size", "28px");
-            })
-            .on("click", function () {
-              queryChartElement(signFullNames[i]);
-            });
+            let signTooltipTimeout;
+            signGroup
+              .on("mouseenter", function (event) {
+                textEl.attr("fill", hoverColor).attr("font-size", "32px");
+                const name = signFullNames[i];
+                const text = signTooltipText[name];
+                if (!text) return;
+                if (signTooltipTimeout) clearTimeout(signTooltipTimeout);
+                const { left, top } = container.getBoundingClientRect();
+                const pageX = event.clientX;
+                const pageY = event.clientY;
+                signTooltipTimeout = setTimeout(() => {
+                  tooltipEl.textContent = text;
+                  tooltipEl.style.left = `${pageX - left + 12}px`;
+                  tooltipEl.style.top = `${pageY - top + 12}px`;
+                  tooltipEl.style.opacity = "1";
+                }, 2000);
+              })
+              .on("mouseleave", function () {
+                textEl.attr("fill", "#e2e8f0").attr("font-size", "28px");
+                if (signTooltipTimeout) clearTimeout(signTooltipTimeout);
+                tooltipEl.style.opacity = "0";
+              })
+              .on("click", function () {
+                queryChartElement(signFullNames[i]);
+              });
           }
 
           // Shared planet glyph color and registry so aspects can bump planets on hover
@@ -2619,9 +2865,9 @@
             const aspectHoverStrokeColors = {
               conjunction: "#ffffff",
               opposition: "#ef4444", // strong red
-              square: "#f87171",     // softer red (not orange)
-              trine: "#3b82f6",      // prominent blue
-              sextile: "#60a5fa",    // lighter blue
+              square: "#f87171", // softer red (not orange)
+              trine: "#3b82f6", // prominent blue
+              sextile: "#60a5fa", // lighter blue
             };
             const planetColorsForAspects = {
               sun: "#FFD700",
@@ -2636,200 +2882,251 @@
               pluto: "#8B008B",
             };
 
+            // Aspect lines inward of planets so they don't obscure glyphs (planets at 0.85)
+            const aspectLineRadius = houseOuterRadius * 0.65;
+            /** Wider invisible hit zone; round caps help near crossings */
+            const ASPECT_HIT_STROKE_BASE = 44;
+            const ASPECT_HIT_STROKE_HOVER = 62;
+
+            // Build list first, then sort so SHORTER chords draw LAST (higher z-order) — easier to grab at tight crossings
+            const aspectDrawList = [];
             birthChart.aspects.forEach((aspect) => {
               if (
-                aspect &&
-                aspect.aspect &&
-                majorAspects.includes(aspect.aspect.toLowerCase()) &&
-                aspect.planet1 &&
-                aspect.planet2
+                !aspect ||
+                !aspect.aspect ||
+                !majorAspects.includes(aspect.aspect.toLowerCase()) ||
+                !aspect.planet1 ||
+                !aspect.planet2
               ) {
-                const planet1 =
-                  birthChart.planets[aspect.planet1?.toLowerCase()];
-                const planet2 =
-                  birthChart.planets[aspect.planet2?.toLowerCase()];
+                return;
+              }
+              const planet1 = birthChart.planets[aspect.planet1?.toLowerCase()];
+              const planet2 = birthChart.planets[aspect.planet2?.toLowerCase()];
+              if (
+                !planet1 ||
+                !planet2 ||
+                planet1.degree === undefined ||
+                planet1.degree === null ||
+                isNaN(planet1.degree) ||
+                planet2.degree === undefined ||
+                planet2.degree === null ||
+                isNaN(planet2.degree)
+              ) {
+                return;
+              }
+              const displayDeg1 = chartToDisplayDegree(planet1.degree);
+              const displayDeg2 = chartToDisplayDegree(planet2.degree);
+              const pos1 = getPosition(displayDeg1, aspectLineRadius);
+              const pos2 = getPosition(displayDeg2, aspectLineRadius);
+              const dx = pos2.x - pos1.x;
+              const dy = pos2.y - pos1.y;
+              const chordLen = Math.sqrt(dx * dx + dy * dy);
+              aspectDrawList.push({
+                aspect,
+                planet1,
+                planet2,
+                displayDeg1,
+                displayDeg2,
+                pos1,
+                pos2,
+                chordLen,
+              });
+            });
+            aspectDrawList.sort((a, b) => a.chordLen - b.chordLen);
 
-                if (
-                  planet1 &&
-                  planet2 &&
-                  planet1.degree !== undefined &&
-                  planet1.degree !== null &&
-                  !isNaN(planet1.degree) &&
-                  planet2.degree !== undefined &&
-                  planet2.degree !== null &&
-                  !isNaN(planet2.degree)
-                ) {
-                  // Aspect lines inward of planets so they don't obscure glyphs (planets at 0.85)
-                  const aspectLineRadius = houseOuterRadius * 0.65;
-                  const displayDeg1 = chartToDisplayDegree(planet1.degree);
-                  const displayDeg2 = chartToDisplayDegree(planet2.degree);
-                  const pos1 = getPosition(displayDeg1, aspectLineRadius);
-                  const pos2 = getPosition(displayDeg2, aspectLineRadius);
-                  const aspectType = aspect.aspect.toLowerCase();
-                  const color = aspectBaseColor;
-                  const hoverStroke =
-                    aspectHoverStrokeColors[aspectType] || aspectBaseColor;
+            aspectDrawList.forEach((item) => {
+              const {
+                aspect,
+                planet1,
+                planet2,
+                displayDeg1,
+                displayDeg2,
+                pos1,
+                pos2,
+              } = item;
+              const aspectType = aspect.aspect.toLowerCase();
+              const color = aspectBaseColor;
+              const hoverStroke =
+                aspectHoverStrokeColors[aspectType] || aspectBaseColor;
 
-                  // Calculate midpoint for aspect label
-                  const midX = (pos1.x + pos2.x) / 2;
-                  const midY = (pos1.y + pos2.y) / 2;
+              // Calculate midpoint for aspect label
+              const midX = (pos1.x + pos2.x) / 2;
+              const midY = (pos1.y + pos2.y) / 2;
 
-                  // Create aspect group for better organization and interactivity
-                  const aspectGroup = svg
-                    .append("g")
-                    .attr("class", "aspect-group")
-                    .style("cursor", "pointer");
+              // Create aspect group for better organization and interactivity
+              const aspectGroup = svg
+                .append("g")
+                .attr("class", "aspect-group")
+                .style("cursor", "pointer");
 
-                  // Invisible wider hit area for the aspect line (appended last so it sits on top for interaction)
-                  const hitArea = svg
-                    .append("line")
-                    .attr("x1", pos1.x)
-                    .attr("y1", pos1.y)
-                    .attr("x2", pos2.x)
-                    .attr("y2", pos2.y)
-                    .attr("stroke", "transparent")
-                    .attr("stroke-width", 32) // Moderately wide invisible hit area for accurate but forgiving selection
-                    .attr("opacity", 0)
-                    .style("cursor", "pointer")
-                    .style("pointer-events", "stroke");
+              // Invisible hit area: wide + round caps so crossings and line ends are easier to grab
+              const hitArea = svg
+                .append("line")
+                .attr("x1", pos1.x)
+                .attr("y1", pos1.y)
+                .attr("x2", pos2.x)
+                .attr("y2", pos2.y)
+                .attr("stroke", "transparent")
+                .attr("stroke-width", ASPECT_HIT_STROKE_BASE)
+                .attr("stroke-linecap", "round")
+                .attr("opacity", 0)
+                .style("cursor", "pointer")
+                .style("pointer-events", "stroke");
+              hitArea
+                .append("title")
+                .text(
+                  `${aspect.planet1} ${aspect.aspect} ${aspect.planet2} — click to ask about this aspect`,
+                );
 
-                  // Draw aspect line (behind planets) - append directly since aspects are drawn before planets
-                  const aspectLine = svg
-                    .append("line")
-                    .attr("x1", pos1.x)
-                    .attr("y1", pos1.y)
-                    .attr("x2", pos2.x)
-                    .attr("y2", pos2.y)
-                    .attr("stroke", color)
-                    .attr("stroke-width", 2.5)
-                    .attr("opacity", 0.6)
-                    .style("cursor", "pointer");
+              // Draw aspect line (behind planets) - append directly since aspects are drawn before planets
+              const aspectLine = svg
+                .append("line")
+                .attr("x1", pos1.x)
+                .attr("y1", pos1.y)
+                .attr("x2", pos2.x)
+                .attr("y2", pos2.y)
+                .attr("stroke", color)
+                .attr("stroke-width", 2.5)
+                .attr("opacity", 0.6)
+                .style("cursor", "pointer");
 
-                  // Ticks at each end: default to base aspect color; turn green on hover
-                  const aspectTickLen = 8;
-                  const tick1Inner = getPosition(displayDeg1, aspectLineRadius - aspectTickLen / 2);
-                  const tick1Outer = getPosition(displayDeg1, aspectLineRadius + aspectTickLen / 2);
-                  const tick2Inner = getPosition(displayDeg2, aspectLineRadius - aspectTickLen / 2);
-                  const tick2Outer = getPosition(displayDeg2, aspectLineRadius + aspectTickLen / 2);
-                  const tick1 = svg.append("line")
-                    .attr("x1", tick1Inner.x)
-                    .attr("y1", tick1Inner.y)
-                    .attr("x2", tick1Outer.x)
-                    .attr("y2", tick1Outer.y)
-                    .attr("stroke", color)
-                    .attr("stroke-width", 2.5)
-                    .attr("opacity", 0.6);
-                  const tick2 = svg.append("line")
-                    .attr("x1", tick2Inner.x)
-                    .attr("y1", tick2Inner.y)
-                    .attr("x2", tick2Outer.x)
-                    .attr("y2", tick2Outer.y)
-                    .attr("stroke", color)
-                    .attr("stroke-width", 2.5)
-                    .attr("opacity", 0.6);
+              // Ticks at each end: default to base aspect color; turn green on hover
+              const aspectTickLen = 8;
+              const tick1Inner = getPosition(
+                displayDeg1,
+                aspectLineRadius - aspectTickLen / 2,
+              );
+              const tick1Outer = getPosition(
+                displayDeg1,
+                aspectLineRadius + aspectTickLen / 2,
+              );
+              const tick2Inner = getPosition(
+                displayDeg2,
+                aspectLineRadius - aspectTickLen / 2,
+              );
+              const tick2Outer = getPosition(
+                displayDeg2,
+                aspectLineRadius + aspectTickLen / 2,
+              );
+              const tick1 = svg
+                .append("line")
+                .attr("x1", tick1Inner.x)
+                .attr("y1", tick1Inner.y)
+                .attr("x2", tick1Outer.x)
+                .attr("y2", tick1Outer.y)
+                .attr("stroke", color)
+                .attr("stroke-width", 2.5)
+                .attr("opacity", 0.6);
+              const tick2 = svg
+                .append("line")
+                .attr("x1", tick2Inner.x)
+                .attr("y1", tick2Inner.y)
+                .attr("x2", tick2Outer.x)
+                .attr("y2", tick2Outer.y)
+                .attr("stroke", color)
+                .attr("stroke-width", 2.5)
+                .attr("opacity", 0.6);
 
-                  // Helper to bump a planet glyph (used from planet hover and aspect hover)
-                  function bumpPlanet(planetKey, active) {
-                    const entry = planetGroupsByName[planetKey?.toLowerCase()];
-                    if (!entry) return;
-                    const sym = entry.symbol;
-                    if (active) {
-                      sym.attr("font-size", "28px").attr("fill", "#10b981");
-                    } else {
-                      sym.attr("font-size", "24px").attr("fill", planetGlyphColor);
-                    }
-                  }
-
-                  // Shared hover handlers so both group, line, and hit-area react the same way
-                  function handleAspectEnter() {
-                    aspectLine
-                      .attr("stroke-width", 4)
-                      .attr("opacity", 0.9)
-                      .attr("stroke", hoverStroke)
-                      .transition()
-                      .duration(200);
-                    tick1
-                      .attr("stroke", "#10b981")
-                      .attr("stroke-width", 3)
-                      .attr("opacity", 0.9);
-                    tick2
-                      .attr("stroke", "#10b981")
-                      .attr("stroke-width", 3)
-                      .attr("opacity", 0.9);
-                    hitArea.attr("stroke-width", 48); // Slightly expand hit area on hover
-                    bumpPlanet(aspect.planet1, true);
-                    bumpPlanet(aspect.planet2, true);
-                  }
-                  function handleAspectLeave() {
-                    aspectLine
-                      .attr("stroke-width", 2.5)
-                      .attr("opacity", 0.6)
-                      .attr("stroke", color)
-                      .transition()
-                      .duration(200);
-                    tick1
-                      .attr("stroke", color)
-                      .attr("stroke-width", 2.5)
-                      .attr("opacity", 0.6);
-                    tick2
-                      .attr("stroke", color)
-                      .attr("stroke-width", 2.5)
-                      .attr("opacity", 0.6);
-                    hitArea.attr("stroke-width", 32); // Reset hit area to base size
-                    bumpPlanet(aspect.planet1, false);
-                    bumpPlanet(aspect.planet2, false);
-                  }
-
-                  // Hover and click handlers for aspect group
-                  aspectGroup
-                    .on("mouseenter", handleAspectEnter)
-                    .on("mouseleave", handleAspectLeave)
-                    .on("click", function () {
-                      const planet1Name =
-                        aspect.planet1.charAt(0).toUpperCase() +
-                        aspect.planet1.slice(1);
-                      const planet2Name =
-                        aspect.planet2.charAt(0).toUpperCase() +
-                        aspect.planet2.slice(1);
-                      const aspectName = aspect.aspect.toLowerCase();
-                      queryChartElement(
-                        `${planet1Name} ${aspectName} ${planet2Name}`,
-                      );
-                    });
-
-                  // Also make hit area and the visible line interactive
-                  hitArea
-                    .on("mouseenter", handleAspectEnter)
-                    .on("mouseleave", handleAspectLeave)
-                    .on("click", function () {
-                    const planet1Name =
-                      aspect.planet1.charAt(0).toUpperCase() +
-                      aspect.planet1.slice(1);
-                    const planet2Name =
-                      aspect.planet2.charAt(0).toUpperCase() +
-                      aspect.planet2.slice(1);
-                    const aspectName = aspect.aspect.toLowerCase();
-                    queryChartElement(
-                      `${planet1Name} ${aspectName} ${planet2Name}`,
-                    );
-                    });
-                  aspectLine
-                    .on("mouseenter", handleAspectEnter)
-                    .on("mouseleave", handleAspectLeave)
-                    .on("click", function () {
-                      const planet1Name =
-                        aspect.planet1.charAt(0).toUpperCase() +
-                        aspect.planet1.slice(1);
-                      const planet2Name =
-                        aspect.planet2.charAt(0).toUpperCase() +
-                        aspect.planet2.slice(1);
-                      const aspectName = aspect.aspect.toLowerCase();
-                      queryChartElement(
-                        `${planet1Name} ${aspectName} ${planet2Name}`,
-                      );
-                    });
+              // Helper to bump a planet glyph (used from planet hover and aspect hover)
+              function bumpPlanet(planetKey, active) {
+                const entry = planetGroupsByName[planetKey?.toLowerCase()];
+                if (!entry) return;
+                const sym = entry.symbol;
+                if (active) {
+                  sym.attr("font-size", "28px").attr("fill", "#10b981");
+                } else {
+                  sym.attr("font-size", "24px").attr("fill", planetGlyphColor);
                 }
               }
+
+              // Shared hover handlers so both group, line, and hit-area react the same way
+              function handleAspectEnter() {
+                aspectLine
+                  .attr("stroke-width", 4)
+                  .attr("opacity", 0.9)
+                  .attr("stroke", hoverStroke)
+                  .transition()
+                  .duration(200);
+                tick1
+                  .attr("stroke", "#10b981")
+                  .attr("stroke-width", 3)
+                  .attr("opacity", 0.9);
+                tick2
+                  .attr("stroke", "#10b981")
+                  .attr("stroke-width", 3)
+                  .attr("opacity", 0.9);
+                hitArea.attr("stroke-width", ASPECT_HIT_STROKE_HOVER);
+                bumpPlanet(aspect.planet1, true);
+                bumpPlanet(aspect.planet2, true);
+              }
+              function handleAspectLeave() {
+                aspectLine
+                  .attr("stroke-width", 2.5)
+                  .attr("opacity", 0.6)
+                  .attr("stroke", color)
+                  .transition()
+                  .duration(200);
+                tick1
+                  .attr("stroke", color)
+                  .attr("stroke-width", 2.5)
+                  .attr("opacity", 0.6);
+                tick2
+                  .attr("stroke", color)
+                  .attr("stroke-width", 2.5)
+                  .attr("opacity", 0.6);
+                hitArea.attr("stroke-width", ASPECT_HIT_STROKE_BASE);
+                bumpPlanet(aspect.planet1, false);
+                bumpPlanet(aspect.planet2, false);
+              }
+
+              // Hover and click handlers for aspect group
+              aspectGroup
+                .on("mouseenter", handleAspectEnter)
+                .on("mouseleave", handleAspectLeave)
+                .on("click", function () {
+                  const planet1Name =
+                    aspect.planet1.charAt(0).toUpperCase() +
+                    aspect.planet1.slice(1);
+                  const planet2Name =
+                    aspect.planet2.charAt(0).toUpperCase() +
+                    aspect.planet2.slice(1);
+                  const aspectName = aspect.aspect.toLowerCase();
+                  queryChartElement(
+                    `${planet1Name} ${aspectName} ${planet2Name}`,
+                  );
+                });
+
+              // Also make hit area and the visible line interactive
+              hitArea
+                .on("mouseenter", handleAspectEnter)
+                .on("mouseleave", handleAspectLeave)
+                .on("click", function () {
+                  const planet1Name =
+                    aspect.planet1.charAt(0).toUpperCase() +
+                    aspect.planet1.slice(1);
+                  const planet2Name =
+                    aspect.planet2.charAt(0).toUpperCase() +
+                    aspect.planet2.slice(1);
+                  const aspectName = aspect.aspect.toLowerCase();
+                  queryChartElement(
+                    `${planet1Name} ${aspectName} ${planet2Name}`,
+                  );
+                });
+              aspectLine
+                .on("mouseenter", handleAspectEnter)
+                .on("mouseleave", handleAspectLeave)
+                .on("click", function () {
+                  const planet1Name =
+                    aspect.planet1.charAt(0).toUpperCase() +
+                    aspect.planet1.slice(1);
+                  const planet2Name =
+                    aspect.planet2.charAt(0).toUpperCase() +
+                    aspect.planet2.slice(1);
+                  const aspectName = aspect.aspect.toLowerCase();
+                  queryChartElement(
+                    `${planet1Name} ${aspectName} ${planet2Name}`,
+                  );
+                });
             });
           }
 
@@ -2923,9 +3220,7 @@
                     .attr("x", labelPos.x)
                     .attr("dy", "-0.45em")
                     .text(labelText);
-                  label
-                    .append("tspan")
-                    .attr("dy", "1");
+                  label.append("tspan").attr("dy", "1");
                   label
                     .append("tspan")
                     .attr("class", "angle-degree-line")
@@ -2950,7 +3245,10 @@
               }
               g.on("mouseenter", function () {
                 const strokeHover = hoverColor || "#10b981";
-                visLine.attr("stroke-width", 3.5).attr("opacity", 1).attr("stroke", strokeHover);
+                visLine
+                  .attr("stroke-width", 3.5)
+                  .attr("opacity", 1)
+                  .attr("stroke", strokeHover);
                 if (hoverColor) label.attr("fill", strokeHover);
                 label.attr("font-size", "20px");
                 if (labelLine2 != null && labelLine2 !== "") {
@@ -2959,11 +3257,16 @@
                 }
               })
                 .on("mouseleave", function () {
-                  visLine.attr("stroke-width", 2.5).attr("opacity", 1).attr("stroke", angleLineColor);
+                  visLine
+                    .attr("stroke-width", 2.5)
+                    .attr("opacity", 1)
+                    .attr("stroke", angleLineColor);
                   if (hoverColor) label.attr("fill", color);
                   label.attr("font-size", "16px");
                   if (labelLine2 != null && labelLine2 !== "") {
-                    label.select(".angle-degree-line").attr("font-size", "12px");
+                    label
+                      .select(".angle-degree-line")
+                      .attr("font-size", "12px");
                     label.select(".angle-degree-min").attr("font-size", "8px");
                   }
                 })
@@ -2984,10 +3287,10 @@
               return { main: String(d), sup: m + "\u2032" };
             }
 
-          // Ascendant (AC) – letter above, degree with minutes of arc upper-right
-          const acDisplayDegree = chartToDisplayDegree(ascDegree);
-          const acPos = getPosition(acDisplayDegree, houseOuterRadius);
-          const innerAcPos = getPosition(acDisplayDegree, innerRadius);
+            // Ascendant (AC) – letter above, degree with minutes of arc upper-right
+            const acDisplayDegree = chartToDisplayDegree(ascDegree);
+            const acPos = getPosition(acDisplayDegree, houseOuterRadius);
+            const innerAcPos = getPosition(acDisplayDegree, innerRadius);
             const ascSign = birthChart.angles?.ascendant?.sign || "";
             const acDM = formatDegreeDM(ascDegree);
             addAngleLine(
@@ -3006,9 +3309,9 @@
             );
 
             // Descendant (DC) – letter above, degree with minutes of arc upper-right
-          const dcDisplayDegree = chartToDisplayDegree(dcDegree);
-          const dcPos = getPosition(dcDisplayDegree, houseOuterRadius);
-          const innerDcPos = getPosition(dcDisplayDegree, innerRadius);
+            const dcDisplayDegree = chartToDisplayDegree(dcDegree);
+            const dcPos = getPosition(dcDisplayDegree, houseOuterRadius);
+            const innerDcPos = getPosition(dcDisplayDegree, innerRadius);
             const house7 =
               birthChart.houses && birthChart.houses.find
                 ? birthChart.houses.find(function (h) {
@@ -3038,9 +3341,9 @@
               mcDegree !== null &&
               !isNaN(mcDegree)
             ) {
-            const mcDisplayDegree = chartToDisplayDegree(mcDegree);
-            const mcPos = getPosition(mcDisplayDegree, houseOuterRadius);
-            const innerMcPos = getPosition(mcDisplayDegree, innerRadius);
+              const mcDisplayDegree = chartToDisplayDegree(mcDegree);
+              const mcPos = getPosition(mcDisplayDegree, houseOuterRadius);
+              const innerMcPos = getPosition(mcDisplayDegree, innerRadius);
               const mcSign = birthChart.angles?.midheaven?.sign || "";
               const mcDM = formatDegreeDM(mcDegree);
               addAngleLine(
@@ -3061,9 +3364,9 @@
 
             // Imum Coeli (IC) – letter above, degree with minutes of arc upper-right
             if (icDegree !== undefined && !isNaN(icDegree)) {
-            const icDisplayDegree = chartToDisplayDegree(icDegree);
-            const icPos = getPosition(icDisplayDegree, houseOuterRadius);
-            const innerIcPos = getPosition(icDisplayDegree, innerRadius);
+              const icDisplayDegree = chartToDisplayDegree(icDegree);
+              const icPos = getPosition(icDisplayDegree, houseOuterRadius);
+              const innerIcPos = getPosition(icDisplayDegree, innerRadius);
               const house4 =
                 birthChart.houses && birthChart.houses.find
                   ? birthChart.houses.find(function (h) {
@@ -3107,14 +3410,30 @@
           // U+2609 Sun, U+263D Moon, U+263F Mercury, U+2640 Venus, U+2642 Mars, U+2643 Jupiter,
           // U+2644 Saturn, U+2645 Uranus, U+2646 Neptune, U+2647 Pluto
           const planetSymbolCodes = [
-            0x2609, 0x263d, 0x263f, 0x2640, 0x2642, 0x2643, 0x2644, 0x2645, 0x2646, 0x2647,
+            0x2609, 0x263d, 0x263f, 0x2640, 0x2642, 0x2643, 0x2644, 0x2645,
+            0x2646, 0x2647,
           ];
-          const planetOrder = ["sun", "moon", "mercury", "venus", "mars", "jupiter", "saturn", "uranus", "neptune", "pluto"];
+          const planetOrder = [
+            "sun",
+            "moon",
+            "mercury",
+            "venus",
+            "mars",
+            "jupiter",
+            "saturn",
+            "uranus",
+            "neptune",
+            "pluto",
+          ];
           const planetSymbolChars = {};
           planetOrder.forEach((name, idx) => {
-            planetSymbolChars[name] = String.fromCodePoint(planetSymbolCodes[idx], 0xfe0e);
+            planetSymbolChars[name] = String.fromCodePoint(
+              planetSymbolCodes[idx],
+              0xfe0e,
+            );
           });
-          const planetSymbolFont = '"Symbola", "Segoe UI Symbol", "Apple Symbols", "Noto Sans Symbols", "Arial Unicode MS", sans-serif';
+          const planetSymbolFont =
+            '"Symbola", "Segoe UI Symbol", "Apple Symbols", "Noto Sans Symbols", "Arial Unicode MS", sans-serif';
 
           // Draw planets (positioned closer to outer edge to fill wheel)
           // Precompute positions with conjunction spread so overlapping planets don't stack
@@ -3207,36 +3526,78 @@
                   .attr("font-weight", "normal")
                   .attr("font-family", planetSymbolFont)
                   .attr("style", "font-variant-emoji: none;")
-                  .text(planetSymbolChars[planetName.toLowerCase()] || planetName.charAt(0).toUpperCase());
+                  .text(
+                    planetSymbolChars[planetName.toLowerCase()] ||
+                      planetName.charAt(0).toUpperCase(),
+                  );
 
-                const houseLabelPos = getPosition(
-                  effectiveDegree,
-                  planetGlyphRadius - 18,
-                );
-                planetGroup
+                // Planet degree + minutes label (in-sign), similar to angle labels
+                const planetDM = formatDegreeDM(planetData.degree);
+                const degreeLabel = planetGroup
                   .append("text")
-                  .attr("x", houseLabelPos.x)
-                  .attr("y", houseLabelPos.y)
+                  .attr("x", pos.x)
+                  .attr("y", pos.y + 18)
                   .attr("text-anchor", "middle")
                   .attr("dominant-baseline", "middle")
-                  .attr("fill", "#94a3b8")
-                  .attr("font-size", "11px")
-                  .attr("font-weight", "normal")
-                  .attr("opacity", 0.9)
-                  .text(planetData.house);
+                  .attr("fill", "#cbd5e1")
+                  .attr("font-size", "10px")
+                  .attr("font-weight", "normal");
+                degreeLabel.append("tspan").text(planetDM.main);
+                if (planetDM.sup) {
+                  degreeLabel
+                    .append("tspan")
+                    .attr("dy", "-0.55em")
+                    .attr("dx", "0.15em")
+                    .attr("font-size", "7px")
+                    .text(planetDM.sup);
+                }
 
                 planetGroupsByName[planetName.toLowerCase()] = {
                   group: planetGroup,
                   symbol: planetSymbol,
                 };
 
+                const planetTooltipText = {
+                  sun: "The Sun describes your core vitality, identity, and the way you naturally shine in the world.",
+                  moon: "The Moon reflects your emotional needs, instincts, and how you self-soothe when life feels intense.",
+                  mercury:
+                    "Mercury shows how you think, learn, and communicate—how your mind naturally processes the world.",
+                  venus:
+                    "Venus speaks to love, pleasure, and values—what you’re drawn to and what feels worth investing in.",
+                  mars: "Mars describes how you act on desire—your drive, anger style, and how you go after what you want.",
+                  jupiter:
+                    "Jupiter points to growth, faith, and opportunity—where life tends to expand when you take risks.",
+                  saturn:
+                    "Saturn highlights work, limits, and responsibility—the places you build strength through effort and time.",
+                  uranus:
+                    "Uranus shows where you resist rules and crave freedom—your instinct for disruption and authenticity.",
+                  neptune:
+                    "Neptune dissolves boundaries and heightens sensitivity—linked to dreams, intuition, and idealism.",
+                  pluto:
+                    "Pluto speaks to deep transformation, power, and shadow work—the places where you can’t stay on the surface.",
+                };
+                let planetTooltipTimeout;
                 planetGroup
-                  .on("mouseenter", function () {
+                  .on("mouseenter", function (event) {
                     planetSymbol
                       .attr("font-size", "28px")
                       .attr("fill", "#10b981")
                       .transition()
                       .duration(200);
+                    const key = planetName.toLowerCase();
+                    const text = planetTooltipText[key];
+                    if (!text) return;
+                    if (planetTooltipTimeout)
+                      clearTimeout(planetTooltipTimeout);
+                    const { left, top } = container.getBoundingClientRect();
+                    const pageX = event.clientX;
+                    const pageY = event.clientY;
+                    planetTooltipTimeout = setTimeout(() => {
+                      tooltipEl.textContent = text;
+                      tooltipEl.style.left = `${pageX - left + 12}px`;
+                      tooltipEl.style.top = `${pageY - top + 12}px`;
+                      tooltipEl.style.opacity = "1";
+                    }, 2000);
                   })
                   .on("mouseleave", function () {
                     planetSymbol
@@ -3244,6 +3605,9 @@
                       .attr("fill", planetGlyphColor)
                       .transition()
                       .duration(200);
+                    if (planetTooltipTimeout)
+                      clearTimeout(planetTooltipTimeout);
+                    tooltipEl.style.opacity = "0";
                   })
                   .on("click", function () {
                     const planetDisplayName =
