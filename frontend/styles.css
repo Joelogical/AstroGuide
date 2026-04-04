@@ -119,20 +119,21 @@ button[type="submit"]:hover {
 .chat-container {
   max-width: 800px;
   margin: 0 auto;
-  padding: 20px;
+  padding: 12px;
   height: 100vh;
   display: flex;
   flex-direction: column;
 }
 
+/* Default chat header — index.html applies tighter layout for AstroGuide */
 .chat-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  margin-bottom: 20px;
+  padding: 8px 10px;
+  background: transparent;
+  border-radius: 0;
+  margin-bottom: 8px;
 }
 
 .chat-header h1 {
@@ -157,10 +158,10 @@ button[type="submit"]:hover {
 .chat-messages {
   flex: 1;
   overflow-y: auto;
-  padding: 20px;
+  padding: 12px;
   background: rgba(255, 255, 255, 0.05);
   border-radius: 10px;
-  margin-bottom: 20px;
+  margin-bottom: 8px;
 }
 
 .message {
@@ -215,4 +216,22 @@ button[type="submit"]:hover {
 
 #send-button:hover {
   background: #357abd;
+}
+
+/* Mobile / notched devices (landing) */
+@media (max-width: 767px) {
+  .landing-container {
+    min-height: 100dvh;
+    padding: max(16px, env(safe-area-inset-top, 16px))
+      max(16px, env(safe-area-inset-right, 16px))
+      max(16px, env(safe-area-inset-bottom, 16px))
+      max(16px, env(safe-area-inset-left, 16px));
+    align-items: flex-start;
+  }
+  .auth-container {
+    max-width: 100%;
+  }
+  .auth-container h1 {
+    font-size: 2rem;
+  }
 }

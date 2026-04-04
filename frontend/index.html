@@ -2,9 +2,19 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#18192b" />
     <title>AstroGuide</title>
     <link rel="stylesheet" href="styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,100..1000&display=swap"
+      rel="stylesheet"
+    />
     <script src="https://d3js.org/d3.v7.min.js"></script>
   </head>
   <body>
@@ -16,14 +26,54 @@
       }
     </script>
 
-    <div id="connection-banner" class="connection-banner connection-pending">
-      Checking server…
+    <div
+      id="live-server-dev-banner"
+      class="live-server-dev-banner"
+      hidden
+      role="alert"
+    >
+      <strong>Wrong URL in the address bar.</strong>
+      This tab is <strong>Live Server</strong> (port 5500/5501), which only serves files. It is not the AstroGuide app. Running
+      <code>npm start</code> in <code>backend</code> does <em>not</em> switch this tab — you must open the app on port 3000.
+      <a href="http://127.0.0.1:3000/index.html">Open AstroGuide: http://127.0.0.1:3000/index.html</a>
     </div>
-    <div class="main-container">
+    <script>
+      (function () {
+        var p = String(location.port || "");
+        if (p === "5500" || p === "5501") {
+          var el = document.getElementById("live-server-dev-banner");
+          if (el) el.removeAttribute("hidden");
+        }
+      })();
+    </script>
+
+    <div class="main-container" id="main-container">
+      <nav
+        class="mobile-nav-tabs"
+        id="mobile-nav-tabs"
+        aria-label="Switch between chat and chart"
+      >
+        <button
+          type="button"
+          class="mobile-nav-tab active"
+          id="mobile-tab-chat"
+          data-panel="chat"
+        >
+          Chat
+        </button>
+        <button
+          type="button"
+          class="mobile-nav-tab"
+          id="mobile-tab-chart"
+          data-panel="chart"
+        >
+          Chart
+        </button>
+      </nav>
       <div class="chat-container">
         <div class="chat-header">
-          <h1>AstroGuide</h1>
-          <div class="profile-switcher">
+          <h1 class="app-title">AstroGuide</h1>
+          <div class="profile-switcher chat-header-controls">
             <button
               type="button"
               id="profile-dropdown-btn"
@@ -202,9 +252,9 @@
         </div>
         <div class="chat-messages" id="chat-messages">
           <div class="message bot-message initial-message">
-            Hello! I'm AstroGuide, your astrological guide. I'm here to help you
-            understand yourself through your birth chart. What would you like to
-            explore?
+            <p class="word-reveal">
+              Hello! I'm AstroGuide, your astrological guide. I'm here to help you understand yourself through your birth chart. What would you like to explore?
+            </p>
           </div>
         </div>
         <div class="input-container">
@@ -218,7 +268,12 @@
       </div>
       <div class="chart-sidebar">
         <div id="chart-wheel-container" class="chart-wheel-container"></div>
-        <div id="chart-table-container" class="chart-table-container"></div>
+        <details class="chart-table-details" id="chart-table-details">
+          <summary class="chart-table-summary">
+            Planet positions &amp; house cusps
+          </summary>
+          <div id="chart-table-container" class="chart-table-container"></div>
+        </details>
       </div>
     </div>
 
@@ -226,28 +281,59 @@
       body {
         background: #23243a;
         color: #f5f6fa;
+        overflow-x: hidden;
       }
-      .connection-banner {
-        padding: 8px 16px;
-        text-align: center;
-        font-size: 0.9rem;
-        margin-bottom: 8px;
-        border-radius: 8px;
+      .live-server-dev-banner {
+        display: none;
+        padding: 12px 14px;
+        margin: 0;
+        background: #422006;
+        color: #ffedd5;
+        border-bottom: 2px solid #f97316;
+        font-size: 0.95rem;
+        line-height: 1.45;
       }
-      .connection-pending {
-        background: #35365a;
-        color: #a0a0c0;
+      .live-server-dev-banner:not([hidden]) {
+        display: block;
       }
-      .connection-ok {
-        background: #1a472a;
-        color: #90ee90;
+      .live-server-dev-banner a {
+        color: #fde68a;
+        font-weight: 600;
+        margin-left: 0.25em;
       }
-      .connection-refused {
-        background: #5c2a2a;
-        color: #ffb0b0;
+      .live-server-dev-banner code {
+        background: rgba(0, 0, 0, 0.25);
+        padding: 0 5px;
+        border-radius: 4px;
       }
-      .connection-refused a {
-        color: #7dd3fc;
+      /* Phone / small tablet: switch Chat vs Chart (hidden on larger screens) */
+      .mobile-nav-tabs {
+        display: none;
+        width: 100%;
+        flex-shrink: 0;
+        gap: 0;
+        padding: 0;
+        margin: 0;
+        background: #12131f;
+        border: 1px solid #2a2b45;
+        border-radius: 10px;
+        overflow: hidden;
+      }
+      .mobile-nav-tab {
+        flex: 1;
+        min-height: 48px;
+        padding: 12px 16px;
+        font-size: 1rem;
+        font-weight: 600;
+        border: none;
+        background: transparent;
+        color: #94a3b8;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .mobile-nav-tab.active {
+        background: #2d2e48;
+        color: #f5f6fa;
       }
       .main-container {
         display: flex;
@@ -259,15 +345,21 @@
       .chat-container {
         flex: 1;
         min-width: 0;
+        min-height: 0;
         background: #18192b;
         border-radius: 12px;
         box-shadow: 0 2px 16px rgba(0, 0, 0, 0.3);
-        padding: 24px;
+        padding: 8px 10px 10px;
         display: flex;
         flex-direction: column;
       }
-      .chat-header h1 {
-        color: #fff;
+      /* Required so #chat-messages can scroll inside the flex column (override styles.css) */
+      #chat-messages {
+        min-height: 0;
+        flex: 1 1 auto;
+        overflow-y: auto;
+        padding: 10px 10px;
+        margin-bottom: 0;
       }
       .message {
         margin: 10px;
@@ -284,8 +376,51 @@
         border: 1px solid #35365a;
         white-space: pre-wrap;
       }
-      .initial-message {
+      /* Whole-paragraph reveal (single motion — not per-line / per-word) */
+      .bot-message p.word-reveal {
+        margin: 0;
+        padding: 0;
+        font-family:
+          "Roboto Flex", system-ui, -apple-system, sans-serif;
+        font-size: clamp(0.95rem, 2.4vw, 1.08rem);
+        font-weight: 450;
+        color: inherit;
+        line-height: 1.55;
+        letter-spacing: normal;
+        word-spacing: normal;
+        white-space: pre-wrap;
+        opacity: 0;
+        transform: translateY(0.65em);
+        animation: revealParagraph 1.65s ease-out forwards;
+      }
+      @keyframes revealParagraph {
+        from {
+          opacity: 0;
+          transform: translateY(0.65em);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .bot-message p.word-reveal {
+          opacity: 1;
+          transform: none;
+          animation: none;
+        }
+      }
+      /* Welcome bubble: avoid pre-wrap (awkward breaks from source); comfortable reading measure */
+      .bot-message.initial-message {
         white-space: normal;
+        padding: 12px 14px;
+        max-width: 100%;
+      }
+      .bot-message.initial-message p.word-reveal {
+        white-space: normal;
+        line-height: 1.65;
+        letter-spacing: 0.01em;
+        word-spacing: normal;
       }
       .user-message {
         background-color: #3b82f6;
@@ -331,7 +466,8 @@
       }
       .input-container {
         display: flex;
-        margin-top: 16px;
+        margin-top: 8px;
+        flex-shrink: 0;
       }
       #message-input {
         flex: 1;
@@ -384,14 +520,58 @@
         padding: 40px 20px;
         font-style: italic;
       }
-      .chart-table-container {
-        padding: 16px;
-        background: rgba(15, 23, 42, 0.9);
+      .chart-table-details {
         border-radius: 12px;
+        background: rgba(15, 23, 42, 0.9);
+        color: #f5f6fa;
+      }
+      .chart-table-details:has(.chart-table-container:empty) {
+        display: none;
+      }
+      .chart-table-summary {
+        list-style: none;
+        padding: 14px 16px;
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #c7d2fe;
+        cursor: pointer;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .chart-table-summary::-webkit-details-marker {
+        display: none;
+      }
+      .chart-table-summary::before {
+        content: "▸ ";
+        display: inline-block;
+        transition: transform 0.15s ease;
+        color: #94a3b8;
+      }
+      .chart-table-details[open] .chart-table-summary::before {
+        transform: rotate(90deg);
+      }
+      .chart-table-container {
+        padding: 0 16px 16px;
+        background: transparent;
+        border-radius: 0 0 12px 12px;
         color: #f5f6fa;
       }
       .chart-table-container:empty {
         display: none;
+      }
+      @media (min-width: 768px) {
+        .chart-table-summary {
+          display: none;
+        }
+        .chart-table-details {
+          padding: 0;
+          background: transparent;
+        }
+        .chart-table-container {
+          padding: 16px;
+          background: rgba(15, 23, 42, 0.9);
+          border-radius: 12px;
+        }
       }
       .chart-table {
         width: 100%;
@@ -448,6 +628,142 @@
           max-height: none;
         }
       }
+
+      /* Narrow phones: one full-height panel + bottom-friendly chrome */
+      @media (max-width: 767px) {
+        html,
+        body {
+          height: 100%;
+          max-height: 100%;
+        }
+        body {
+          display: flex;
+          flex-direction: column;
+          min-height: 100dvh;
+          min-height: 100vh;
+          padding-left: env(safe-area-inset-left, 0);
+          padding-right: env(safe-area-inset-right, 0);
+          padding-bottom: env(safe-area-inset-bottom, 0);
+        }
+        .main-container {
+          flex-direction: column;
+          flex: 1;
+          min-height: 0;
+          overflow: hidden;
+          gap: 10px;
+          padding: 10px;
+          max-width: none;
+        }
+        /* Chart tab: scroll the column (nav → wheel → chat); default mobile uses overflow:hidden + flex trap */
+        .main-container.mobile-show-chart {
+          padding: 6px 2px 8px !important;
+          gap: 4px !important;
+          overflow-y: auto !important;
+          overflow-x: hidden;
+          -webkit-overflow-scrolling: touch;
+        }
+        .mobile-nav-tabs {
+          display: flex;
+          order: 0;
+        }
+        .chat-container {
+          order: 1;
+          padding: 6px 8px 8px;
+          flex: 1;
+          min-height: 0;
+          display: flex;
+          flex-direction: column;
+        }
+        .chart-sidebar {
+          order: 2;
+          width: 100% !important;
+          max-width: none !important;
+          margin: 0 !important;
+          flex: 1;
+          min-height: 0;
+          overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
+          padding: 0;
+        }
+        /* Chart tab: wheel + collapsible table first, chat below (natural height; page scrolls) */
+        .main-container.mobile-show-chart .chart-sidebar {
+          gap: 8px;
+          order: 1;
+          display: flex !important;
+          flex: 0 0 auto;
+          overflow: visible;
+        }
+        .main-container.mobile-show-chart .chat-container {
+          order: 2;
+          display: flex !important;
+          flex: 0 0 auto;
+          min-height: 0;
+        }
+        .main-container.mobile-show-chart #chat-messages {
+          flex: 0 0 auto;
+          overflow-y: visible;
+          min-height: min(42vh, 360px);
+        }
+        /* Chart tab only: title / profile / settings stay on Chat tab (PC unchanged). */
+        .main-container.mobile-show-chart .chat-header {
+          display: none !important;
+        }
+        .main-container:not(.mobile-show-chart) .chart-sidebar {
+          display: none !important;
+        }
+        .main-container:not(.mobile-show-chart) .chat-container {
+          display: flex !important;
+        }
+        .chat-header {
+          flex-wrap: nowrap;
+          gap: 4px;
+          padding: 2px 0 6px;
+          margin-bottom: 4px;
+        }
+        .chat-header .app-title {
+          font-size: 0.95rem;
+        }
+        .profile-dropdown-btn {
+          font-size: 0.78rem;
+          padding: 5px 8px;
+          max-width: min(160px, 42vw);
+        }
+        .settings-dropdown-btn.settings-gear-btn {
+          padding: 4px 8px;
+          font-size: 1rem;
+        }
+        #message-input {
+          font-size: 16px;
+        }
+        #send-button {
+          min-height: 44px;
+          min-width: 72px;
+        }
+        .message {
+          max-width: 92%;
+        }
+        .chart-wheel-container {
+          padding: 4px 2px !important;
+        }
+        .main-container.mobile-show-chart .chart-wheel-container {
+          padding: 0 !important;
+          margin: 0 !important;
+          border-radius: 8px;
+        }
+        .main-container.mobile-show-chart .chart-table-container {
+          padding: 10px 4px !important;
+        }
+        .main-container.mobile-show-chart .chart-table-details[open]
+          .chart-table-container {
+          max-height: min(48vh, 380px);
+          overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
+        }
+        .chart-wheel-container svg {
+          max-width: 100%;
+          height: auto;
+        }
+      }
       .chart-wheel-container {
         position: relative;
       }
@@ -471,6 +787,44 @@
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
         opacity: 0;
         transition: opacity 0.15s ease;
+      }
+      /* Mobile chart tab: long-press loupe (JS creates #chart-wheel-loupe) */
+      .chart-wheel-loupe {
+        display: none;
+        position: fixed;
+        width: 73.5px;
+        height: 73.5px;
+        margin: 0;
+        padding: 0;
+        border-radius: 50%;
+        overflow: hidden;
+        border: 2px solid rgba(255, 255, 255, 0.92);
+        box-shadow: 0 10px 32px rgba(0, 0, 0, 0.55);
+        z-index: 200;
+        pointer-events: none;
+        background: #0b1120;
+      }
+      .chart-wheel-loupe.chart-wheel-loupe-visible {
+        display: block;
+      }
+      /* Clone must never steal hits — probe uses elementFromPoint on the real chart below */
+      .chart-wheel-loupe,
+      .chart-wheel-loupe * {
+        pointer-events: none !important;
+      }
+      .chart-wheel-loupe-inner {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        transform-origin: 0 0;
+      }
+      .chart-wheel-loupe-inner svg {
+        display: block;
+      }
+      body.chart-wheel-loupe-mode .chart-wheel-container.chart-wheel-loupe-active {
+        touch-action: none;
       }
       /* Interactive chart elements - hover effects */
       .chart-wheel-container svg .planet-group,
@@ -517,24 +871,63 @@
           font-size 0.2s ease;
         pointer-events: none; /* Allow clicks to pass through to group */
       }
+      /* Compact top bar — overrides styles.css .chat-header padding/margin */
       .chat-header {
         display: flex;
-        flex-wrap: wrap;
+        flex-wrap: nowrap;
         align-items: center;
-        gap: 8px;
+        justify-content: space-between;
+        gap: 6px;
+        padding: 4px 2px 8px;
+        margin-bottom: 6px;
+        border-bottom: 1px solid rgba(53, 54, 90, 0.55);
+        background: transparent;
+        border-radius: 0;
+        flex-shrink: 0;
+      }
+      .chat-header .app-title {
+        margin: 0;
+        font-size: 1.05rem;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        color: #fff;
+        line-height: 1.15;
+        flex-shrink: 0;
       }
       .profile-switcher {
         position: relative;
-        margin-left: 10px;
+        margin-left: 0;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 4px;
+        flex: 1;
+        min-width: 0;
+      }
+      .chat-header-controls {
+        max-width: 100%;
+      }
+      #active-profile-name {
+        display: inline-block;
+        max-width: 9rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        vertical-align: bottom;
       }
       .profile-dropdown-btn {
-        padding: 8px 14px;
+        padding: 5px 10px;
         background: #2d2e48;
         border: 1px solid #35365a;
         border-radius: 6px;
         color: #f5f6fa;
         cursor: pointer;
-        font-size: 0.95em;
+        font-size: 0.8125rem;
+        line-height: 1.2;
+        display: inline-flex;
+        align-items: center;
+        max-width: min(220px, 46vw);
+        overflow: hidden;
       }
       .profile-dropdown-btn:hover {
         background: #35365a;
@@ -637,20 +1030,22 @@
       }
       .settings-switcher {
         position: relative;
-        margin-left: 6px;
+        margin-left: 0;
+        flex-shrink: 0;
       }
       .settings-dropdown-btn {
-        padding: 8px 14px;
+        padding: 5px 10px;
         background: #2d2e48;
         border: 1px solid #35365a;
         border-radius: 6px;
         color: #f5f6fa;
         cursor: pointer;
-        font-size: 0.95em;
+        font-size: 0.8125rem;
       }
       .settings-dropdown-btn.settings-gear-btn {
-        padding: 6px 10px;
-        font-size: 1.1em;
+        padding: 4px 8px;
+        font-size: 1rem;
+        line-height: 1;
         color: #a0a0c0;
       }
       .settings-dropdown-btn:hover {
@@ -833,19 +1228,6 @@
         }
       }
 
-      /* Animation for bot messages */
-      .bot-message.fade-in {
-        opacity: 0;
-        transform: translateX(-20px);
-        transition:
-          opacity 3s ease-out,
-          transform 3s ease-out;
-      }
-
-      .bot-message.fade-in.animate {
-        opacity: 1;
-        transform: translateX(0);
-      }
     </style>
 
     <script>
@@ -1301,6 +1683,42 @@
         return baseOffset;
       }
 
+      /**
+       * 405 on POST: page wasn’t served by Express (Live Server, file://, or IDE preview), or wrong host/port.
+       */
+      function errorMessageForApiFailure(response, data) {
+        if (response.status === 405) {
+          const page =
+            typeof window !== "undefined" ? window.location.href : "";
+          const port =
+            typeof window !== "undefined" && window.location.port
+              ? window.location.port
+              : "";
+          let portHint = "";
+          if (port === "5500" || port === "5501") {
+            portHint =
+              "This tab is still on port " +
+              port +
+              " (Live Server). Starting the backend does not change the address bar — open http://127.0.0.1:3000/index.html in a new tab or use the orange banner link. ";
+          } else if (port && port !== "3000") {
+            portHint =
+              "This page is on port " +
+              port +
+              ", but the API is on the port from npm start (default 3000). ";
+          }
+          return (
+            portHint +
+            "Use http://127.0.0.1:3000/ (PC) or http://YOUR-LAN-IP:3000/ (phone on Wi‑Fi), not Live Server or file://. " +
+            (page ? `This tab: ${page}` : "")
+          );
+        }
+        return (
+          (data && (data.details || data.error)) ||
+          response.statusText ||
+          "Request failed"
+        );
+      }
+
       /** Fetches birth chart for a profile (birthDate, birthTime, birthPlace). Returns { chartData, resolvedLocation } or throws. */
       async function fetchBirthChartForProfile(profile) {
         if (
@@ -1331,7 +1749,7 @@
           longitude: coordinates.longitude,
           timezone,
         };
-        const response = await fetch("http://localhost:3000/api/birth-chart", {
+        const response = await fetch("/api/birth-chart", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(requestData),
@@ -1339,7 +1757,8 @@
         if (!response.ok) {
           const err = await response.json().catch(() => ({}));
           throw new Error(
-            err.details || err.error || "Failed to calculate birth chart",
+            errorMessageForApiFailure(response, err) ||
+              "Failed to calculate birth chart",
           );
         }
         const chartData = await response.json();
@@ -1486,6 +1905,101 @@
         if (container) container.innerHTML = "";
       }
 
+      /**
+       * Desktop chart wheel: original proportions (700px max, full degree ticks, classic spacing).
+       * Declared before first renderChartWheel() call on load (avoids TDZ with const).
+       */
+      const CHART_WHEEL_PROFILE_DESKTOP = {
+        width(rawW) {
+          return Math.min(700, Math.max(260, Math.floor(rawW) - 24));
+        },
+        radiusInset: 20,
+        innerFrac: 0.125,
+        zodiacBand: 40,
+        notchBand: 12,
+        planetRingFrac: 0.85,
+        aspectRingFrac: 0.65,
+        degreeSkipEvery5: false,
+        conjThreshold: 10,
+        conjSpread: 8,
+        zodiacGlyph: 28,
+        zodiacGlyphHover: 32,
+        zodiacHit: 20,
+        planetGlyph: 24,
+        planetGlyphHi: 28,
+        planetHit: 22,
+        houseNum: 11,
+        houseHit: 25,
+        houseLabelHitR: 25,
+        angleLineHit: 28,
+        aspectHit: 52,
+        aspectHitHi: 72,
+        aspectStroke: 2.5,
+        angleLabelPad: 24,
+        angleLabelPadHorizon: 28,
+        aspectLineOpacity: 0.6,
+        tooltipDelayMs: 2000,
+        aspectTickLen: 8,
+        planetDegLabelOffsetY: 18,
+      };
+
+      /**
+       * Mobile chart wheel: compact size, thinned zodiac band, wider conjunction spread, touch hits.
+       */
+      const CHART_WHEEL_PROFILE_MOBILE = {
+        /** rawW is viewport-based on mobile (see renderChartWheel) so the wheel fills the screen. */
+        width(rawW) {
+          const w = Math.floor(rawW);
+          return Math.max(240, w - 4);
+        },
+        radiusInset: 10,
+        innerFrac: 0.17,
+        zodiacBand: 22,
+        notchBand: 8,
+        planetRingFrac: 0.88,
+        aspectRingFrac: 0.56,
+        degreeSkipEvery5: true,
+        conjThreshold: 12,
+        conjSpread: 16,
+        zodiacGlyph: 20,
+        zodiacGlyphHover: 24,
+        zodiacHit: 22,
+        planetGlyph: 20,
+        planetGlyphHi: 24,
+        planetHit: 28,
+        houseNum: 10,
+        houseHit: 30,
+        houseLabelHitR: 22,
+        angleLineHit: 32,
+        aspectHit: 52,
+        aspectHitHi: 68,
+        aspectStroke: 2,
+        angleLabelPad: 18,
+        angleLabelPadHorizon: 22,
+        aspectLineOpacity: 0.45,
+        tooltipDelayMs: 450,
+        aspectTickLen: 6,
+        planetDegLabelOffsetY: 15,
+      };
+
+      /**
+       * Use mobile wheel only when the app is in narrow / mobile layout (Chat vs Chart tabs visible).
+       * Matches CSS: .mobile-nav-tabs { display:none } on wide screens, display:flex @ max-width 767px.
+       * Relying on matchMedia alone can disagree with actual layout (zoom, scrollbar, embedded previews).
+       */
+      function isChartWheelMobileLayout() {
+        const nav = document.getElementById("mobile-nav-tabs");
+        if (nav) {
+          const display = window.getComputedStyle(nav).display;
+          if (display === "none") return false;
+          if (/flex/i.test(display)) return true;
+        }
+        return (
+          typeof window.matchMedia === "function" &&
+          window.matchMedia("(max-width: 767px)").matches
+        );
+      }
+
       migrateFromLegacyProfiles();
       // Sync active profile ID if stale (e.g. deleted profile or wrong storage): ensure it exists in the list
       const profiles = getChartProfiles();
@@ -1540,6 +2054,43 @@
         setTimeout(processBotQueue, 0);
       }
 
+      /** Duration matches `.bot-message p.word-reveal` animation (+ small buffer for queue). */
+      const BOT_PARAGRAPH_REVEAL_MS = 1750;
+
+      /**
+       * Scroll #chat-messages so the user bubble sits at the top of the visible area.
+       * Synchronous (no rAF) so the viewport is correct before the next paint — required so
+       * the assistant paragraph reveal animation is fully visible from the first frame.
+       */
+      function scrollUserPromptToTopImmediate(userBubbleEl) {
+        if (!chatMessages || !userBubbleEl) return;
+        void chatMessages.offsetHeight;
+        const padTop = parseFloat(getComputedStyle(chatMessages).paddingTop) || 0;
+        const relTop =
+          userBubbleEl.getBoundingClientRect().top -
+          chatMessages.getBoundingClientRect().top +
+          chatMessages.scrollTop;
+        const want = Math.max(0, relTop - padTop);
+        let maxScroll = Math.max(
+          0,
+          chatMessages.scrollHeight - chatMessages.clientHeight,
+        );
+        if (want > maxScroll) {
+          chatMessages.style.paddingBottom = want - maxScroll + 32 + "px";
+          void chatMessages.offsetHeight;
+          maxScroll = Math.max(
+            0,
+            chatMessages.scrollHeight - chatMessages.clientHeight,
+          );
+        }
+        chatMessages.scrollTop = Math.min(want, maxScroll);
+      }
+
+      function getLastUserBubble() {
+        const list = chatMessages.querySelectorAll(".user-message");
+        return list.length ? list[list.length - 1] : null;
+      }
+
       function addMessage(message, isUser = false, fromQueue = false) {
         return new Promise((resolve) => {
           const messageDiv = document.createElement("div");
@@ -1549,54 +2100,27 @@
             console.log("[MESSAGE] Adding user message:", message);
             messageDiv.textContent = message;
             chatMessages.appendChild(messageDiv);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
+            scrollUserPromptToTopImmediate(messageDiv);
             resolve();
           } else {
-            // For bot messages, use typewriter effect only if from queue
             hideSpinner();
             messageDiv.classList.add("typing");
             chatMessages.appendChild(messageDiv);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-            if (fromQueue) {
-              console.log(
-                "[TYPEWRITER] Starting typewriter for bot message:",
-                message,
-              );
-              typeMessage(messageDiv, message, 30, () => {
-                console.log(
-                  "[TYPEWRITER] Finished typing bot message:",
-                  message,
-                );
-                resolve();
-              });
-            } else {
-              // If not from queue, type instantly (for compatibility)
-              messageDiv.textContent = message;
-              messageDiv.classList.remove("typing");
+
+            const p = document.createElement("p");
+            p.className = "word-reveal";
+            p.textContent = message;
+            messageDiv.appendChild(p);
+            messageDiv.classList.remove("typing");
+
+            const ub = getLastUserBubble();
+            if (ub) scrollUserPromptToTopImmediate(ub);
+
+            setTimeout(() => {
               resolve();
-            }
+            }, BOT_PARAGRAPH_REVEAL_MS);
           }
         });
-      }
-
-      // Updated typeMessage to create a left-to-right sweeping fade-in animation
-      function typeMessage(element, message, speed = 30, done) {
-        // Set the full message content
-        element.textContent = message;
-
-        // Add the fade-in class
-        element.classList.add("fade-in");
-
-        // Trigger the animation after a small delay
-        setTimeout(() => {
-          element.classList.add("animate");
-        }, 50);
-
-        // Remove typing class and call done callback after animation
-        setTimeout(() => {
-          element.classList.remove("typing", "fade-in", "animate");
-          if (done) done();
-        }, 3000);
       }
 
       async function handleSendMessage() {
@@ -1606,6 +2130,7 @@
           chatMessages
             .querySelectorAll(".follow-up-suggestions")
             .forEach((el) => el.remove());
+          chatMessages.style.paddingBottom = "";
           await addMessage(message, true);
           messageInput.value = "";
 
@@ -1782,7 +2307,7 @@
                 birthChart: birthChartData,
                 conversationHistory,
               });
-              const response = await fetch("http://localhost:3000/api/chat", {
+              const response = await fetch("/api/chat", {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
@@ -1814,10 +2339,12 @@
 
               if (!response.ok) {
                 const errMsg =
-                  data.details ||
-                  data.error ||
-                  response.statusText ||
-                  "Unknown error";
+                  response.status === 405
+                    ? errorMessageForApiFailure(response, data)
+                    : data.details ||
+                      data.error ||
+                      response.statusText ||
+                      "Unknown error";
                 const stageHint =
                   data.stage != null ? ` [Stage: ${data.stage}]` : "";
                 const stackPreview =
@@ -1825,16 +2352,21 @@
                     ? "\n\nStack:\n" + data.stackPreview.join("\n")
                     : "";
                 const debugHint = data._debug ? ` (${data._debug})` : "";
-                console.log("[API] 500 full payload:", data);
+                console.log("[API] error payload:", data);
+                const errPrefix =
+                  response.status === 405 ? "Setup" : "Server error";
                 await queueBotMessage(
-                  "Server error (" +
+                  errPrefix +
+                    " (" +
                     response.status +
                     "): " +
                     errMsg +
-                    stageHint +
-                    debugHint +
-                    stackPreview +
-                    " — Check backend/.env and server terminal for details.",
+                    (response.status === 405
+                      ? ""
+                      : stageHint +
+                        debugHint +
+                        stackPreview +
+                        " — Check backend/.env and server terminal for details."),
                 );
                 hideSpinner();
                 return;
@@ -1912,7 +2444,8 @@
           wrap.appendChild(chip);
         });
         chatMessages.appendChild(wrap);
-        chatMessages.scrollTop = chatMessages.scrollHeight;
+        const ub = getLastUserBubble();
+        if (ub) scrollUserPromptToTopImmediate(ub);
       }
 
       // Add a function to clear conversation history for the active profile only
@@ -1926,27 +2459,394 @@
         );
       }
 
-      // Add a function to test the backend connection and show status in UI
-      function testBackendConnection() {
-        const banner = document.getElementById("connection-banner");
-        if (!banner) return;
-        fetch("http://localhost:3000/api/test")
-          .then((response) => response.json())
-          .then((data) => {
-            console.log("Backend test response:", data);
-            banner.className = "connection-banner connection-ok";
-            banner.textContent = "Server connected";
-          })
-          .catch((error) => {
-            console.error("Backend connection test failed:", error);
-            banner.className = "connection-banner connection-refused";
-            banner.innerHTML =
-              "Connection refused. Start the server: open a terminal in the project folder and run <strong>npm start</strong>, then refresh this page.";
+      // Mobile: Chat / Chart tabs (narrow viewports only)
+      (function initMobileViewTabs() {
+        const main = document.getElementById("main-container");
+        const nav = document.getElementById("mobile-nav-tabs");
+        if (!main || !nav) return;
+        const mq = window.matchMedia("(max-width: 767px)");
+        function onViewportChange() {
+          if (!mq.matches) main.classList.remove("mobile-show-chart");
+          // Crossing the breakpoint changes isChartWheelMobileLayout(); re-render so the
+          // wheel uses CHART_WHEEL_PROFILE_DESKTOP vs MOBILE (SVG is not auto-updated).
+          const p = getActiveProfile();
+          if (p && p.birthChartData) {
+            requestAnimationFrame(function () {
+              renderChartWheel(p.birthChartData);
+            });
+          }
+        }
+        if (mq.addEventListener) mq.addEventListener("change", onViewportChange);
+        else mq.addListener(onViewportChange);
+        nav.querySelectorAll(".mobile-nav-tab").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            if (!mq.matches) return;
+            const panel = btn.getAttribute("data-panel");
+            const showChart = panel === "chart";
+            main.classList.toggle("mobile-show-chart", showChart);
+            nav.querySelectorAll(".mobile-nav-tab").forEach(function (b) {
+              b.classList.toggle(
+                "active",
+                b.getAttribute("data-panel") === panel,
+              );
+            });
+            if (showChart) {
+              requestAnimationFrame(function () {
+                const p = getActiveProfile();
+                if (p && p.birthChartData) renderChartWheel(p.birthChartData);
+              });
+            }
           });
-      }
+        });
+      })();
 
-      // Test backend connection when page loads
-      testBackendConnection();
+      /** Desktop: planet table always visible; mobile: <details> starts collapsed. */
+      (function syncChartTableDetailsForViewport() {
+        const details = document.getElementById("chart-table-details");
+        if (!details) return;
+        function sync() {
+          if (window.matchMedia("(min-width: 768px)").matches) {
+            details.setAttribute("open", "");
+          } else {
+            details.removeAttribute("open");
+          }
+        }
+        sync();
+        const mq = window.matchMedia("(min-width: 768px)");
+        if (mq.addEventListener) mq.addEventListener("change", sync);
+        else mq.addListener(sync);
+      })();
+
+      /** Re-render wheel when viewport size changes so mobile width (vw) math stays correct. */
+      (function initMobileChartWheelResize() {
+        let resizeTimer;
+        function refreshIfChartTab() {
+          const main = document.getElementById("main-container");
+          if (!main || !main.classList.contains("mobile-show-chart")) return;
+          if (!isChartWheelMobileLayout()) return;
+          const p = getActiveProfile();
+          if (p && p.birthChartData) renderChartWheel(p.birthChartData);
+        }
+        window.addEventListener("resize", function () {
+          clearTimeout(resizeTimer);
+          resizeTimer = setTimeout(refreshIfChartTab, 200);
+        });
+        window.addEventListener("orientationchange", function () {
+          setTimeout(refreshIfChartTab, 250);
+        });
+      })();
+
+      /**
+       * Mobile Chart tab only: long-press on the wheel opens a magnifier; drag to hover
+       * targets, release to trigger the same action as a click (planets, aspects, etc.).
+       */
+      (function initChartWheelLoupe() {
+        const LOUPE_MS = 420;
+        const MOVE_MAX = 14;
+        const MAG = 2.65;
+        const LOUPE_PX = 73.5;
+        const R = LOUPE_PX / 2;
+        /** Vertical offset: probe (loupe center) sits this many px above the finger — smaller = closer to touch point. */
+        const OFFSET_Y = 40;
+
+        let timer = null;
+        let loupeActive = false;
+        let tracking = false;
+        let startX = 0;
+        let startY = 0;
+        let lastCX = 0;
+        let lastCY = 0;
+        let lastHoverTarget = null;
+        let loupeEl = null;
+        let innerLoupe = null;
+        let loupeRafId = null;
+        let pendingLoupeTouch = null;
+
+        const chartWheel = document.getElementById("chart-wheel-container");
+        if (!chartWheel) return;
+
+        /**
+         * Map elementFromPoint hit to the node D3 actually listens on (groups for planets/signs;
+         * lines for aspects/house cusps — aspect g is empty of geometry).
+         */
+        function resolveLoupeHoverTarget(rawEl, svgRoot) {
+          if (!rawEl || !svgRoot || !svgRoot.contains(rawEl)) return null;
+          if (rawEl.closest(".chart-wheel-loupe")) return null;
+          if (rawEl.closest(".chart-tooltip")) return null;
+          if (rawEl.classList && rawEl.classList.contains("aspect-hit-overlay"))
+            return rawEl;
+          if (rawEl.closest("g.aspect-group")) return rawEl;
+          const g = rawEl.closest(
+            "g.planet-group, g.house-group, g.sign-group, g.ac-group, g.mc-group, g.dc-group, g.ic-group",
+          );
+          if (g) return g;
+          return rawEl;
+        }
+
+        function dispatchLoupeEnter(el, probeX, probeY) {
+          const me = {
+            bubbles: false,
+            cancelable: true,
+            clientX: probeX,
+            clientY: probeY,
+            view: window,
+          };
+          el.dispatchEvent(new MouseEvent("mouseenter", me));
+          el.dispatchEvent(
+            new MouseEvent("mouseover", {
+              bubbles: true,
+              cancelable: true,
+              clientX: probeX,
+              clientY: probeY,
+              view: window,
+            }),
+          );
+        }
+
+        function dispatchLoupeLeave(el, probeX, probeY) {
+          const me = {
+            bubbles: false,
+            cancelable: true,
+            clientX: probeX,
+            clientY: probeY,
+            view: window,
+          };
+          el.dispatchEvent(new MouseEvent("mouseleave", me));
+          el.dispatchEvent(
+            new MouseEvent("mouseout", {
+              bubbles: true,
+              cancelable: true,
+              clientX: probeX,
+              clientY: probeY,
+              view: window,
+            }),
+          );
+        }
+
+        function isMobileChartTab() {
+          const main = document.getElementById("main-container");
+          return (
+            !!main &&
+            main.classList.contains("mobile-show-chart") &&
+            typeof window.matchMedia === "function" &&
+            window.matchMedia("(max-width: 767px)").matches
+          );
+        }
+
+        function ensureLoupe() {
+          if (loupeEl) return;
+          loupeEl = document.createElement("div");
+          loupeEl.id = "chart-wheel-loupe";
+          loupeEl.className = "chart-wheel-loupe";
+          loupeEl.setAttribute("aria-hidden", "true");
+          innerLoupe = document.createElement("div");
+          innerLoupe.className = "chart-wheel-loupe-inner";
+          loupeEl.appendChild(innerLoupe);
+          document.body.appendChild(loupeEl);
+        }
+
+        function probeFromTouch(touch) {
+          const probeX = touch.clientX;
+          const probeY = touch.clientY - OFFSET_Y;
+          return { probeX, probeY, loupeLeft: probeX - R, loupeTop: probeY - R };
+        }
+
+        /**
+         * 1) Update hover on the live chart (D3 mutates stroke/fill on the real SVG).
+         * 2) Clone that live DOM into the loupe so highlights appear inside the magnifier.
+         * 3) Pan/zoom the clone so the probe point stays centered under magnification.
+         */
+        function updateLoupe(container, touch) {
+          if (!loupeEl || !innerLoupe || !touch) return;
+          const svgEl = container.querySelector("svg");
+          if (!svgEl) return;
+          const { probeX, probeY, loupeLeft, loupeTop } = probeFromTouch(touch);
+          const maxL = Math.max(8, window.innerWidth - LOUPE_PX - 8);
+          const maxT = Math.max(8, window.innerHeight - LOUPE_PX - 8);
+          loupeEl.style.left = `${Math.min(Math.max(8, loupeLeft), maxL)}px`;
+          loupeEl.style.top = `${Math.min(Math.max(8, loupeTop), maxT)}px`;
+
+          const svgRoot = svgEl;
+          const rawEl = document.elementFromPoint(probeX, probeY);
+          const hoverTarget = resolveLoupeHoverTarget(rawEl, svgRoot);
+          if (hoverTarget !== lastHoverTarget) {
+            if (lastHoverTarget && svgRoot.contains(lastHoverTarget)) {
+              dispatchLoupeLeave(lastHoverTarget, probeX, probeY);
+            }
+            if (hoverTarget) {
+              dispatchLoupeEnter(hoverTarget, probeX, probeY);
+            }
+            lastHoverTarget = hoverTarget;
+          }
+
+          const bbox = svgEl.getBoundingClientRect();
+          const px = probeX - bbox.left;
+          const py = probeY - bbox.top;
+          const fresh = svgEl.cloneNode(true);
+          fresh.removeAttribute("id");
+          innerLoupe.innerHTML = "";
+          innerLoupe.appendChild(fresh);
+          fresh.style.width = `${bbox.width}px`;
+          fresh.style.height = `${bbox.height}px`;
+          fresh.style.transform = `translate(${R - px * MAG}px, ${R - py * MAG}px) scale(${MAG})`;
+          fresh.style.transformOrigin = "0 0";
+        }
+
+        function scheduleLoupeUpdate(container, touch) {
+          pendingLoupeTouch = {
+            clientX: touch.clientX,
+            clientY: touch.clientY,
+          };
+          if (loupeRafId != null) return;
+          loupeRafId = requestAnimationFrame(function () {
+            loupeRafId = null;
+            if (!loupeActive || !pendingLoupeTouch) return;
+            updateLoupe(container, pendingLoupeTouch);
+            pendingLoupeTouch = null;
+          });
+        }
+
+        function openLoupe(container, touch) {
+          const svgEl = container.querySelector("svg");
+          if (!svgEl) return;
+          ensureLoupe();
+          loupeEl.classList.add("chart-wheel-loupe-visible");
+          document.body.classList.add("chart-wheel-loupe-mode");
+          chartWheel.classList.add("chart-wheel-loupe-active");
+          updateLoupe(container, touch);
+        }
+
+        function closeLoupe() {
+          if (loupeRafId != null) {
+            cancelAnimationFrame(loupeRafId);
+            loupeRafId = null;
+          }
+          pendingLoupeTouch = null;
+          if (loupeEl) {
+            loupeEl.classList.remove("chart-wheel-loupe-visible");
+            innerLoupe.innerHTML = "";
+          }
+          document.body.classList.remove("chart-wheel-loupe-mode");
+          chartWheel.classList.remove("chart-wheel-loupe-active");
+          const svgRoot = chartWheel.querySelector("svg");
+          if (lastHoverTarget && svgRoot && svgRoot.contains(lastHoverTarget)) {
+            dispatchLoupeLeave(lastHoverTarget, lastCX, lastCY - OFFSET_Y);
+          }
+          lastHoverTarget = null;
+          loupeActive = false;
+        }
+
+        function finalizeSelection(container, touch) {
+          const svgRoot = container.querySelector("svg");
+          if (!svgRoot || !touch) return;
+          const { probeX, probeY } = probeFromTouch(touch);
+          if (lastHoverTarget && svgRoot.contains(lastHoverTarget)) {
+            dispatchLoupeLeave(lastHoverTarget, probeX, probeY);
+          }
+          lastHoverTarget = null;
+          const rawEl = document.elementFromPoint(probeX, probeY);
+          const clickTarget = resolveLoupeHoverTarget(rawEl, svgRoot);
+          if (clickTarget) {
+            clickTarget.dispatchEvent(
+              new MouseEvent("click", {
+                bubbles: true,
+                cancelable: true,
+                clientX: probeX,
+                clientY: probeY,
+                view: window,
+              }),
+            );
+          }
+        }
+
+        chartWheel.addEventListener(
+          "touchstart",
+          function (e) {
+            if (!isMobileChartTab()) return;
+            if (!e.touches || e.touches.length !== 1) return;
+            const t = e.touches[0];
+            const svg = chartWheel.querySelector("svg");
+            if (!svg) return;
+            if (!svg.contains(e.target)) return;
+
+            tracking = true;
+            startX = t.clientX;
+            startY = t.clientY;
+            lastCX = startX;
+            lastCY = startY;
+            timer = setTimeout(function () {
+              timer = null;
+              if (!tracking || !isMobileChartTab()) return;
+              const svgNow = chartWheel.querySelector("svg");
+              if (!svgNow) return;
+              const probeX = lastCX;
+              const probeY = lastCY - OFFSET_Y;
+              const elAt = document.elementFromPoint(probeX, probeY);
+              if (!elAt || !svgNow.contains(elAt)) return;
+              loupeActive = true;
+              openLoupe(chartWheel, {
+                clientX: lastCX,
+                clientY: lastCY,
+              });
+            }, LOUPE_MS);
+          },
+          { passive: true },
+        );
+
+        document.addEventListener(
+          "touchmove",
+          function (e) {
+            if (!tracking) return;
+            const t = e.touches[0];
+            if (!t) return;
+            lastCX = t.clientX;
+            lastCY = t.clientY;
+            if (timer && !loupeActive) {
+              const dx = t.clientX - startX;
+              const dy = t.clientY - startY;
+              if (dx * dx + dy * dy > MOVE_MAX * MOVE_MAX) {
+                clearTimeout(timer);
+                timer = null;
+              }
+            }
+            if (loupeActive && isMobileChartTab()) {
+              e.preventDefault();
+              scheduleLoupeUpdate(chartWheel, t);
+            }
+          },
+          { passive: false, capture: true },
+        );
+
+        document.addEventListener(
+          "touchend",
+          function (e) {
+            if (!tracking) return;
+            tracking = false;
+            clearTimeout(timer);
+            timer = null;
+            const t = e.changedTouches && e.changedTouches[0];
+            const hadLoupe = loupeActive;
+            if (hadLoupe && t && isMobileChartTab()) {
+              e.preventDefault();
+              finalizeSelection(chartWheel, t);
+            }
+            closeLoupe();
+          },
+          { capture: true },
+        );
+
+        document.addEventListener(
+          "touchcancel",
+          function () {
+            if (!tracking && !loupeActive) return;
+            tracking = false;
+            clearTimeout(timer);
+            timer = null;
+            closeLoupe();
+          },
+          { capture: true },
+        );
+      })();
 
       // Profile dropdown toggle
       document
@@ -2108,18 +3008,16 @@
             timezone: timezone,
           };
           try {
-            const response = await fetch(
-              "http://localhost:3000/api/birth-chart",
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(requestData),
-              },
-            );
+            const response = await fetch("/api/birth-chart", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(requestData),
+            });
             if (!response.ok) {
               const err = await response.json().catch(() => ({}));
               throw new Error(
-                err.details || err.error || "Failed to calculate birth chart",
+                errorMessageForApiFailure(response, err) ||
+                  "Failed to calculate birth chart",
               );
             }
             const birthChartData = await response.json();
@@ -2299,6 +3197,10 @@
       /**
        * Render birth chart wheel with counter-clockwise progression (mirrored/reverse clock)
        *
+       * Desktop vs mobile: two fixed layouts (see CHART_WHEEL_PROFILE_DESKTOP and
+       * CHART_WHEEL_PROFILE_MOBILE). Uses isChartWheelMobileLayout() so the wheel matches
+       * the same layout as the UI (mobile Chat/Chart tabs vs sidebar), not viewport alone.
+       *
        * COORDINATE SYSTEM:
        * - Top-down view: Ascendant at 9 o'clock (left) = 180° in standard polar coordinates
        * - All elements progress COUNTER-CLOCKWISE from Ascendant
@@ -2345,13 +3247,31 @@
           tooltipEl.className = "chart-tooltip";
           container.appendChild(tooltipEl);
 
-          const width = 700;
-          const height = 700;
+          let rawW =
+            container.clientWidth ||
+            container.getBoundingClientRect().width ||
+            360;
+          const isMobileChart = isChartWheelMobileLayout();
+          if (isMobileChart) {
+            const vw = Math.floor(
+              window.innerWidth ||
+                document.documentElement.clientWidth ||
+                rawW,
+            );
+            // Use viewport width so the wheel fills the phone even when #chart-wheel-container width is 0 or stale.
+            rawW = Math.max(240, vw - 8);
+          }
+          const wheelProfile = isMobileChart
+            ? CHART_WHEEL_PROFILE_MOBILE
+            : CHART_WHEEL_PROFILE_DESKTOP;
+          const width = wheelProfile.width(rawW);
+          const height = width;
           // Zodiac surrounds houses: total radius, then house wheel, notch band, zodiac ring
-          const totalRadius = (Math.min(width, height) / 2 - 20) * 0.93;
-          const innerRadius = totalRadius * 0.125; // center circle ~50% smaller than before (was 0.25)
-          const zodiacBandHeight = 40;
-          const notchBandHeight = 12;
+          const totalRadius =
+            (Math.min(width, height) / 2 - wheelProfile.radiusInset) * 0.93;
+          const innerRadius = totalRadius * wheelProfile.innerFrac;
+          const zodiacBandHeight = wheelProfile.zodiacBand;
+          const notchBandHeight = wheelProfile.notchBand;
           const houseOuterRadius =
             totalRadius - zodiacBandHeight - notchBandHeight;
           const notchInnerRadius = houseOuterRadius;
@@ -2438,7 +3358,7 @@
           // House wheel shading using two solid bands split at the aspect-line radius:
           // - Outer band (aspectLineRadius → houseOuterRadius): lighter gray
           // - Inner band (innerRadius → aspectLineRadius): darker gray
-          const aspectBandRadius = houseOuterRadius * 0.65;
+          const aspectBandRadius = houseOuterRadius * wheelProfile.aspectRingFrac;
 
           // Outer house band
           svg
@@ -2476,7 +3396,9 @@
             .attr("stroke", "none");
 
           // Degree notches – pronounced: every degree visible, every 5° longer, every 10° / sign start longest
+          // Mobile: only every 5° (plus sign boundaries) to reduce visual noise
           for (let deg = 0; deg < 360; deg++) {
+            if (wheelProfile.degreeSkipEvery5 && deg % 5 !== 0) continue;
             const displayDeg = chartToDisplayDegree(deg);
             const isSignStart = deg % 30 === 0;
             const isTen = deg % 10 === 0;
@@ -2582,7 +3504,7 @@
                 .attr("x2", pos.x)
                 .attr("y2", pos.y)
                 .attr("stroke", "transparent")
-                .attr("stroke-width", 25) // Broad invisible hit area
+                .attr("stroke-width", wheelProfile.houseHit)
                 .attr("opacity", 0)
                 .style("cursor", "pointer")
                 .on("mouseenter", function () {
@@ -2649,7 +3571,7 @@
                 .append("circle")
                 .attr("cx", labelPos.x)
                 .attr("cy", labelPos.y)
-                .attr("r", 25)
+                .attr("r", wheelProfile.houseLabelHitR)
                 .attr("fill", "transparent")
                 .attr("opacity", 0);
 
@@ -2660,7 +3582,7 @@
                 .attr("text-anchor", "middle")
                 .attr("dominant-baseline", "middle")
                 .attr("fill", "#e2e8f0")
-                .attr("font-size", "11px")
+                .attr("font-size", `${wheelProfile.houseNum}px`)
                 .attr("font-weight", "200")
                 .text(house.number);
 
@@ -2668,7 +3590,7 @@
               houseGroup
                 .on("mouseenter", function () {
                   houseText
-                    .attr("font-size", "15px")
+                    .attr("font-size", `${wheelProfile.houseNum + 4}px`)
                     .attr("fill", "#10b981")
                     .attr("font-weight", "200");
                   houseLine
@@ -2678,7 +3600,7 @@
                 })
                 .on("mouseleave", function () {
                   houseText
-                    .attr("font-size", "11px")
+                    .attr("font-size", `${wheelProfile.houseNum}px`)
                     .attr("fill", "#e2e8f0")
                     .attr("font-weight", "200");
                   houseLine
@@ -2698,7 +3620,7 @@
           // Planet ticks inside houses: from zodiac inner edge inward (extend 2/3 toward planet ring)
           const tickMid =
             (houseOuterRadius - 1 + (houseOuterRadius * 1.1 + 10)) / 2 + 14;
-          const tickInward = houseOuterRadius * 0.85 + 10;
+          const tickInward = houseOuterRadius * wheelProfile.planetRingFrac + 10;
           const planetTickInnerRadius =
             tickMid * (1 / 3) + tickInward * (2 / 3);
           if (birthChart.planets && typeof birthChart.planets === "object") {
@@ -2802,7 +3724,7 @@
               .append("circle")
               .attr("cx", pos.x)
               .attr("cy", pos.y)
-              .attr("r", 20)
+              .attr("r", wheelProfile.zodiacHit)
               .attr("fill", "transparent")
               .attr("opacity", 0);
             const char = zodiacChars[i];
@@ -2814,7 +3736,7 @@
               .attr("text-anchor", "middle")
               .attr("dominant-baseline", "middle")
               .attr("fill", "#e2e8f0")
-              .attr("font-size", "28px")
+              .attr("font-size", `${wheelProfile.zodiacGlyph}px`)
               .attr("font-weight", "normal")
               .attr("font-family", symbolFont)
               .attr("style", "font-variant-emoji: none;")
@@ -2822,7 +3744,9 @@
             let signTooltipTimeout;
             signGroup
               .on("mouseenter", function (event) {
-                textEl.attr("fill", hoverColor).attr("font-size", "32px");
+                textEl
+                  .attr("fill", hoverColor)
+                  .attr("font-size", `${wheelProfile.zodiacGlyphHover}px`);
                 const name = signFullNames[i];
                 const text = signTooltipText[name];
                 if (!text) return;
@@ -2835,10 +3759,12 @@
                   tooltipEl.style.left = `${pageX - left + 12}px`;
                   tooltipEl.style.top = `${pageY - top + 12}px`;
                   tooltipEl.style.opacity = "1";
-                }, 2000);
+                }, wheelProfile.tooltipDelayMs);
               })
               .on("mouseleave", function () {
-                textEl.attr("fill", "#e2e8f0").attr("font-size", "28px");
+                textEl
+                  .attr("fill", "#e2e8f0")
+                  .attr("font-size", `${wheelProfile.zodiacGlyph}px`);
                 if (signTooltipTimeout) clearTimeout(signTooltipTimeout);
                 tooltipEl.style.opacity = "0";
               })
@@ -2850,6 +3776,7 @@
           // Shared planet glyph color and registry so aspects can bump planets on hover
           const planetGlyphColor = "#e2e8f0";
           const planetGroupsByName = {};
+          const deferredAspectHitAppends = [];
 
           // Draw aspect lines FIRST (so they appear behind planets)
           if (birthChart.aspects && Array.isArray(birthChart.aspects)) {
@@ -2882,13 +3809,13 @@
               pluto: "#8B008B",
             };
 
-            // Aspect lines inward of planets so they don't obscure glyphs (planets at 0.85)
-            const aspectLineRadius = houseOuterRadius * 0.65;
+            // Aspect lines inward of planets so they don't obscure glyphs
+            const aspectLineRadius = houseOuterRadius * wheelProfile.aspectRingFrac;
             /** Wider invisible hit zone; round caps help near crossings */
-            const ASPECT_HIT_STROKE_BASE = 44;
-            const ASPECT_HIT_STROKE_HOVER = 62;
+            const ASPECT_HIT_STROKE_BASE = wheelProfile.aspectHit;
+            const ASPECT_HIT_STROKE_HOVER = wheelProfile.aspectHitHi;
 
-            // Build list first, then sort so SHORTER chords draw LAST (higher z-order) — easier to grab at tight crossings
+            // Build list, sort by chord length (short segments drawn first in DOM; overlay hit lines are appended later in reverse so shorter aspects stack on top for picking)
             const aspectDrawList = [];
             birthChart.aspects.forEach((aspect) => {
               if (
@@ -2953,45 +3880,26 @@
               const midX = (pos1.x + pos2.x) / 2;
               const midY = (pos1.y + pos2.y) / 2;
 
-              // Create aspect group for better organization and interactivity
+              // Create aspect group for better organization and interactivity (children must live in this g for mobile loupe hit-testing)
               const aspectGroup = svg
                 .append("g")
                 .attr("class", "aspect-group")
                 .style("cursor", "pointer");
 
-              // Invisible hit area: wide + round caps so crossings and line ends are easier to grab
-              const hitArea = svg
-                .append("line")
-                .attr("x1", pos1.x)
-                .attr("y1", pos1.y)
-                .attr("x2", pos2.x)
-                .attr("y2", pos2.y)
-                .attr("stroke", "transparent")
-                .attr("stroke-width", ASPECT_HIT_STROKE_BASE)
-                .attr("stroke-linecap", "round")
-                .attr("opacity", 0)
-                .style("cursor", "pointer")
-                .style("pointer-events", "stroke");
-              hitArea
-                .append("title")
-                .text(
-                  `${aspect.planet1} ${aspect.aspect} ${aspect.planet2} — click to ask about this aspect`,
-                );
-
               // Draw aspect line (behind planets) - append directly since aspects are drawn before planets
-              const aspectLine = svg
+              const aspectLine = aspectGroup
                 .append("line")
                 .attr("x1", pos1.x)
                 .attr("y1", pos1.y)
                 .attr("x2", pos2.x)
                 .attr("y2", pos2.y)
                 .attr("stroke", color)
-                .attr("stroke-width", 2.5)
-                .attr("opacity", 0.6)
+                .attr("stroke-width", wheelProfile.aspectStroke)
+                .attr("opacity", wheelProfile.aspectLineOpacity)
                 .style("cursor", "pointer");
 
               // Ticks at each end: default to base aspect color; turn green on hover
-              const aspectTickLen = 8;
+              const aspectTickLen = wheelProfile.aspectTickLen;
               const tick1Inner = getPosition(
                 displayDeg1,
                 aspectLineRadius - aspectTickLen / 2,
@@ -3008,24 +3916,29 @@
                 displayDeg2,
                 aspectLineRadius + aspectTickLen / 2,
               );
-              const tick1 = svg
+              const tick1 = aspectGroup
                 .append("line")
                 .attr("x1", tick1Inner.x)
                 .attr("y1", tick1Inner.y)
                 .attr("x2", tick1Outer.x)
                 .attr("y2", tick1Outer.y)
                 .attr("stroke", color)
-                .attr("stroke-width", 2.5)
-                .attr("opacity", 0.6);
-              const tick2 = svg
+                .attr("stroke-width", wheelProfile.aspectStroke)
+                .attr("opacity", wheelProfile.aspectLineOpacity)
+                .style("pointer-events", "none");
+              const tick2 = aspectGroup
                 .append("line")
                 .attr("x1", tick2Inner.x)
                 .attr("y1", tick2Inner.y)
                 .attr("x2", tick2Outer.x)
                 .attr("y2", tick2Outer.y)
                 .attr("stroke", color)
-                .attr("stroke-width", 2.5)
-                .attr("opacity", 0.6);
+                .attr("stroke-width", wheelProfile.aspectStroke)
+                .attr("opacity", wheelProfile.aspectLineOpacity)
+                .style("pointer-events", "none");
+
+              /** Top-layer hit line (assigned when overlay runs after planets) */
+              let hitArea;
 
               // Helper to bump a planet glyph (used from planet hover and aspect hover)
               function bumpPlanet(planetKey, active) {
@@ -3033,9 +3946,13 @@
                 if (!entry) return;
                 const sym = entry.symbol;
                 if (active) {
-                  sym.attr("font-size", "28px").attr("fill", "#10b981");
+                  sym
+                    .attr("font-size", `${wheelProfile.planetGlyphHi}px`)
+                    .attr("fill", "#10b981");
                 } else {
-                  sym.attr("font-size", "24px").attr("fill", planetGlyphColor);
+                  sym
+                    .attr("font-size", `${wheelProfile.planetGlyph}px`)
+                    .attr("fill", planetGlyphColor);
                 }
               }
 
@@ -3061,72 +3978,61 @@
               }
               function handleAspectLeave() {
                 aspectLine
-                  .attr("stroke-width", 2.5)
-                  .attr("opacity", 0.6)
+                  .attr("stroke-width", wheelProfile.aspectStroke)
+                  .attr("opacity", wheelProfile.aspectLineOpacity)
                   .attr("stroke", color)
                   .transition()
                   .duration(200);
                 tick1
                   .attr("stroke", color)
-                  .attr("stroke-width", 2.5)
-                  .attr("opacity", 0.6);
+                  .attr("stroke-width", wheelProfile.aspectStroke)
+                  .attr("opacity", wheelProfile.aspectLineOpacity);
                 tick2
                   .attr("stroke", color)
-                  .attr("stroke-width", 2.5)
-                  .attr("opacity", 0.6);
+                  .attr("stroke-width", wheelProfile.aspectStroke)
+                  .attr("opacity", wheelProfile.aspectLineOpacity);
                 hitArea.attr("stroke-width", ASPECT_HIT_STROKE_BASE);
                 bumpPlanet(aspect.planet1, false);
                 bumpPlanet(aspect.planet2, false);
               }
 
-              // Hover and click handlers for aspect group
-              aspectGroup
-                .on("mouseenter", handleAspectEnter)
-                .on("mouseleave", handleAspectLeave)
-                .on("click", function () {
-                  const planet1Name =
-                    aspect.planet1.charAt(0).toUpperCase() +
-                    aspect.planet1.slice(1);
-                  const planet2Name =
-                    aspect.planet2.charAt(0).toUpperCase() +
-                    aspect.planet2.slice(1);
-                  const aspectName = aspect.aspect.toLowerCase();
-                  queryChartElement(
-                    `${planet1Name} ${aspectName} ${planet2Name}`,
-                  );
-                });
+              function aspectClickQuery() {
+                const planet1Name =
+                  aspect.planet1.charAt(0).toUpperCase() +
+                  aspect.planet1.slice(1);
+                const planet2Name =
+                  aspect.planet2.charAt(0).toUpperCase() +
+                  aspect.planet2.slice(1);
+                const aspectName = aspect.aspect.toLowerCase();
+                queryChartElement(
+                  `${planet1Name} ${aspectName} ${planet2Name}`,
+                );
+              }
 
-              // Also make hit area and the visible line interactive
-              hitArea
-                .on("mouseenter", handleAspectEnter)
-                .on("mouseleave", handleAspectLeave)
-                .on("click", function () {
-                  const planet1Name =
-                    aspect.planet1.charAt(0).toUpperCase() +
-                    aspect.planet1.slice(1);
-                  const planet2Name =
-                    aspect.planet2.charAt(0).toUpperCase() +
-                    aspect.planet2.slice(1);
-                  const aspectName = aspect.aspect.toLowerCase();
-                  queryChartElement(
-                    `${planet1Name} ${aspectName} ${planet2Name}`,
+              deferredAspectHitAppends.push(function (overlayG) {
+                hitArea = overlayG
+                  .append("line")
+                  .attr("class", "aspect-hit-overlay")
+                  .attr("x1", pos1.x)
+                  .attr("y1", pos1.y)
+                  .attr("x2", pos2.x)
+                  .attr("y2", pos2.y)
+                  .attr("stroke", "transparent")
+                  .attr("stroke-width", ASPECT_HIT_STROKE_BASE)
+                  .attr("stroke-linecap", "round")
+                  .attr("opacity", 0)
+                  .style("cursor", "pointer")
+                  .style("pointer-events", "stroke");
+                hitArea
+                  .append("title")
+                  .text(
+                    `${aspect.planet1} ${aspect.aspect} ${aspect.planet2} — click to ask about this aspect`,
                   );
-                });
-              aspectLine
-                .on("mouseenter", handleAspectEnter)
-                .on("mouseleave", handleAspectLeave)
-                .on("click", function () {
-                  const planet1Name =
-                    aspect.planet1.charAt(0).toUpperCase() +
-                    aspect.planet1.slice(1);
-                  const planet2Name =
-                    aspect.planet2.charAt(0).toUpperCase() +
-                    aspect.planet2.slice(1);
-                  const aspectName = aspect.aspect.toLowerCase();
-                  queryChartElement(
-                    `${planet1Name} ${aspectName} ${planet2Name}`,
-                  );
-                });
+                hitArea
+                  .on("mouseenter", handleAspectEnter)
+                  .on("mouseleave", handleAspectLeave)
+                  .on("click", aspectClickQuery);
+              });
             });
           }
 
@@ -3165,7 +4071,7 @@
                 .attr("x2", outerPos.x)
                 .attr("y2", outerPos.y)
                 .attr("stroke", "transparent")
-                .attr("stroke-width", 28)
+                .attr("stroke-width", wheelProfile.angleLineHit)
                 .attr("opacity", 0);
               const angleLineColor = "#cbd5e1";
               const visLine = g
@@ -3276,8 +4182,8 @@
             }
 
             // Angle labels outside the wheel (past zodiac ring); AC/DC further out with degree below
-            const angleLabelRadius = totalRadius + 24;
-            const angleLabelRadiusHorizon = totalRadius + 28;
+            const angleLabelRadius = totalRadius + wheelProfile.angleLabelPad;
+            const angleLabelRadiusHorizon = totalRadius + wheelProfile.angleLabelPadHorizon;
             // Format decimal degrees as: degree number, minutes of arc as superscript (′ = U+2032)
             function formatDegreeDM(deg) {
               if (deg == null || isNaN(deg)) return { main: "?", sup: "" };
@@ -3437,8 +4343,8 @@
 
           // Draw planets (positioned closer to outer edge to fill wheel)
           // Precompute positions with conjunction spread so overlapping planets don't stack
-          const CONJUNCTION_THRESHOLD_DEG = 10; // planets within this many degrees are "conjunct"
-          const CONJUNCTION_SPREAD_DEG = 8; // spread conjunct planets by this many degrees so they don't overlap
+          const CONJUNCTION_THRESHOLD_DEG = wheelProfile.conjThreshold;
+          const CONJUNCTION_SPREAD_DEG = wheelProfile.conjSpread;
           if (birthChart.planets && typeof birthChart.planets === "object") {
             const planetList = [];
             Object.entries(birthChart.planets).forEach(
@@ -3496,7 +4402,7 @@
               });
             });
 
-            const planetGlyphRadius = houseOuterRadius * 0.85;
+            const planetGlyphRadius = houseOuterRadius * wheelProfile.planetRingFrac;
             planetList.forEach(
               ({ planetName, planetData, displayDegree, angleOffset = 0 }) => {
                 const effectiveDegree = displayDegree + angleOffset;
@@ -3511,7 +4417,7 @@
                   .append("circle")
                   .attr("cx", pos.x)
                   .attr("cy", pos.y)
-                  .attr("r", 22)
+                  .attr("r", wheelProfile.planetHit)
                   .attr("fill", "transparent")
                   .attr("opacity", 0);
 
@@ -3522,7 +4428,7 @@
                   .attr("text-anchor", "middle")
                   .attr("dominant-baseline", "middle")
                   .attr("fill", planetGlyphColor)
-                  .attr("font-size", "24px")
+                  .attr("font-size", `${wheelProfile.planetGlyph}px`)
                   .attr("font-weight", "normal")
                   .attr("font-family", planetSymbolFont)
                   .attr("style", "font-variant-emoji: none;")
@@ -3536,7 +4442,7 @@
                 const degreeLabel = planetGroup
                   .append("text")
                   .attr("x", pos.x)
-                  .attr("y", pos.y + 18)
+                  .attr("y", pos.y + wheelProfile.planetDegLabelOffsetY)
                   .attr("text-anchor", "middle")
                   .attr("dominant-baseline", "middle")
                   .attr("fill", "#cbd5e1")
@@ -3580,7 +4486,7 @@
                 planetGroup
                   .on("mouseenter", function (event) {
                     planetSymbol
-                      .attr("font-size", "28px")
+                      .attr("font-size", `${wheelProfile.planetGlyphHi}px`)
                       .attr("fill", "#10b981")
                       .transition()
                       .duration(200);
@@ -3597,11 +4503,11 @@
                       tooltipEl.style.left = `${pageX - left + 12}px`;
                       tooltipEl.style.top = `${pageY - top + 12}px`;
                       tooltipEl.style.opacity = "1";
-                    }, 2000);
+                    }, wheelProfile.tooltipDelayMs);
                   })
                   .on("mouseleave", function () {
                     planetSymbol
-                      .attr("font-size", "24px")
+                      .attr("font-size", `${wheelProfile.planetGlyph}px`)
                       .attr("fill", planetGlyphColor)
                       .transition()
                       .duration(200);
@@ -3619,6 +4525,19 @@
                   });
               },
             );
+          }
+
+          if (deferredAspectHitAppends.length) {
+            const aspectHitOverlay = svg
+              .append("g")
+              .attr("class", "aspect-hit-overlay-layer")
+              .attr("pointer-events", "all");
+            deferredAspectHitAppends
+              .slice()
+              .reverse()
+              .forEach(function (fn) {
+                fn(aspectHitOverlay);
+              });
           }
 
           // Center remains empty - no label
@@ -3725,7 +4644,8 @@
         spinnerContainer.appendChild(spinner);
         spinnerContainer.appendChild(typingIndicator);
         chatMessages.appendChild(spinnerContainer);
-        chatMessages.scrollTop = chatMessages.scrollHeight;
+        const ub = getLastUserBubble();
+        if (ub) scrollUserPromptToTopImmediate(ub);
       }
 
       function hideSpinner() {

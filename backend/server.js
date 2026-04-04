@@ -66,9 +66,6 @@ app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
-// Serve static files from the frontend directory
-app.use(express.static(path.join(__dirname, "../frontend")));
-
 // Add request logging middleware
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
@@ -1690,6 +1687,9 @@ app.post("/api/test-general-question", (req, res) => {
   });
 });
 
+// Static frontend after all /api routes so API handlers always run first
+app.use(express.static(path.join(__dirname, "../frontend")));
+
 // Catch-all error handler so 500s are logged and returned safely
 app.use((err, req, res, next) => {
   console.error("\n*** 500 ERROR (global handler) ***", err.message);
@@ -1707,9 +1707,13 @@ app.use((err, req, res, next) => {
   }
 });
 
-// Start server
+// Listen on default host so both IPv4 (LAN, 127.0.0.1) and IPv6 (::1 “localhost”) hit this app.
+// (Binding only 0.0.0.0 can leave some PC browsers connecting to localhost via IPv6 without a listener.)
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
+  console.log(
+    `Same machine: try http://127.0.0.1:${port} if localhost misbehaves. Phone (same Wi‑Fi): http://<this-PC-LAN-IP>:${port}`,
+  );
   console.log("Available endpoints:");
   console.log("- POST /api/login");
   console.log("- POST /api/signup");
