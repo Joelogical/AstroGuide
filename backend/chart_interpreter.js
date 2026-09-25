@@ -23,6 +23,10 @@ const {
   rulerInfluenceTemplate,
   noAspectTemplates,
 } = require("./holistic_config");
+const {
+  buildChartArchitecture,
+  formatArchitectureForAI,
+} = require("./chart_architecture");
 
 /**
  * Process raw birth chart data and generate deterministic interpretations
@@ -211,6 +215,11 @@ function generateChartInterpretation(birthChart) {
   // Calculate key themes from the chart
   interpretation.keyThemes = extractKeyThemes(interpretation);
 
+  interpretation.architecture =
+    birthChart.architecture && birthChart.architecture.ok
+      ? birthChart.architecture
+      : buildChartArchitecture(birthChart);
+
   return interpretation;
 }
 
@@ -364,6 +373,11 @@ function formatInterpretationForAI(interpretation, birthChart) {
     template += `${index + 1}. ${instruction}\n`;
   });
   template += `\n`;
+
+  if (interpretation.architecture && interpretation.architecture.ok) {
+    template += `CHART ARCHITECTURE (computed skeleton — start the reading from this):\n`;
+    template += `${formatArchitectureForAI(interpretation.architecture)}\n\n`;
+  }
 
   template += `CHART INFORMATION:\n`;
   template += `Date: ${interpretation.chartInfo.date}\n`;

@@ -30,9 +30,12 @@ function getSystemRules() {
 
 function getAstrologyInterpreterRules() {
   return (
-    "WHOLE-CHART FIRST, THEN DETAILS: Before answering ANY question, silently scan the overall chart structure. " +
-    "Identify chart ruler, dominant planets, dominant elements, dominant modalities, angular house emphasis, hemisphere emphasis (e.g. more planets above/below the horizon or East/West), and any clear chart patterns (stelliums, bowl, bundle, splash, seesaw, etc.). " +
-    'Let this overall "personality architecture" frame everything you say. Never treat a single placement (e.g. Venus in Scorpio, Moon in 7th, a specific aspect) as if it exists in isolation—always relate it back to the bigger pattern you see in the chart.\n\n' +
+    "WHOLE-CHART FIRST, THEN DETAILS: A CHART ARCHITECTURE block is computed from this natal chart (ruler condition, dominant planets, house chains, dispositors, lunar phase, sect, shape, stelliums, aspect configurations, ASC/MC aspects, repeating themes). " +
+    "Treat that block as the skeleton of the person. Do not rediscover the structure from scratch. " +
+    "If the user asks to be told about themselves or who they are, that is a portrait: the whole person as one idea, in ordinary speech—not an aspect list. " +
+    "If they ask about the chart itself (interpret my chart, tell me about my chart, what stands out), talk through the architecture and the named placements, aspects, and patterns. " +
+    "Individual placements and clicked aspects refine that skeleton; they do not replace it. " +
+    "Never treat a single placement (e.g. Venus in Scorpio, Moon in 7th, a specific aspect) as if it exists in isolation—always relate it back to the architecture.\n\n" +
     "ANCHOR EVERY ANSWER IN THE NATAL CHART: Even when the user asks a specific question, anchor your answer in the natal chart’s core structure so it stays consistent and coherent. " +
     "Make sure what you say aligns with: (1) the chart ruler’s condition, (2) the dominant planets you ranked, (3) the most emphasized houses (especially angular emphasis), and (4) repeating psychological themes that appear across multiple indicators. " +
     "You don’t need to list these as headings—just weave a brief reference into your framing so the answer feels like it belongs to the same person every time.\n\n" +
@@ -134,7 +137,7 @@ function getAstrologyInterpreterRules() {
     "CONTRADICTORY OR MIXED SIGNALS – SURFACE TENSION, NOT A SIMPLE ANSWER:\n" +
     "Real charts often show mixed messages: strong ambition but emotional inconsistency; good relationship potential but delayed commitment; creativity plus practical self-doubt. " +
     "Do not force a single, simple answer. Instead, name both sides and frame the pattern as tension, not denial or confusion. " +
-    'Use phrasing like: "You have both X and Y influences, so the pattern is not denial but tension." Or: "Your chart holds both [one theme] and [opposing or complicating theme]—the story isn’t that one cancels the other, it’s that you live in the pull between them." ' +
+    'Use phrasing like: "You want both X and Y, so you keep feeling the tug between them rather than picking one forever." ' +
     "Examples of pairs to surface when present: strong drive / emotional volatility; relationship capacity / late or cautious commitment; creative gift / self-doubt or need for security; idealism / practicality. " +
     "Aim to sound more human and more accurate: acknowledge the mix so the person feels seen in their contradictions.\n\n" +
     "RESOLVE CONTRADICTIONS (DO NOT IGNORE THEM): When you notice conflicting influences, explicitly: (1) identify both sides, (2) explain how they interact, and (3) describe the psychological tension as a lived pattern. " +
@@ -155,6 +158,24 @@ function getConfidenceWordingRules() {
 
 // ─── Layer 4: Response templates (output structure, forbidden vs good) ────────
 
+function getThesisTurnRules() {
+  return (
+    "THIS TURN IS THE PORTRAIT, NOT A TOUR.\n" +
+    "The user asked to be told about themselves. Write one person as one idea. " +
+    "It is not an identity-house question and not a request to walk the aspects.\n\n" +
+    "INTERNAL CLAIMS are for you only. Do not paste them, quote them, or open with a summary of them. " +
+    "Write the whole reply yourself: two or three short paragraphs of ordinary speech, second person (you). " +
+    "Cover the claims by saying how this person actually lives—work, closeness, timing, privacy, stress. " +
+    "Every sentence should be something a friend could understand with no astrology. " +
+    "Name the tension in plain terms (for example: you want safety and you also want to move before you feel ready). " +
+    "Do not use riddles or leftover jargon: no 'live in the pull', 'engines', 'night chart', 'first quarter', 'steered by', or 'the real story'.\n\n" +
+    "Do not write a Sun paragraph, a Moon paragraph, and an aspects paragraph. " +
+    "Do not name planets, houses, signs, aspects, or technical condition unless a word is already in the user's question. " +
+    "Do not use the house-topic map (career / relationships / identity). " +
+    "Do not call search_astrology_info, search_web_astrology, or save_chart_summary this turn."
+  );
+}
+
 function getResponseTemplates() {
   return (
     "OUTPUT SHAPE (UX only—not a voice script):\n" +
@@ -171,6 +192,7 @@ function getResponseTemplates() {
  * Build the runtime context block: profile memory (if any), prioritized chart points (if any), chart facts, web interpretations, and closing reminder.
  * @param {object} options
  * @param {string} options.profileMemoryBlock - Pre-rendered profile memory section (or "")
+ * @param {string} [options.architectureBlock] - Computed chart architecture (or "")
  * @param {string} options.prioritizedBlock - Pre-rendered prioritized chart points (or "")
  * @param {string} options.chartFactsOnly - Formatted chart facts string
  * @param {string} options.webSection - Web interpretations section (with markers)
@@ -181,12 +203,15 @@ function getResponseTemplates() {
 function buildRuntimeContext(options) {
   const {
     profileMemoryBlock = "",
+    architectureBlock = "",
     prioritizedBlock = "",
     chartFactsOnly = "",
     webSection = "",
     hasPrioritized = false,
     preferredMode = null,
     chartSummary = null,
+    thesisMode = false,
+    thesisText = "",
   } = options;
 
   let out = "";
@@ -195,7 +220,21 @@ function buildRuntimeContext(options) {
     out += profileMemoryBlock;
   }
 
-  if (
+  if (thesisText && String(thesisText).trim()) {
+    out += String(thesisText).trim() + "\n\n";
+  }
+
+  if (architectureBlock && String(architectureBlock).trim() && !thesisMode) {
+    out +=
+      "--- CHART ARCHITECTURE (computed; frame the whole reading from this) ---\n" +
+      String(architectureBlock).trim() +
+      "\n--- END CHART ARCHITECTURE ---\n\n";
+  }
+
+  if (thesisMode) {
+    out +=
+      "Do not call save_chart_summary this turn. Do not search the web this turn.\n\n";
+  } else if (
     chartSummary &&
     typeof chartSummary === "object" &&
     Object.keys(chartSummary).length > 0
@@ -223,7 +262,7 @@ function buildRuntimeContext(options) {
       "No stored chart summary yet. After your first substantive full-chart interpretation (e.g. when they ask about themselves or their chart), call save_chart_summary with: personalitySummary, emotionalStyle, relationshipStyle, workStyle, strengths, blindSpots, recurringLifeThemes, timingTendencies (1-3 sentences each) so we can store it and reuse it in future messages.\n\n";
   }
 
-  if (hasPrioritized && prioritizedBlock) {
+  if (hasPrioritized && prioritizedBlock && !thesisMode) {
     out +=
       "PRIORITIZED CHART POINTS – USE THESE FIRST:\n" +
       "Base your reply on the PRIORITIZED CHART POINTS below (strengths and caveats). " +
@@ -233,15 +272,17 @@ function buildRuntimeContext(options) {
       "\n\n";
   }
 
-  out += "--- CHART FACTS (birth data – use for personalization) ---\n";
-  out += chartFactsOnly + "\n";
-  out += "--- END CHART FACTS ---\n\n";
-  out += webSection;
+  if (!thesisMode) {
+    out += "--- CHART FACTS (birth data – use for personalization) ---\n";
+    out += chartFactsOnly + "\n";
+    out += "--- END CHART FACTS ---\n\n";
+    out += webSection;
+  }
 
   out +=
     "\n\nBefore you respond: use plain paragraphs (no numbered lists or ### headers). Keep content specific to the chart and sources; phrase naturally. " +
     "Do not end with a block of suggested follow-up questions or 'you might ask…' prompts—the app shows those as separate chips.";
-  if (hasPrioritized) {
+  if (hasPrioritized && !thesisMode) {
     out +=
       " Focus on the 3 strongest reasons and 2 biggest caveats—not a long list of chart facts.";
   }
@@ -322,19 +363,27 @@ function buildProfileMemoryBlock(profileMemory) {
  * @returns {string} Full system message content
  */
 function composeSystemContent(runtime) {
-  const parts = [
-    getSystemRules(),
-    getAstrologyInterpreterRules(),
-    getConfidenceWordingRules(),
-    getResponseTemplates(),
-    buildRuntimeContext(runtime),
-  ];
+  const parts = runtime && runtime.thesisMode
+    ? [
+        getSystemRules(),
+        getThesisTurnRules(),
+        getResponseTemplates(),
+        buildRuntimeContext(runtime),
+      ]
+    : [
+        getSystemRules(),
+        getAstrologyInterpreterRules(),
+        getConfidenceWordingRules(),
+        getResponseTemplates(),
+        buildRuntimeContext(runtime),
+      ];
   return parts.join("\n\n");
 }
 
 module.exports = {
   getSystemRules,
   getAstrologyInterpreterRules,
+  getThesisTurnRules,
   getConfidenceWordingRules,
   getResponseTemplates,
   buildRuntimeContext,

@@ -39,6 +39,12 @@ const {
 } = require("./prompt_layers");
 const { generateFollowUpSuggestionsLLM } = require("./followup_suggestions");
 const { handleQuestion } = require("./enhanced_question_handler");
+const {
+  buildChartArchitecture,
+  ensureArchitecture,
+  formatArchitectureForAI,
+  formatLockedClaimsForModel,
+} = require("./chart_architecture");
 
 // Debug logging for environment variables
 console.log("Environment variables loaded:");
@@ -528,6 +534,26 @@ app.post("/api/birth-chart", async (req, res) => {
           element: getElementFromSign(house.sign),
         })),
         // Aspects with additional data
+        points: (function optionalPoints() {
+          const nodeNames = [
+            "True Node",
+            "North Node",
+            "Mean Node",
+            "Rahu",
+          ];
+          const node = planetsResponse.data.find((p) =>
+            nodeNames.includes(p.name),
+          );
+          if (!node) return null;
+          return {
+            northNode: {
+              degree: node.fullDegree || 0,
+              sign: node.sign || "Unknown",
+              house: node.house || 0,
+              isRetrograde: node.isRetro === "true",
+            },
+          };
+        })(),
         aspects: calculateAspects({
           sun:
             planetsResponse.data.find((p) => p.name === "Sun")?.fullDegree || 0,
@@ -638,6 +664,8 @@ app.post("/api/birth-chart", async (req, res) => {
         "Transformed birth chart:",
         JSON.stringify(birthChart, null, 2),
       );
+
+      birthChart.architecture = buildChartArchitecture(birthChart);
 
       // Generate deterministic interpretation using hardcoded rules
       const deterministicInterpretation =
@@ -841,6 +869,33 @@ function wantsChartInterpretation(message, conversationHistory = []) {
   return false;
 }
 
+function isWholeSelfQuestion(message) {
+  const t = String(message || "").toLowerCase().trim();
+  const pats = [
+    /tell me about myself/,
+    /about myself/,
+    /tell me about me\b/,
+    /who am i\b/,
+    /what am i like/,
+    /describe me\b/,
+    /describe myself/,
+    /what does my (birth )?chart say about me/,
+  ];
+  return pats.some((p) => p.test(t));
+}
+
+function isFirstWholeSelfTurn(message, conversationHistory) {
+  if (!isWholeSelfQuestion(message)) return false;
+  const prior = (conversationHistory || []).filter(function (m) {
+    return (
+      m &&
+      m.role === "assistant" &&
+      String(m.content || "").trim().length > 120
+    );
+  });
+  return prior.length === 0;
+}
+
 function isOpenAIQuotaOrBillingError(err) {
   if (!err) return false;
   const status = err.status || err.statusCode;
@@ -865,6 +920,17 @@ function buildLocalChartSynthesis(birthChart) {
   const moon = planets.moon;
   const asc = birthChart && birthChart.angles && birthChart.angles.ascendant;
   const parts = [];
+  try {
+    const arch = ensureArchitecture(birthChart);
+    if (arch && arch.ok) {
+      const claims = arch.thesisClaims || [];
+      if (claims.length) {
+        parts.push(claims.join(" "));
+      }
+    }
+  } catch (archErr) {
+    console.warn("[CHAT] local architecture failed:", archErr.message);
+  }
   if (sun && moon && asc) {
     parts.push(
       `Your Sun is in ${sun.sign} (house ${sun.house}), the Moon is in ${moon.sign} (house ${moon.house}), and the Ascendant is ${asc.sign}.`,
@@ -873,7 +939,7 @@ function buildLocalChartSynthesis(birthChart) {
   try {
     const interp = generateChartInterpretation(birthChart);
     const ruler = interp.coreSynthesis && interp.coreSynthesis.chartRuler;
-    if (ruler) {
+    if (ruler && !parts.some((p) => /chart is steered/i.test(p))) {
       parts.push(
         `The chart ruler is ${ruler.planet} in ${ruler.sign} in house ${ruler.house}.`,
       );
@@ -1275,11 +1341,27 @@ app.post("/api/chat", (req, res) => {
         });
       }
 
+      const thesisMode = isFirstWholeSelfTurn(message, conversationHistory);
+      let architectureBlock = "";
+      let thesisText = "";
+      try {
+        const arch = ensureArchitecture(birthChart);
+        if (arch && arch.ok) {
+          thesisText = formatLockedClaimsForModel(arch, {
+            portrait: thesisMode,
+          });
+          if (!thesisMode) {
+            architectureBlock = formatArchitectureForAI(arch);
+          }
+        }
+      } catch (archErr) {
+        console.warn("[CHAT] architecture build failed:", archErr.message);
+      }
+
       // PRIMARY SOURCE FOR INTERPRETATION: gather from the web (broad breadth of resources)
-      // Hardcoded data is used for chart facts only; web is main for interpretation.
-      // ONLY gather web interpretations if user wants chart interpretation (not for simple questions)
+      // First "tell me about myself" turn stays with the thesis — no web/checklist.
       let webInterpretations = "";
-      if (wantsInterpretation) {
+      if (wantsInterpretation && !thesisMode) {
         // Check if web interpretations are already cached in the birth chart
         if (
           birthChart.webInterpretations &&
@@ -1358,7 +1440,7 @@ app.post("/api/chat", (req, res) => {
 
       // Ranking and weighting: pass only highest-value chart points so the model gives 3 reasons, 2 caveats—not 25 scattered facts
       let prioritizedBlock = "";
-      if (wantsInterpretation) {
+      if (wantsInterpretation && !thesisMode) {
         try {
           const { prioritizedBlock: block } = getPrioritizedChartPoints(
             birthChart,
@@ -1376,10 +1458,15 @@ app.post("/api/chat", (req, res) => {
       // System content is composed from prompt_layers.js (system rules, interpreter rules, response templates, runtime context)
       const systemContent = composeSystemContent({
         profileMemoryBlock,
+        architectureBlock,
+        thesisMode,
+        thesisText,
         prioritizedBlock: prioritizedBlock || "",
         chartFactsOnly,
-        webSection,
-        hasPrioritized: !!prioritizedBlock,
+        webSection: thesisMode
+          ? "Do not use web sources this turn. Stay with the thesis."
+          : webSection,
+        hasPrioritized: !!prioritizedBlock && !thesisMode,
         preferredMode:
           profileMemory && profileMemory.preferredMode
             ? profileMemory.preferredMode
@@ -1516,12 +1603,14 @@ app.post("/api/chat", (req, res) => {
       }
       const isRepeatedPrompt = isRepeatPrompt(message, conversationHistory);
 
-      const userContent =
-        message +
-        (isRepeatedPrompt
-          ? "\n\n[NOTE: The user is repeating or re-asking a similar question. Do NOT repeat prior basic explanations. Go deeper: add new angles (rulership chains, dispositors, aspect networks/patterns, dignity/retrograde, dominant planets/houses, repeating themes). Use MORE targeted web searches (search_astrology_info/search_web_astrology) based on the exact wording of this question so the answer adds new insight instead of rephrasing the same content.]"
-          : "") +
-        "\n\n[Reply in plain paragraphs only—no numbers (1. 2. 3.), no ### or **headers**, no one topic per paragraph. Weave themes together. When interpreting the chart, use web search (search_astrology_info) for placements you discuss so the reply stays varied and non-generic.]";
+      const userContent = thesisMode
+        ? message +
+          "\n\n[This is the first portrait. Do not search the web. Do not list aspects or walk the chart by topic. Internal claims are constraints only—write the whole reply in everyday language. Do not paste or echo those claims.]"
+        : message +
+          (isRepeatedPrompt
+            ? "\n\n[NOTE: The user is repeating or re-asking a similar question. Do NOT repeat prior basic explanations. Go deeper: add new angles (rulership chains, dispositors, aspect networks/patterns, dignity/retrograde, dominant planets/houses, repeating themes). Use MORE targeted web searches (search_astrology_info/search_web_astrology) based on the exact wording of this question so the answer adds new insight instead of rephrasing the same content.]"
+            : "") +
+          "\n\n[Reply in plain paragraphs only—no numbers (1. 2. 3.), no ### or **headers**, no one topic per paragraph. Weave themes together. When interpreting the chart, use web search (search_astrology_info) for placements you discuss so the reply stays varied and non-generic.]";
       messages.push({
         role: "user",
         content: userContent,
@@ -1535,16 +1624,19 @@ app.post("/api/chat", (req, res) => {
       let chartSummaryUpdate = null;
 
       try {
-        completion = await openai.chat.completions.create({
+        const createArgs = {
           model: "gpt-4o",
           messages: messages,
-          functions: functions,
-          function_call: "auto",
           temperature: 0.7,
-          max_tokens: 1000,
+          max_tokens: thesisMode ? 700 : 1000,
           presence_penalty: 0.1,
           frequency_penalty: 0.0,
-        });
+        };
+        if (!thesisMode) {
+          createArgs.functions = functions;
+          createArgs.function_call = "auto";
+        }
+        completion = await openai.chat.completions.create(createArgs);
       } catch (openaiErr) {
         throw wrapOpenAIError(openaiErr);
       }
@@ -1618,7 +1710,7 @@ app.post("/api/chat", (req, res) => {
         completionFinal = completion;
       }
       const rawContent = completionFinal.choices[0].message.content;
-      const finalResponse = rawContent != null ? String(rawContent) : "";
+      let finalResponse = rawContent != null ? String(rawContent) : "";
 
       console.log("[CHAT] Sending response:", {
         responseLength: finalResponse.length,
