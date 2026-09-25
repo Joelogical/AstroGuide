@@ -959,13 +959,11 @@ function buildThesisClaims(architecture) {
   if (!architecture || !architecture.ok) return [];
   const claims = [];
   const r = architecture.chartRuler;
-  if (r && r.planet) {
-    let c =
-      "A lot of your life is organized around " +
-      (PLANET_CLAIM[r.planet] || r.planet) +
-      ", and that shows up most in " +
-      (HOUSE_CLAIM[r.house] || "a major area of life") +
-      ".";
+  const drive = r && r.planet ? PLANET_CLAIM[r.planet] || r.planet : null;
+  const arena = r ? HOUSE_CLAIM[r.house] || "a major area of life" : null;
+
+  if (drive && arena) {
+    let c = "The through-line is " + drive + ", and it shows up most in " + arena + ".";
     if (r.dignity === "domicile" || r.dignity === "exaltation") {
       c += " Other people can usually see this in you without you having to explain it.";
     } else if (r.dignity === "detriment" || r.dignity === "fall") {
@@ -976,20 +974,39 @@ function buildThesisClaims(architecture) {
     }
     claims.push(c);
   }
-  const doms = (architecture.dominantPlanets || [])
-    .map((d) => d.planet)
-    .filter((p) => !r || p !== r.planet)
-    .slice(0, 2);
-  if (doms.length) {
+
+  const tsq =
+    architecture.configurations &&
+    architecture.configurations.tSquares &&
+    architecture.configurations.tSquares[0];
+  const focal = tsq && tsq.focal ? PLANET_CLAIM[tsq.focal] || tsq.focal : null;
+  if (focal && drive) {
     claims.push(
-      "Two other things keep showing up as well: " +
-        doms.map((p) => PLANET_CLAIM[p] || p).join(", and ") +
-        ".",
+      "In " +
+        (arena || "daily life") +
+        ", that through-line keeps colliding with " +
+        focal +
+        ": you want both, and neither side fully wins.",
     );
+  } else {
+    const extra = (architecture.dominantPlanets || [])
+      .map((d) => d.planet)
+      .filter((p) => !r || p !== r.planet)[0];
+    if (extra && drive) {
+      claims.push(
+        "Alongside that, " +
+          (PLANET_CLAIM[extra] || extra) +
+          " keeps showing up, so this is not only a story about " +
+          drive +
+          ".",
+      );
+    }
   }
+
   if (architecture.lunarPhase && PHASE_PLAIN[architecture.lunarPhase.name]) {
     claims.push(PHASE_PLAIN[architecture.lunarPhase.name] + ".");
   }
+
   if (architecture.sect === "night") {
     claims.push(
       "Even when your days look busy, a lot of what actually matters to you happens in private: feelings, doubts, and the story you tell yourself.",
@@ -998,34 +1015,18 @@ function buildThesisClaims(architecture) {
     claims.push(
       "A lot of this plays out in visible effort and the outside world, not only in private.",
     );
+  } else {
+    const stSign =
+      architecture.stelliums &&
+      architecture.stelliums.signs &&
+      architecture.stelliums.signs[0];
+    const tone = stSign && SIGN_TONE[String(stSign.sign || "").toLowerCase()];
+    if (tone) {
+      claims.push("A lot of different parts of your life share the same tone: " + tone + ".");
+    }
   }
-  const tsq =
-    architecture.configurations &&
-    architecture.configurations.tSquares &&
-    architecture.configurations.tSquares[0];
-  if (tsq && tsq.focal) {
-    claims.push(
-      "When things get hard, the sore spot is " +
-        (PLANET_CLAIM[tsq.focal] || tsq.focal) +
-        ". You often want two different things at the same time, and neither side fully wins.",
-    );
-  }
-  const stSign =
-    architecture.stelliums &&
-    architecture.stelliums.signs &&
-    architecture.stelliums.signs[0];
-  if (stSign) {
-    const signKey = String(stSign.sign || "").toLowerCase();
-    const tone = SIGN_TONE[signKey];
-    claims.push(
-      tone
-        ? "A lot of different parts of your life share the same tone: " +
-            tone +
-            "."
-        : "A lot of different parts of your life share the same tone, so one style shows up almost everywhere.",
-    );
-  }
-  return claims.slice(0, 6);
+
+  return claims.slice(0, 4);
 }
 
 /**
@@ -1049,7 +1050,7 @@ function formatLockedClaimsForModel(architecture, options) {
     );
   } else {
     lines.push(
-      "Keep later answers consistent with these themes. Do not paste this block.",
+      "Keep later answers consistent with these themes. When the user asks about one part of life, show how the through-line shows up there. Do not paste this block.",
     );
   }
   claims.forEach(function (c, i) {
@@ -1299,6 +1300,276 @@ function formatArchitectureForAI(architecture) {
   return lines.join("\n");
 }
 
+const LIFE_TOPICS = {
+  career: {
+    id: "career",
+    label: "work, reputation, and how you are seen",
+    houses: [10, 6, 2],
+  },
+  relationships: {
+    id: "relationships",
+    label: "closeness and one-to-one bonds",
+    houses: [7, 5, 8],
+  },
+  money: {
+    id: "money",
+    label: "money, resources, and feeling resourced",
+    houses: [2, 8, 11],
+  },
+  home: {
+    id: "home",
+    label: "home, family, and private life",
+    houses: [4, 3, 12],
+  },
+  health: {
+    id: "health",
+    label: "routines, health, and the work you actually do",
+    houses: [6, 1, 8],
+  },
+  friends: {
+    id: "friends",
+    label: "friends, groups, and where you belong",
+    houses: [11, 7],
+  },
+  growth: {
+    id: "growth",
+    label: "beliefs, study, and the bigger picture",
+    houses: [9, 12, 5],
+  },
+};
+
+function isPlacementQuestion(message) {
+  const t = String(message || "").toLowerCase();
+  return (
+    /\b(sun|moon|mercury|venus|mars|jupiter|saturn|uranus|neptune|pluto|ascendant|rising|midheaven|north node)\b/.test(
+      t,
+    ) &&
+    /\b(in|square|trine|opposite|opposition|conjunct|conjunction|sextile|quincunx|house|sign)\b/.test(
+      t,
+    )
+  );
+}
+
+function detectLifeTopic(message) {
+  const t = String(message || "").toLowerCase();
+  if (!t.trim() || isPlacementQuestion(t)) return null;
+  const tests = [
+    {
+      id: "relationships",
+      re: /\b(relationships?|love life|romantic|partner|marriage|married|dating|romance|boyfriend|girlfriend|spouse|closeness|one-to-one)\b/,
+    },
+    {
+      id: "career",
+      re: /\b(career|profession|vocation|job|my work|at work|workplace|public image|ambition)\b/,
+    },
+    {
+      id: "money",
+      re: /\b(money|finances?|financial|income|wealth|salary|earn)\b/,
+    },
+    {
+      id: "home",
+      re: /\b(home life|family|parents?|childhood home|roots|my home|private life)\b/,
+    },
+    {
+      id: "friends",
+      re: /\b(friends?|friendships?|social circle|community)\b/,
+    },
+    {
+      id: "health",
+      re: /\b(health|wellness|daily routine|burnout)\b/,
+    },
+    {
+      id: "growth",
+      re: /\b(purpose|beliefs?|spiritual|meaning of life|philosophy)\b/,
+    },
+  ];
+  for (let i = 0; i < tests.length; i++) {
+    if (tests[i].re.test(t)) return LIFE_TOPICS[tests[i].id];
+  }
+  return null;
+}
+
+const ASPECT_PLAIN = {
+  conjunction: "these two needs sit on top of each other",
+  opposition: "these two needs face each other",
+  square: "these two needs rub and create heat",
+  trine: "these two needs support each other without much effort",
+  sextile: "these two needs can cooperate if you put them to use",
+  quincunx: "these two needs keep missing each other and need adjusting",
+  semisquare: "there is a low-grade scrape between these two needs",
+  sesquiquadrate: "there is a restless scrape between these two needs",
+};
+
+function normalizeAspectName(name) {
+  const t = String(name || "").toLowerCase();
+  if (t === "conjunct") return "conjunction";
+  if (t === "opposite") return "opposition";
+  return t;
+}
+
+function parseClickedAspect(message) {
+  const t = String(message || "").toLowerCase();
+  const planets = "sun|moon|mercury|venus|mars|jupiter|saturn|uranus|neptune|pluto";
+  const aspects =
+    "conjunction|conjunct|square|trine|opposition|opposite|sextile|quincunx|semisquare|sesquiquadrate";
+  let m = t.match(
+    new RegExp(
+      "\\b(" + planets + ")\\s+(" + aspects + ")\\s+(?:to |with )?(" + planets + ")\\b",
+    ),
+  );
+  if (!m) {
+    m = t.match(
+      new RegExp(
+        "\\b(" +
+          aspects +
+          ")\\s+between\\s+(" +
+          planets +
+          ")\\s+and\\s+(" +
+          planets +
+          ")\\b",
+      ),
+    );
+    if (m) return { planet1: m[2], aspect: normalizeAspectName(m[1]), planet2: m[3] };
+    return null;
+  }
+  return { planet1: m[1], aspect: normalizeAspectName(m[2]), planet2: m[3] };
+}
+
+function samePlanetPair(a, b, x, y) {
+  const A = String(a || "").toLowerCase();
+  const B = String(b || "").toLowerCase();
+  const X = String(x || "").toLowerCase();
+  const Y = String(y || "").toLowerCase();
+  return (A === X && B === Y) || (A === Y && B === X);
+}
+
+function formatAspectLensForModel(architecture, clicked, birthChart) {
+  if (!clicked || !architecture || !architecture.ok) return "";
+  const p1 = clicked.planet1;
+  const p2 = clicked.planet2;
+  const aspect = normalizeAspectName(clicked.aspect);
+  const cond = architecture.planetConditions || {};
+  const c1 = cond[p1] || {};
+  const c2 = cond[p2] || {};
+  const lines = [
+    "--- ASPECT LENS (computed; answer the click through this) ---",
+    "Clicked: " +
+      titleCase(p1) +
+      " " +
+      aspect +
+      " " +
+      titleCase(p2) +
+      ".",
+    "In life: " +
+      (PLANET_CLAIM[p1] || p1) +
+      " / " +
+      (PLANET_CLAIM[p2] || p2) +
+      " — " +
+      (ASPECT_PLAIN[aspect] || "these two needs are linked") +
+      ".",
+    titleCase(p1) +
+      " shows up most in " +
+      (HOUSE_CLAIM[c1.house] || "daily life") +
+      (c1.dignity ? " (" + c1.dignity + ")" : "") +
+      (c1.retrograde ? ", in cycles" : "") +
+      ".",
+    titleCase(p2) +
+      " shows up most in " +
+      (HOUSE_CLAIM[c2.house] || "daily life") +
+      (c2.dignity ? " (" + c2.dignity + ")" : "") +
+      (c2.retrograde ? ", in cycles" : "") +
+      ".",
+  ];
+  const links = [];
+  const r = architecture.chartRuler;
+  if (r && r.planet && (r.planet === p1 || r.planet === p2)) {
+    links.push(titleCase(r.planet) + " is the chart through-line");
+  }
+  const tsqs =
+    (architecture.configurations && architecture.configurations.tSquares) || [];
+  tsqs.forEach(function (t) {
+    const members = [t.focal].concat(t.opposition || []);
+    if (members.indexOf(p1) !== -1 || members.indexOf(p2) !== -1) {
+      links.push(
+        "this pair sits in a three-way stress with " +
+          (PLANET_CLAIM[t.focal] || t.focal) +
+          " as the sore spot",
+      );
+    }
+  });
+  const doms = (architecture.dominantPlanets || []).map(function (d) {
+    return d.planet;
+  });
+  if (doms.indexOf(p1) !== -1) links.push(titleCase(p1) + " is a main driver");
+  if (doms.indexOf(p2) !== -1) links.push(titleCase(p2) + " is a main driver");
+  if (links.length) {
+    lines.push("Tie to the through-line: " + links.join("; ") + ".");
+  }
+  const neighbors = [];
+  (c1.majorAspects || []).forEach(function (a) {
+    if (!samePlanetPair(p1, a.other, p1, p2)) {
+      neighbors.push(titleCase(p1) + " " + a.aspect + " " + titleCase(a.other));
+    }
+  });
+  (c2.majorAspects || []).forEach(function (a) {
+    if (!samePlanetPair(p2, a.other, p1, p2)) {
+      neighbors.push(titleCase(p2) + " " + a.aspect + " " + titleCase(a.other));
+    }
+  });
+  if (neighbors.length) {
+    lines.push("Nearby connections (do not tour them): " + neighbors.slice(0, 4).join("; ") + ".");
+  }
+  lines.push("--- END ASPECT LENS ---");
+  return lines.join("\n");
+}
+
+function formatTopicLensForModel(architecture, topic, birthChart) {
+  if (!topic || !architecture || !architecture.ok) return "";
+  const wanted = topic.houses || [];
+  const chains = (architecture.houseChains || [])
+    .filter((c) => wanted.indexOf(c.house) !== -1)
+    .sort(function (a, b) {
+      return wanted.indexOf(a.house) - wanted.indexOf(b.house);
+    });
+  const lines = [
+    "--- TOPIC LENS (computed; answer the question through this) ---",
+    "Life area: " + topic.label + ".",
+  ];
+  chains.forEach(function (c, i) {
+    const role = i === 0 ? "Main thread" : "Also";
+    lines.push(
+      role +
+        ": house " +
+        c.house +
+        " " +
+        (c.sign || "?") +
+        " is run by " +
+        titleCase(c.ruler || "unknown") +
+        " in " +
+        (c.rulerSign || "?") +
+        " house " +
+        (c.rulerHouse || "?") +
+        " (" +
+        (c.rulerDignity || "?") +
+        (c.rulerRetrograde ? ", retrograde" : "") +
+        ").",
+    );
+  });
+  if (birthChart && birthChart.planets) {
+    const sitting = [];
+    Object.entries(birthChart.planets).forEach(function ([name, p]) {
+      if (p && wanted.indexOf(Number(p.house)) !== -1) {
+        sitting.push(titleCase(name) + " in house " + p.house);
+      }
+    });
+    if (sitting.length) {
+      lines.push("Planets sitting in this area: " + sitting.join("; ") + ".");
+    }
+  }
+  lines.push("--- END TOPIC LENS ---");
+  return lines.join("\n");
+}
+
 module.exports = {
   buildChartArchitecture,
   ensureArchitecture,
@@ -1306,6 +1577,11 @@ module.exports = {
   buildChartThesis,
   buildThesisClaims,
   formatLockedClaimsForModel,
+  detectLifeTopic,
+  formatTopicLensForModel,
+  parseClickedAspect,
+  formatAspectLensForModel,
+  LIFE_TOPICS,
   getChartRuler,
   getDignity,
 };

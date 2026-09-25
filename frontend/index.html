@@ -262,11 +262,11 @@
           </div>
         </div>
         <div class="input-container">
-          <input
-            type="text"
+          <textarea
             id="message-input"
+            rows="1"
             placeholder="Type your message here..."
-          />
+          ></textarea>
           <button id="send-button">Send</button>
         </div>
       </div>
@@ -429,13 +429,74 @@
       .user-message {
         background-color: #3b82f6;
         color: #fff;
+        width: fit-content;
+        max-width: 80%;
         margin-left: auto;
+        margin-right: 10px;
         border: 1px solid #2563eb;
+        text-align: left;
+        white-space: pre-wrap;
+        overflow-wrap: break-word;
+        transform-origin: right center;
+      }
+      .user-message.user-send-slam {
+        backface-visibility: hidden;
+        animation: user-send-slam 0.7s cubic-bezier(0.16, 0.84, 0.28, 1) both;
+      }
+      @keyframes user-send-slam {
+        0% {
+          transform: translate3d(0, -27.7px, 0) scale(1.0495);
+          opacity: 0.21;
+          box-shadow: 0 18px 26px rgba(37, 99, 235, 0);
+        }
+        28% {
+          opacity: 1;
+        }
+        52% {
+          transform: translate3d(0, 5.9px, 0) scale(1.059, 0.901);
+          box-shadow: 0 8px 16px rgba(37, 99, 235, 0.277);
+        }
+        70% {
+          transform: translate3d(0, -4px, 0) scale(0.9802, 1.0396);
+          box-shadow: 0 4px 12px rgba(37, 99, 235, 0.158);
+        }
+        86% {
+          transform: translate3d(0, 1.5px, 0) scale(1.0099, 0.995);
+          box-shadow: 0 2px 8px rgba(37, 99, 235, 0.079);
+        }
+        100% {
+          transform: translate3d(0, 0, 0) scale(1);
+          opacity: 1;
+          box-shadow: 0 0 0 rgba(37, 99, 235, 0);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .user-message.user-send-slam {
+          animation: none;
+        }
       }
       .follow-up-suggestions {
         margin-top: 12px;
         margin-bottom: 8px;
         min-height: 0;
+      }
+      .follow-up-suggestions.follow-up-suggestions-enter {
+        opacity: 0;
+        transform: translateY(10px);
+        animation: follow-up-suggestions-in 1.6s ease-out forwards;
+      }
+      @keyframes follow-up-suggestions-in {
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .follow-up-suggestions.follow-up-suggestions-enter {
+          animation: none;
+          opacity: 1;
+          transform: none;
+        }
       }
       .follow-up-chip {
         display: inline-block;
@@ -463,6 +524,55 @@
         cursor: wait;
         pointer-events: none;
       }
+      .follow-up-chip-row {
+        margin: 10px 0 6px;
+        max-width: 100%;
+      }
+      .follow-up-chip-in-transcript {
+        cursor: default;
+        pointer-events: none;
+        background: #35365a;
+        border-color: #6366f1;
+        color: #c7d2fe;
+        transform-origin: left center;
+        max-width: calc(100% / 1.08);
+      }
+      .follow-up-chip-in-transcript.chip-slam {
+        backface-visibility: hidden;
+        animation: follow-up-chip-slam 0.78s cubic-bezier(0.16, 0.84, 0.28, 1) both;
+      }
+      @keyframes follow-up-chip-slam {
+        0% {
+          transform: translate3d(0, -35.6px, 0) scale(1.079);
+          opacity: 0.257;
+          box-shadow: 0 20px 28px rgba(99, 102, 241, 0);
+        }
+        26% {
+          opacity: 1;
+        }
+        50% {
+          transform: translate3d(0, 7.9px, 0) scale(1.079, 0.861);
+          box-shadow: 0 10px 18px rgba(99, 102, 241, 0.317);
+        }
+        68% {
+          transform: translate3d(0, -5px, 0) scale(0.9703, 1.0495);
+          box-shadow: 0 5px 12px rgba(99, 102, 241, 0.178);
+        }
+        84% {
+          transform: translate3d(0, 2px, 0) scale(1.0149, 0.992);
+          box-shadow: 0 2px 8px rgba(99, 102, 241, 0.079);
+        }
+        100% {
+          transform: translate3d(0, 0, 0) scale(1);
+          opacity: 1;
+          box-shadow: 0 0 0 rgba(99, 102, 241, 0);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .follow-up-chip-in-transcript.chip-slam {
+          animation: none;
+        }
+      }
       .follow-up-suggestions .suggestion-label {
         font-size: 0.85em;
         color: #888ca3;
@@ -470,11 +580,13 @@
       }
       .input-container {
         display: flex;
+        align-items: flex-end;
         margin-top: 8px;
         flex-shrink: 0;
       }
       #message-input {
         flex: 1;
+        min-width: 0;
         padding: 10px 14px;
         border-radius: 6px;
         border: none;
@@ -482,6 +594,16 @@
         color: #f5f6fa;
         font-size: 1em;
         margin-right: 8px;
+        line-height: 1.45;
+        resize: none;
+        overflow-x: hidden;
+        overflow-y: hidden;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+        field-sizing: content;
+        min-height: 42px;
+        max-height: min(40vh, 280px);
       }
       #message-input::placeholder {
         color: #888ca3;
@@ -1348,6 +1470,21 @@
         min-height: 50px;
         position: relative;
       }
+      .spinner-container.spinner-enter {
+        opacity: 0;
+        animation: spinner-fade-in 0.65s ease-out forwards;
+      }
+      @keyframes spinner-fade-in {
+        to {
+          opacity: 1;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .spinner-container.spinner-enter {
+          animation: none;
+          opacity: 1;
+        }
+      }
       .spinner {
         width: 30px;
         height: 30px;
@@ -1399,6 +1536,25 @@
       const messageInput = document.getElementById("message-input");
       const sendButton = document.getElementById("send-button");
       const chatMessages = document.getElementById("chat-messages");
+      const CHIP_REVEAL_DELAY_MS = 2800;
+      const CHIP_SLAM_MS = 780;
+      const USER_SEND_SLAM_MS = 700;
+      const CHIP_SLAM_SETTLE_MS = 220;
+      let pendingChipTimer = null;
+      let pendingChipEaseTimer = null;
+      let pendingChipScrollHandler = null;
+      let feedScrollAnim = null;
+      let pendingTrimAfterScroll = false;
+      let sendMotionWaiters = [];
+      let spinnerWanted = false;
+      if (chatMessages) {
+        chatMessages.addEventListener("wheel", function () {
+          cancelFeedScrollAnim();
+        }, { passive: true });
+        chatMessages.addEventListener("touchstart", function () {
+          cancelFeedScrollAnim();
+        }, { passive: true });
+      }
       const logoutSettingsBtn = document.getElementById("logout-settings-btn");
       const clearDropdownBtn = document.getElementById(
         "clear-chat-dropdown-btn",
@@ -1472,6 +1628,25 @@
         if (idx === -1) return;
         profiles[idx].conversationHistory = history;
         setChartProfiles(profiles);
+      }
+
+      function saveActiveProfilePendingFollowUps(list) {
+        const profiles = getChartProfiles();
+        const id = getActiveProfileId();
+        const idx = profiles.findIndex((x) => x.id === id);
+        if (idx === -1) return;
+        profiles[idx].pendingFollowUps = Array.isArray(list)
+          ? list.map((s) => String(s || "").trim()).filter(Boolean)
+          : [];
+        setChartProfiles(profiles);
+      }
+
+      function getProfilePendingFollowUps(profile) {
+        const p = profile || getActiveProfile();
+        if (!p || !Array.isArray(p.pendingFollowUps)) return [];
+        return p.pendingFollowUps
+          .map((s) => String(s || "").trim())
+          .filter(Boolean);
       }
 
       function getActiveProfileConversation() {
@@ -1711,11 +1886,28 @@
             ? profile.conversationHistory
             : [];
         history.forEach((msg) => {
+          if (msg.role === "user" && msg.viaChip) {
+            const row = document.createElement("div");
+            row.className = "follow-up-chip-row";
+            const chip = document.createElement("div");
+            chip.className = "follow-up-chip follow-up-chip-in-transcript";
+            chip.textContent = msg.content || "";
+            row.appendChild(chip);
+            container.appendChild(row);
+            return;
+          }
           const div = document.createElement("div");
           div.className = `message ${msg.role === "user" ? "user-message" : "bot-message"}`;
           div.textContent = msg.content || "";
           container.appendChild(div);
         });
+        const pending = getProfilePendingFollowUps(profile);
+        if (pending.length) {
+          appendFollowUpSuggestionChips(pending, {
+            persist: false,
+            delay: 0,
+          });
+        }
         container.scrollTop = container.scrollHeight;
       }
 
@@ -2274,37 +2466,269 @@
       const BOT_PARAGRAPH_REVEAL_MS = 1750;
 
       /**
-       * Scroll #chat-messages so the user bubble sits at the top of the visible area.
-       * Synchronous (no rAF) so the viewport is correct before the next paint — required so
-       * the assistant paragraph reveal animation is fully visible from the first frame.
+       * Nudge the feed only if el is off-screen. Never pin a prompt to the top —
+       * that hid the text the user was still reading.
        */
-      function scrollUserPromptToTopImmediate(userBubbleEl) {
-        if (!chatMessages || !userBubbleEl) return;
+      function cancelFeedScrollAnim(opts) {
+        const wasRunning = !!feedScrollAnim;
+        if (feedScrollAnim) {
+          cancelAnimationFrame(feedScrollAnim);
+          feedScrollAnim = null;
+        }
+        if (wasRunning && (!opts || opts.flush !== false)) {
+          flushSendMotionWaiters();
+        }
+      }
+
+      function flushSendMotionWaiters() {
+        const list = sendMotionWaiters;
+        sendMotionWaiters = [];
+        list.forEach(function (fn) {
+          try {
+            fn();
+          } catch (err) {
+            console.error(err);
+          }
+        });
+      }
+
+      function whenSendMotionDone(fn) {
+        if (!pendingChipEaseTimer && !feedScrollAnim) {
+          fn();
+          return;
+        }
+        sendMotionWaiters = [fn];
+      }
+
+      function chatFeedIsScrollport() {
+        return !!(
+          chatMessages &&
+          chatMessages.scrollHeight > chatMessages.clientHeight + 1
+        );
+      }
+
+      function animateFeedScrollTo(targetTop, durationMs) {
+        animateScrollerTo(chatMessages, targetTop, durationMs);
+      }
+
+      function animateScrollerTo(scroller, targetTop, durationMs) {
+        function done() {
+          finishFeedScrollAnim();
+          flushSendMotionWaiters();
+        }
+        if (!scroller) {
+          done();
+          return;
+        }
+        cancelFeedScrollAnim({ flush: false });
+        const isWin = scroller === window;
+        const start = isWin ? window.scrollY : scroller.scrollTop;
+        const max = isWin
+          ? Math.max(
+              0,
+              document.documentElement.scrollHeight - window.innerHeight,
+            )
+          : Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+        const end = Math.max(0, Math.min(targetTop, max));
+        const dist = end - start;
+        if (Math.abs(dist) < 2) {
+          done();
+          return;
+        }
+        const dur = durationMs || 1800;
+        const t0 = performance.now();
+        function easeInOutCubic(t) {
+          return t < 0.5
+            ? 4 * t * t * t
+            : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        }
+        function step(now) {
+          const p = Math.min(1, (now - t0) / dur);
+          const y = start + dist * easeInOutCubic(p);
+          if (isWin) window.scrollTo(0, y);
+          else scroller.scrollTop = y;
+          if (p < 1) {
+            feedScrollAnim = requestAnimationFrame(step);
+          } else {
+            feedScrollAnim = null;
+            done();
+          }
+        }
+        feedScrollAnim = requestAnimationFrame(step);
+      }
+
+      function trimChatFeedPadding() {
+        if (!chatMessages || !chatMessages.style.paddingBottom) return;
+        chatMessages.style.paddingBottom = "";
         void chatMessages.offsetHeight;
-        const padTop = parseFloat(getComputedStyle(chatMessages).paddingTop) || 0;
-        const relTop =
-          userBubbleEl.getBoundingClientRect().top -
-          chatMessages.getBoundingClientRect().top +
-          chatMessages.scrollTop;
-        const want = Math.max(0, relTop - padTop);
-        let maxScroll = Math.max(
+        const max = Math.max(
           0,
           chatMessages.scrollHeight - chatMessages.clientHeight,
         );
-        if (want > maxScroll) {
-          chatMessages.style.paddingBottom = want - maxScroll + 32 + "px";
+        if (chatMessages.scrollTop > max) {
+          chatMessages.scrollTop = max;
+        }
+      }
+
+      function finishFeedScrollAnim() {
+        if (!pendingTrimAfterScroll) return;
+        pendingTrimAfterScroll = false;
+        trimChatFeedPadding();
+      }
+
+      function scheduleTrimChatFeedPadding() {
+        requestAnimationFrame(function () {
+          requestAnimationFrame(function () {
+            if (feedScrollAnim) {
+              pendingTrimAfterScroll = true;
+              return;
+            }
+            pendingTrimAfterScroll = false;
+            trimChatFeedPadding();
+          });
+        });
+      }
+
+      function easePromptToTop(el, durationMs) {
+        if (!el) {
+          flushSendMotionWaiters();
+          return;
+        }
+        const dur = durationMs || 2000;
+        if (chatMessages && chatFeedIsScrollport()) {
           void chatMessages.offsetHeight;
-          maxScroll = Math.max(
+          const padTop =
+            parseFloat(getComputedStyle(chatMessages).paddingTop) || 0;
+          const relTop =
+            el.getBoundingClientRect().top -
+            chatMessages.getBoundingClientRect().top +
+            chatMessages.scrollTop;
+          const want = Math.max(0, relTop - padTop);
+          const maxScroll = Math.max(
             0,
             chatMessages.scrollHeight - chatMessages.clientHeight,
           );
+          if (want > maxScroll) {
+            const h0 = chatMessages.clientHeight;
+            chatMessages.style.paddingBottom = want - maxScroll + "px";
+            void chatMessages.offsetHeight;
+            if (chatMessages.clientHeight > h0 + 1) {
+              chatMessages.style.paddingBottom = "";
+            } else {
+              animateFeedScrollTo(want, dur);
+              return;
+            }
+          } else {
+            animateFeedScrollTo(want, dur);
+            return;
+          }
         }
-        chatMessages.scrollTop = Math.min(want, maxScroll);
+        const target = Math.max(
+          0,
+          window.scrollY + el.getBoundingClientRect().top - 12,
+        );
+        animateScrollerTo(window, target, dur);
+      }
+
+      function ensureElementVisible(el, opts) {
+        if (!el) return;
+        const pad = 12;
+        if (!chatFeedIsScrollport()) {
+          const eRect = el.getBoundingClientRect();
+          let delta = 0;
+          if (eRect.bottom > window.innerHeight - pad) {
+            delta = eRect.bottom - window.innerHeight + pad;
+          } else if (eRect.top < pad) {
+            delta = eRect.top - pad;
+          }
+          if (!delta) return;
+          const target = window.scrollY + delta;
+          if (opts && opts.smooth) {
+            animateScrollerTo(window, target, opts.duration || 2000);
+          } else {
+            window.scrollTo(0, target);
+          }
+          return;
+        }
+        void chatMessages.offsetHeight;
+        const cRect = chatMessages.getBoundingClientRect();
+        const eRect = el.getBoundingClientRect();
+        let delta = 0;
+        if (eRect.bottom > cRect.bottom - pad) {
+          delta = eRect.bottom - cRect.bottom + pad;
+        } else if (eRect.top < cRect.top + pad) {
+          delta = -(cRect.top + pad - eRect.top);
+        }
+        if (!delta) return;
+        if (opts && opts.smooth) {
+          animateFeedScrollTo(
+            chatMessages.scrollTop + delta,
+            opts.duration || 2000,
+          );
+        } else {
+          chatMessages.scrollTop += delta;
+        }
       }
 
       function getLastUserBubble() {
-        const list = chatMessages.querySelectorAll(".user-message");
+        const list = chatMessages.querySelectorAll(
+          ".user-message, .follow-up-chip-row",
+        );
         return list.length ? list[list.length - 1] : null;
+      }
+
+      function easeAfterSendSlam(animEl, easeEl, animClass, animName, durationMs) {
+        let started = false;
+        function startEaseAfterSlam() {
+          if (started) return;
+          started = true;
+          if (pendingChipEaseTimer) {
+            clearTimeout(pendingChipEaseTimer);
+            pendingChipEaseTimer = null;
+          }
+          if (animClass) animEl.classList.remove(animClass);
+          pendingChipEaseTimer = setTimeout(function () {
+            pendingChipEaseTimer = null;
+            easePromptToTop(easeEl, 2000);
+          }, CHIP_SLAM_SETTLE_MS);
+        }
+        animEl.addEventListener(
+          "animationend",
+          function (e) {
+            if (e && e.animationName && e.animationName !== animName) {
+              return;
+            }
+            startEaseAfterSlam();
+          },
+          { once: true },
+        );
+        const reduceMotion =
+          window.matchMedia &&
+          window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        pendingChipEaseTimer = setTimeout(
+          startEaseAfterSlam,
+          reduceMotion ? 0 : durationMs + 80,
+        );
+      }
+
+      function appendChosenFollowUpChip(text) {
+        const row = document.createElement("div");
+        row.className = "follow-up-chip-row";
+        const chip = document.createElement("div");
+        chip.className = "follow-up-chip follow-up-chip-in-transcript";
+        chip.textContent = String(text || "").trim();
+        row.appendChild(chip);
+        chatMessages.appendChild(row);
+        void chatMessages.offsetHeight;
+        ensureElementVisible(row);
+        chip.classList.add("chip-slam");
+        easeAfterSendSlam(
+          chip,
+          row,
+          "chip-slam",
+          "follow-up-chip-slam",
+          CHIP_SLAM_MS,
+        );
       }
 
       function addMessage(message, isUser = false, fromQueue = false) {
@@ -2316,7 +2740,16 @@
             console.log("[MESSAGE] Adding user message:", message);
             messageDiv.textContent = message;
             chatMessages.appendChild(messageDiv);
-            scrollUserPromptToTopImmediate(messageDiv);
+            void chatMessages.offsetHeight;
+            ensureElementVisible(messageDiv);
+            messageDiv.classList.add("user-send-slam");
+            easeAfterSendSlam(
+              messageDiv,
+              messageDiv,
+              "user-send-slam",
+              "user-send-slam",
+              USER_SEND_SLAM_MS,
+            );
             resolve();
           } else {
             hideSpinner();
@@ -2328,9 +2761,7 @@
             p.textContent = message;
             messageDiv.appendChild(p);
             messageDiv.classList.remove("typing");
-
-            const ub = getLastUserBubble();
-            if (ub) scrollUserPromptToTopImmediate(ub);
+            scheduleTrimChatFeedPadding();
 
             setTimeout(() => {
               resolve();
@@ -2339,16 +2770,34 @@
         });
       }
 
-      async function handleSendMessage() {
-        const message = messageInput.value.trim();
+      async function handleSendMessage(opts) {
+        const fromChip = !!(opts && opts.fromChip);
+        const message = fromChip
+          ? String(opts.message || "").trim()
+          : messageInput.value.trim();
         if (message) {
           console.log("[HANDLE] User sent message:", message);
           chatMessages
             .querySelectorAll(".follow-up-suggestions")
             .forEach((el) => el.remove());
           chatMessages.style.paddingBottom = "";
-          await addMessage(message, true);
-          messageInput.value = "";
+          pendingTrimAfterScroll = false;
+          spinnerWanted = false;
+          sendMotionWaiters = [];
+          if (pendingChipEaseTimer) {
+            clearTimeout(pendingChipEaseTimer);
+            pendingChipEaseTimer = null;
+          }
+          cancelPendingChipReveal();
+          cancelFeedScrollAnim({ flush: false });
+          saveActiveProfilePendingFollowUps([]);
+          if (fromChip) {
+            appendChosenFollowUpChip(message);
+          } else {
+            await addMessage(message, true);
+            messageInput.value = "";
+            resizeMessageInput();
+          }
 
           // Get user data from localStorage
           const userData = JSON.parse(localStorage.getItem("userData"));
@@ -2514,6 +2963,7 @@
             conversationHistory.push({
               role: "user",
               content: message,
+              ...(fromChip ? { viaChip: true } : {}),
             });
 
             try {
@@ -2642,46 +3092,117 @@
         }
       }
 
-      /** LLM-written “next step” lines (ChatGPT-style); tap sends the message automatically. */
-      function appendFollowUpSuggestionChips(suggestions) {
+      function lastBotMessageEl() {
+        if (!chatMessages) return null;
+        const list = chatMessages.querySelectorAll(
+          ".bot-message:not(.initial-message)",
+        );
+        return list.length ? list[list.length - 1] : null;
+      }
+
+      function isElementBottomVisible(el) {
+        if (!chatMessages || !el) return true;
+        const cRect = chatMessages.getBoundingClientRect();
+        const eRect = el.getBoundingClientRect();
+        return eRect.bottom <= cRect.bottom + 20;
+      }
+
+      function whenBotReplyEndVisible(done) {
+        const bot = lastBotMessageEl();
+        if (!bot || isElementBottomVisible(bot)) {
+          done();
+          return;
+        }
+        function onScroll() {
+          if (!isElementBottomVisible(bot)) return;
+          if (chatMessages) {
+            chatMessages.removeEventListener("scroll", onScroll);
+          }
+          pendingChipScrollHandler = null;
+          done();
+        }
+        pendingChipScrollHandler = function () {
+          if (chatMessages) {
+            chatMessages.removeEventListener("scroll", onScroll);
+          }
+        };
+        chatMessages.addEventListener("scroll", onScroll, { passive: true });
+      }
+
+      function cancelPendingChipReveal() {
+        if (pendingChipTimer) {
+          clearTimeout(pendingChipTimer);
+          pendingChipTimer = null;
+        }
+        if (typeof pendingChipScrollHandler === "function") {
+          const stop = pendingChipScrollHandler;
+          pendingChipScrollHandler = null;
+          stop();
+        }
+      }
+
+      /** LLM-written invitations; tap keeps the chip in the transcript, then asks. */
+      function appendFollowUpSuggestionChips(suggestions, opts) {
         const list = Array.isArray(suggestions)
           ? suggestions.filter((s) => s && String(s).trim())
           : [];
         if (!list.length || !chatMessages) return;
-        chatMessages
-          .querySelectorAll(".follow-up-suggestions")
-          .forEach((el) => el.remove());
-        const wrap = document.createElement("div");
-        wrap.className = "follow-up-suggestions";
-        const label = document.createElement("div");
-        label.className = "suggestion-label";
-        label.textContent = "Continue the conversation";
-        wrap.appendChild(label);
-        list.forEach((text) => {
-          const chip = document.createElement("button");
-          chip.type = "button";
-          chip.className = "follow-up-chip";
-          chip.textContent = String(text).trim();
-          chip.addEventListener("click", async () => {
-            const t = String(chip.textContent || "").trim();
-            if (!t) return;
-            wrap.querySelectorAll(".follow-up-chip").forEach((c) => {
-              c.disabled = true;
+        if (!opts || opts.persist !== false) {
+          saveActiveProfilePendingFollowUps(list);
+        }
+        cancelPendingChipReveal();
+        const delay =
+          opts && opts.delay != null ? opts.delay : CHIP_REVEAL_DELAY_MS;
+
+        function reveal() {
+          if (!chatMessages) return;
+          chatMessages
+            .querySelectorAll(".follow-up-suggestions")
+            .forEach((el) => el.remove());
+          const wrap = document.createElement("div");
+          wrap.className =
+            "follow-up-suggestions follow-up-suggestions-enter";
+          const label = document.createElement("div");
+          label.className = "suggestion-label";
+          label.textContent = "Continue the conversation";
+          wrap.appendChild(label);
+          list.forEach((text) => {
+            const chip = document.createElement("button");
+            chip.type = "button";
+            chip.className = "follow-up-chip";
+            chip.textContent = String(text).trim();
+            chip.addEventListener("click", async () => {
+              const t = String(chip.textContent || "").trim();
+              if (!t) return;
+              wrap.querySelectorAll(".follow-up-chip").forEach((c) => {
+                c.disabled = true;
+              });
+              await handleSendMessage({ fromChip: true, message: t });
             });
-            messageInput.value = t;
-            await handleSendMessage();
+            wrap.appendChild(chip);
           });
-          wrap.appendChild(chip);
+          chatMessages.appendChild(wrap);
+          trimChatFeedPadding();
+          ensureElementVisible(wrap, { smooth: true, duration: 2200 });
+        }
+
+        if (delay <= 0) {
+          reveal();
+          return;
+        }
+        whenBotReplyEndVisible(function () {
+          pendingChipTimer = setTimeout(function () {
+            pendingChipTimer = null;
+            reveal();
+          }, delay);
         });
-        chatMessages.appendChild(wrap);
-        const ub = getLastUserBubble();
-        if (ub) scrollUserPromptToTopImmediate(ub);
       }
 
       // Add a function to clear conversation history for the active profile only
       function clearConversationHistory() {
         if (getActiveProfile()) {
           saveActiveProfileConversation([]);
+          saveActiveProfilePendingFollowUps([]);
           renderConversation(getActiveProfile());
         }
         addMessage(
@@ -3776,12 +4297,25 @@
         window.location.href = "landing.html";
       });
 
+      function resizeMessageInput() {
+        if (!messageInput) return;
+        messageInput.style.height = "auto";
+        const maxPx = Math.round(Math.min(window.innerHeight * 0.4, 280));
+        const next = Math.min(messageInput.scrollHeight, maxPx);
+        messageInput.style.height = next + "px";
+        messageInput.style.overflowY =
+          messageInput.scrollHeight > maxPx ? "auto" : "hidden";
+      }
+
       sendButton.addEventListener("click", handleSendMessage);
-      messageInput.addEventListener("keypress", (e) => {
-        if (e.key === "Enter") {
+      messageInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
           handleSendMessage();
         }
       });
+      messageInput.addEventListener("input", resizeMessageInput);
+      resizeMessageInput();
 
       // View Raw Data (in Settings dropdown) handler
       viewRawDataSettingsBtn.addEventListener("click", () => {
@@ -3852,6 +4386,7 @@
         const messageInput = document.getElementById("message-input");
         if (messageInput) {
           messageInput.value = query;
+          resizeMessageInput();
           messageInput.focus();
           // Small delay to ensure input is ready, then trigger send
           setTimeout(() => {
@@ -5590,29 +6125,38 @@
         }
       }
 
-      function showSpinner() {
-        const spinnerContainer = document.createElement("div");
-        spinnerContainer.className = "spinner-container";
+      function removeSpinnerEl() {
+        document.querySelectorAll(".spinner-container").forEach(function (el) {
+          el.remove();
+        });
+      }
 
+      function mountSpinner() {
+        if (!chatMessages || !spinnerWanted) return;
+        removeSpinnerEl();
+        const spinnerContainer = document.createElement("div");
+        spinnerContainer.className = "spinner-container spinner-enter";
         const spinner = document.createElement("div");
         spinner.className = "spinner";
-
         const typingIndicator = document.createElement("div");
         typingIndicator.className = "typing-indicator";
         typingIndicator.textContent = "AstroGuide is thinking";
-
         spinnerContainer.appendChild(spinner);
         spinnerContainer.appendChild(typingIndicator);
         chatMessages.appendChild(spinnerContainer);
-        const ub = getLastUserBubble();
-        if (ub) scrollUserPromptToTopImmediate(ub);
+      }
+
+      function showSpinner() {
+        spinnerWanted = true;
+        whenSendMotionDone(function () {
+          if (!spinnerWanted) return;
+          mountSpinner();
+        });
       }
 
       function hideSpinner() {
-        const spinnerContainer = document.querySelector(".spinner-container");
-        if (spinnerContainer) {
-          spinnerContainer.remove();
-        }
+        spinnerWanted = false;
+        removeSpinnerEl();
       }
     </script>
   </body>

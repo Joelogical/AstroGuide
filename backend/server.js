@@ -44,6 +44,10 @@ const {
   ensureArchitecture,
   formatArchitectureForAI,
   formatLockedClaimsForModel,
+  detectLifeTopic,
+  formatTopicLensForModel,
+  parseClickedAspect,
+  formatAspectLensForModel,
 } = require("./chart_architecture");
 
 // Debug logging for environment variables
@@ -1184,6 +1188,7 @@ app.post("/api/chat", (req, res) => {
                 chartSummary,
                 conversationHistory,
                 isGeneralQuestion: true,
+                lastMode: "general",
               },
             );
           } catch (fuErr) {
@@ -1255,6 +1260,7 @@ app.post("/api/chat", (req, res) => {
                 chartSummary,
                 conversationHistory,
                 isGeneralQuestion: false,
+                lastMode: "chart",
               },
             );
           } catch (fuErr) {
@@ -1342,15 +1348,30 @@ app.post("/api/chat", (req, res) => {
       }
 
       const thesisMode = isFirstWholeSelfTurn(message, conversationHistory);
+      const topic = !thesisMode ? detectLifeTopic(message) : null;
+      const topicMode = !!topic;
+      const clickedAspect =
+        !thesisMode && !topicMode ? parseClickedAspect(message) : null;
+      const aspectMode = !!clickedAspect;
       let architectureBlock = "";
       let thesisText = "";
+      let topicLens = "";
+      let aspectLens = "";
       try {
         const arch = ensureArchitecture(birthChart);
         if (arch && arch.ok) {
           thesisText = formatLockedClaimsForModel(arch, {
             portrait: thesisMode,
           });
-          if (!thesisMode) {
+          if (topicMode) {
+            topicLens = formatTopicLensForModel(arch, topic, birthChart);
+          } else if (aspectMode) {
+            aspectLens = formatAspectLensForModel(
+              arch,
+              clickedAspect,
+              birthChart,
+            );
+          } else if (!thesisMode) {
             architectureBlock = formatArchitectureForAI(arch);
           }
         }
@@ -1360,8 +1381,10 @@ app.post("/api/chat", (req, res) => {
 
       // PRIMARY SOURCE FOR INTERPRETATION: gather from the web (broad breadth of resources)
       // First "tell me about myself" turn stays with the thesis — no web/checklist.
+      // Topic questions stay with the locked claims + topic lens.
+      // Clicked aspects stay with the locked claims + aspect lens.
       let webInterpretations = "";
-      if (wantsInterpretation && !thesisMode) {
+      if (wantsInterpretation && !thesisMode && !topicMode && !aspectMode) {
         // Check if web interpretations are already cached in the birth chart
         if (
           birthChart.webInterpretations &&
@@ -1440,7 +1463,7 @@ app.post("/api/chat", (req, res) => {
 
       // Ranking and weighting: pass only highest-value chart points so the model gives 3 reasons, 2 caveats—not 25 scattered facts
       let prioritizedBlock = "";
-      if (wantsInterpretation && !thesisMode) {
+      if (wantsInterpretation && !thesisMode && !topicMode && !aspectMode) {
         try {
           const { prioritizedBlock: block } = getPrioritizedChartPoints(
             birthChart,
@@ -1461,12 +1484,20 @@ app.post("/api/chat", (req, res) => {
         architectureBlock,
         thesisMode,
         thesisText,
+        topicMode,
+        topic,
+        topicLens,
+        aspectMode,
+        aspectLens,
         prioritizedBlock: prioritizedBlock || "",
         chartFactsOnly,
         webSection: thesisMode
           ? "Do not use web sources this turn. Stay with the thesis."
-          : webSection,
-        hasPrioritized: !!prioritizedBlock && !thesisMode,
+          : topicMode || aspectMode
+            ? "Web is color only this turn. Do not build the answer from blogs."
+            : webSection,
+        hasPrioritized:
+          !!prioritizedBlock && !thesisMode && !topicMode && !aspectMode,
         preferredMode:
           profileMemory && profileMemory.preferredMode
             ? profileMemory.preferredMode
@@ -1606,6 +1637,12 @@ app.post("/api/chat", (req, res) => {
       const userContent = thesisMode
         ? message +
           "\n\n[This is the first portrait. Do not search the web. Do not list aspects or walk the chart by topic. Internal claims are constraints only—write the whole reply in everyday language. Do not paste or echo those claims.]"
+        : topicMode
+          ? message +
+            "\n\n[This is a life-area question. Answer that area. Re-anchor to the internal claims, then stay on this topic. Do not reprint the portrait. Do not tour the whole chart.]"
+          : aspectMode
+            ? message +
+              "\n\n[This is a clicked aspect. Answer that connection. Re-anchor to the internal claims, then stay with these two needs. Do not reprint the portrait. Do not tour the whole chart.]"
         : message +
           (isRepeatedPrompt
             ? "\n\n[NOTE: The user is repeating or re-asking a similar question. Do NOT repeat prior basic explanations. Go deeper: add new angles (rulership chains, dispositors, aspect networks/patterns, dignity/retrograde, dominant planets/houses, repeating themes). Use MORE targeted web searches (search_astrology_info/search_web_astrology) based on the exact wording of this question so the answer adds new insight instead of rephrasing the same content.]"
@@ -1727,6 +1764,13 @@ app.post("/api/chat", (req, res) => {
           chartSummary,
           conversationHistory,
           isGeneralQuestion: false,
+          lastMode: thesisMode
+            ? "portrait"
+            : topicMode
+              ? "topic"
+              : aspectMode
+                ? "aspect"
+                : "chart",
         });
       } catch (fuErr) {
         console.warn(

@@ -176,12 +176,45 @@ function getThesisTurnRules() {
   );
 }
 
+function getTopicTurnRules(topic) {
+  const area = topic && topic.label ? topic.label : "this part of life";
+  return (
+    "THIS TURN IS A LIFE-AREA QUESTION, NOT A TOUR AND NOT A NEW PORTRAIT.\n" +
+    "The user asked about " +
+    area +
+    ". Answer that question.\n\n" +
+    "Open by tying the answer to the same through-line in INTERNAL CLAIMS (one or two sentences). Then stay in this life area. " +
+    "Use TOPIC LENS: follow the house chains computed there. You may name a placement if it helps, then say what it does in ordinary life. " +
+    "Do not reprint the self-portrait. Do not walk the whole chart. Do not invent a second personality.\n\n" +
+    "Same voice as the portrait: concrete, second person, something a friend could understand. " +
+    "No riddles or leftover jargon: no 'live in the pull', 'engines', 'night chart', 'first quarter', or 'steered by'. " +
+    "Do not lead with house numbers unless the user asked for them.\n\n" +
+    "Web is color only. At most one search if you need a phrase. Do not build the answer from blogs. " +
+    "Do not call save_chart_summary this turn."
+  );
+}
+
+function getAspectTurnRules() {
+  return (
+    "THIS TURN IS A CLICKED ASPECT, NOT A TOUR AND NOT A NEW PORTRAIT.\n" +
+    "The user pointed at one connection on the wheel. Answer that connection.\n\n" +
+    "Open by tying it to the same through-line in INTERNAL CLAIMS (one or two sentences). Then stay with what these two needs do together in lived life. " +
+    "Use ASPECT LENS. You may name the two planets and the aspect once, then talk in ordinary speech. " +
+    "Do not reprint the self-portrait. Do not walk the rest of the chart. Do not invent a second personality.\n\n" +
+    "If this pair sits in a larger stress pattern, say the lived tension—do not lecture the geometry. " +
+    "Same voice as the portrait: concrete, second person, something a friend could understand. " +
+    "No riddles or leftover jargon: no 'live in the pull', 'engines', 'night chart', 'first quarter', or 'steered by'.\n\n" +
+    "Web is color only. At most one search if you need a phrase. Do not build the answer from blogs. " +
+    "Do not call save_chart_summary this turn."
+  );
+}
+
 function getResponseTemplates() {
   return (
     "OUTPUT SHAPE (UX only—not a voice script):\n" +
     "Reply in a few coherent paragraphs of plain text. Avoid numbered lists, bullet lists, and markdown-style section headers (###, **Topic:**). " +
     "Weave multiple chart factors together rather than one rigid paragraph per planet.\n\n" +
-    "The user may send a suggested continuation written in first person (e.g. 'If you'd like, I can go deeper into...') from the app's chips—that means they want you to go deeper on that topic; answer substantively without awkwardly mirroring the wording.\n\n" +
+    "The user may tap a follow-up question from the app's chips (e.g. 'Want to talk about…?' or 'Should we stay with…?'). That means they want that thread; answer substantively without awkwardly mirroring the wording.\n\n" +
     "Otherwise let your wording be natural and helpful, as you would in a normal ChatGPT conversation—no required opening lines, no prescribed emotional register, no example paragraphs to imitate."
   );
 }
@@ -212,6 +245,10 @@ function buildRuntimeContext(options) {
     chartSummary = null,
     thesisMode = false,
     thesisText = "",
+    topicMode = false,
+    topicLens = "",
+    aspectMode = false,
+    aspectLens = "",
   } = options;
 
   let out = "";
@@ -224,21 +261,36 @@ function buildRuntimeContext(options) {
     out += String(thesisText).trim() + "\n\n";
   }
 
-  if (architectureBlock && String(architectureBlock).trim() && !thesisMode) {
+  if (topicLens && String(topicLens).trim()) {
+    out += String(topicLens).trim() + "\n\n";
+  }
+
+  if (aspectLens && String(aspectLens).trim()) {
+    out += String(aspectLens).trim() + "\n\n";
+  }
+
+  if (
+    architectureBlock &&
+    String(architectureBlock).trim() &&
+    !thesisMode &&
+    !topicMode &&
+    !aspectMode
+  ) {
     out +=
       "--- CHART ARCHITECTURE (computed; frame the whole reading from this) ---\n" +
       String(architectureBlock).trim() +
       "\n--- END CHART ARCHITECTURE ---\n\n";
   }
 
+  const hasSummary =
+    chartSummary &&
+    typeof chartSummary === "object" &&
+    Object.keys(chartSummary).length > 0;
+
   if (thesisMode) {
     out +=
       "Do not call save_chart_summary this turn. Do not search the web this turn.\n\n";
-  } else if (
-    chartSummary &&
-    typeof chartSummary === "object" &&
-    Object.keys(chartSummary).length > 0
-  ) {
+  } else if (hasSummary) {
     out +=
       "--- STORED CHART SUMMARY (use this baseline; do not rediscover the user each time) ---\n";
     const fields = [
@@ -257,7 +309,7 @@ function buildRuntimeContext(options) {
         out += f.label + ": " + String(val).trim() + "\n";
     });
     out += "--- END STORED CHART SUMMARY ---\n\n";
-  } else {
+  } else if (!topicMode && !aspectMode) {
     out +=
       "No stored chart summary yet. After your first substantive full-chart interpretation (e.g. when they ask about themselves or their chart), call save_chart_summary with: personalitySummary, emotionalStyle, relationshipStyle, workStyle, strengths, blindSpots, recurringLifeThemes, timingTendencies (1-3 sentences each) so we can store it and reuse it in future messages.\n\n";
   }
@@ -363,20 +415,37 @@ function buildProfileMemoryBlock(profileMemory) {
  * @returns {string} Full system message content
  */
 function composeSystemContent(runtime) {
-  const parts = runtime && runtime.thesisMode
-    ? [
-        getSystemRules(),
-        getThesisTurnRules(),
-        getResponseTemplates(),
-        buildRuntimeContext(runtime),
-      ]
-    : [
-        getSystemRules(),
-        getAstrologyInterpreterRules(),
-        getConfidenceWordingRules(),
-        getResponseTemplates(),
-        buildRuntimeContext(runtime),
-      ];
+  const parts =
+    runtime && runtime.thesisMode
+      ? [
+          getSystemRules(),
+          getThesisTurnRules(),
+          getResponseTemplates(),
+          buildRuntimeContext(runtime),
+        ]
+      : runtime && runtime.topicMode
+        ? [
+            getSystemRules(),
+            getTopicTurnRules(runtime.topic),
+            getConfidenceWordingRules(),
+            getResponseTemplates(),
+            buildRuntimeContext(runtime),
+          ]
+        : runtime && runtime.aspectMode
+          ? [
+              getSystemRules(),
+              getAspectTurnRules(),
+              getConfidenceWordingRules(),
+              getResponseTemplates(),
+              buildRuntimeContext(runtime),
+            ]
+          : [
+            getSystemRules(),
+            getAstrologyInterpreterRules(),
+            getConfidenceWordingRules(),
+            getResponseTemplates(),
+            buildRuntimeContext(runtime),
+          ];
   return parts.join("\n\n");
 }
 
@@ -384,6 +453,8 @@ module.exports = {
   getSystemRules,
   getAstrologyInterpreterRules,
   getThesisTurnRules,
+  getTopicTurnRules,
+  getAspectTurnRules,
   getConfidenceWordingRules,
   getResponseTemplates,
   buildRuntimeContext,
