@@ -33,12 +33,16 @@
       role="alert"
     >
       <strong>Wrong URL in the address bar.</strong>
-      This tab is <strong>Live Server</strong> (port 5500/5501), which only serves files. It is not the AstroGuide app. Running
-      <code>npm start</code> in <code>backend</code> does <em>not</em> switch this tab — you must open the app on port 3000.
+      This tab opened the HTML file directly (<code>file://</code>) or via <strong>Live Server</strong>, which only serves files. Running
+      <code>npm start</code> does <em>not</em> switch this tab — you must open the app on port 3000.
       <a href="http://127.0.0.1:3000/index.html">Open AstroGuide: http://127.0.0.1:3000/index.html</a>
     </div>
     <script>
       (function () {
+        if (location.protocol === "file:") {
+          location.replace("http://127.0.0.1:3000/index.html");
+          return;
+        }
         var p = String(location.port || "");
         if (p === "5500" || p === "5501") {
           var el = document.getElementById("live-server-dev-banner");
@@ -807,9 +811,42 @@
       .chart-wheel-loupe.chart-wheel-loupe-visible {
         display: block;
       }
+      .chart-wheel-loupe.chart-wheel-loupe-desktop {
+        width: 168px;
+        height: 168px;
+        border-width: 3px;
+        cursor: crosshair;
+        box-shadow:
+          0 0 0 1px rgba(16, 185, 129, 0.35),
+          0 12px 36px rgba(0, 0, 0, 0.55);
+        pointer-events: auto !important;
+      }
+      .chart-wheel-loupe.chart-wheel-loupe-desktop * {
+        pointer-events: none !important;
+      }
+      .chart-wheel-loupe::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 10px;
+        height: 10px;
+        margin: -5px 0 0 -5px;
+        border: 1px solid rgba(255, 255, 255, 0.75);
+        border-radius: 50%;
+        box-shadow: 0 0 0 1px rgba(11, 17, 32, 0.5);
+        z-index: 2;
+      }
       /* Clone must never steal hits — probe uses elementFromPoint on the real chart below */
       .chart-wheel-loupe,
       .chart-wheel-loupe * {
+        pointer-events: none !important;
+      }
+      .chart-wheel-loupe.chart-wheel-loupe-desktop {
+        pointer-events: auto !important;
+        cursor: crosshair;
+      }
+      .chart-wheel-loupe.chart-wheel-loupe-desktop * {
         pointer-events: none !important;
       }
       .chart-wheel-loupe-inner {
@@ -825,6 +862,53 @@
       }
       body.chart-wheel-loupe-mode .chart-wheel-container.chart-wheel-loupe-active {
         touch-action: none;
+      }
+      .chart-wheel-pick-menu {
+        position: fixed;
+        z-index: 240;
+        min-width: 200px;
+        max-width: min(320px, calc(100vw - 16px));
+        max-height: min(360px, calc(100vh - 24px));
+        overflow: auto;
+        padding: 8px;
+        border-radius: 12px;
+        background: #1a1b32;
+        border: 1px solid #3d3f63;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+      }
+      .chart-wheel-pick-menu[hidden] {
+        display: none;
+      }
+      .chart-wheel-pick-title {
+        margin: 2px 6px 8px;
+        font-size: 0.75rem;
+        letter-spacing: 0.02em;
+        color: #a0a0c0;
+      }
+      .chart-wheel-pick-item {
+        display: block;
+        width: 100%;
+        text-align: left;
+        margin: 0 0 4px;
+        padding: 9px 10px;
+        border: 0;
+        border-radius: 8px;
+        background: #2a2b48;
+        color: #f5f6fa;
+        font: inherit;
+        font-size: 0.9rem;
+        cursor: pointer;
+      }
+      .chart-wheel-pick-item:hover,
+      .chart-wheel-pick-item:focus {
+        background: #3a3c64;
+        outline: none;
+      }
+      .chart-wheel-pick-kind {
+        display: block;
+        font-size: 0.7rem;
+        color: #9aa0c8;
+        margin-bottom: 2px;
       }
       /* Interactive chart elements - hover effects */
       .chart-wheel-container svg .planet-group,
@@ -1633,12 +1717,29 @@
         ) {
           throw new Error("Coordinates out of valid range");
         }
+        const countryCode =
+          result.address && result.address.country_code
+            ? String(result.address.country_code).toLowerCase()
+            : null;
         return {
           latitude,
           longitude,
           displayName: result.display_name || cityName,
           originalQuery: cityName,
+          countryCode,
         };
+      }
+
+      /**
+       * Fixed UTC offsets from ISO country code (where longitude/15 rounds wrong).
+       * India and neighbors use fractional-hour zones; integer tzone breaks ascendant vs astro.com.
+       */
+      function timezoneOffsetFromCountryCode(countryCode) {
+        if (!countryCode) return null;
+        const c = String(countryCode).toLowerCase();
+        if (c === "in" || c === "lk") return 5.5; // IST / Sri Lanka
+        if (c === "np") return 5.75; // Nepal Time
+        return null;
       }
 
       function getNthSunday(year, month, n) {
@@ -1653,7 +1754,9 @@
         return lastDay.getDate() - dayOfWeek;
       }
 
-      async function calculateTimezone(lat, lon, y, m, d) {
+      async function calculateTimezone(lat, lon, y, m, d, countryCode) {
+        const fromCountry = timezoneOffsetFromCountryCode(countryCode);
+        if (fromCountry != null) return fromCountry;
         let baseOffset = Math.round(lon / 15);
         if (lon >= -125 && lon < -67) {
           if (lon >= -125 && lon < -112) baseOffset = -8;
@@ -1681,6 +1784,20 @@
           }
         }
         return baseOffset;
+      }
+
+      function isWrongDevOrigin() {
+        return (
+          location.protocol === "file:" ||
+          location.port === "5500" ||
+          location.port === "5501"
+        );
+      }
+
+      function apiUrl(path) {
+        const p = path.charAt(0) === "/" ? path : "/" + path;
+        if (isWrongDevOrigin()) return "http://127.0.0.1:3000" + p;
+        return p;
       }
 
       /**
@@ -1738,6 +1855,7 @@
           year,
           month,
           day,
+          coordinates.countryCode,
         );
         const requestData = {
           year,
@@ -1749,7 +1867,7 @@
           longitude: coordinates.longitude,
           timezone,
         };
-        const response = await fetch("/api/birth-chart", {
+        const response = await fetch(apiUrl("/api/birth-chart"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(requestData),
@@ -1998,6 +2116,23 @@
           typeof window.matchMedia === "function" &&
           window.matchMedia("(max-width: 767px)").matches
         );
+      }
+
+      const wheelPickState = {
+        targets: [],
+        centerX: 0,
+        centerY: 0,
+        innerRadius: 0,
+        pointRadius: 30,
+        lineRadius: 16,
+        menuEl: null,
+        deskPark: null,
+        deskDelayTimer: null,
+        clearDeskLoupeDelay: null,
+      };
+
+      function hideWheelPickMenu() {
+        if (wheelPickState.menuEl) wheelPickState.menuEl.hidden = true;
       }
 
       migrateFromLegacyProfiles();
@@ -2307,7 +2442,7 @@
                 birthChart: birthChartData,
                 conversationHistory,
               });
-              const response = await fetch("/api/chat", {
+              const response = await fetch(apiUrl("/api/chat"), {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
@@ -2345,6 +2480,17 @@
                       data.error ||
                       response.statusText ||
                       "Unknown error";
+                const quotaError =
+                  /429|insufficient_quota|no credits remaining|billing/i.test(
+                    String(errMsg),
+                  );
+                if (quotaError) {
+                  await queueBotMessage(
+                    "I couldn't generate that reading just now. Try again in a moment, or ask a more specific question about a planet, house, or aspect.",
+                  );
+                  hideSpinner();
+                  return;
+                }
                 const stageHint =
                   data.stage != null ? ` [Stage: ${data.stage}]` : "";
                 const stackPreview =
@@ -2397,8 +2543,11 @@
               appendFollowUpSuggestionChips(followUps);
             } catch (error) {
               console.error("Error:", error);
+              const openedAsFile = location.protocol === "file:";
               await queueBotMessage(
-                "I'm having trouble processing your question right now. Could you try rephrasing it?",
+                openedAsFile || isWrongDevOrigin()
+                  ? "This tab is not the AstroGuide server, so chat cannot reach /api/chat. Open http://127.0.0.1:3000/index.html (after npm start) instead of the HTML file or Live Server."
+                  : "I'm having trouble processing your question right now. Could you try rephrasing it?",
               );
             } finally {
               console.log("[SPINNER] Hiding spinner after chat follow-up");
@@ -2744,6 +2893,8 @@
             dispatchLoupeLeave(lastHoverTarget, probeX, probeY);
           }
           lastHoverTarget = null;
+          const picked = resolveWheelPick(svgRoot, probeX, probeY);
+          if (picked !== "none") return;
           const rawEl = document.elementFromPoint(probeX, probeY);
           const clickTarget = resolveLoupeHoverTarget(rawEl, svgRoot);
           if (clickTarget) {
@@ -2846,6 +2997,334 @@
           },
           { capture: true },
         );
+
+        const DESK_PX = 168;
+        const DESK_R = DESK_PX / 2;
+        const DESK_MAG = 2.7;
+        const DESK_DELAY_MS = 650;
+        let desktopLoupeOn = false;
+        let deskRafId = null;
+        let pendingDesk = null;
+        let lastDeskX = 0;
+        let lastDeskY = 0;
+        let loupeClickBound = false;
+        let deskDelayKey = null;
+        let lastDeskHover = null;
+
+        function clearDeskLoupeDelay() {
+          if (wheelPickState.deskDelayTimer) {
+            clearTimeout(wheelPickState.deskDelayTimer);
+            wheelPickState.deskDelayTimer = null;
+          }
+          deskDelayKey = null;
+        }
+        wheelPickState.clearDeskLoupeDelay = clearDeskLoupeDelay;
+
+        function hideDesktopLoupe() {
+          if (loupeActive) return;
+          clearDeskLoupeDelay();
+          if (deskRafId != null) {
+            cancelAnimationFrame(deskRafId);
+            deskRafId = null;
+          }
+          pendingDesk = null;
+          wheelPickState.deskPark = null;
+          if (lastDeskHover && typeof lastDeskHover.unhover === "function") {
+            lastDeskHover.unhover();
+          }
+          lastDeskHover = null;
+          if (!desktopLoupeOn) return;
+          desktopLoupeOn = false;
+          const svgRoot = chartWheel.querySelector("svg");
+          if (lastHoverTarget && svgRoot && svgRoot.contains(lastHoverTarget)) {
+            dispatchLoupeLeave(lastHoverTarget, lastCX, lastCY);
+          }
+          lastHoverTarget = null;
+          if (loupeEl) {
+            loupeEl.classList.remove(
+              "chart-wheel-loupe-visible",
+              "chart-wheel-loupe-desktop",
+            );
+            if (innerLoupe) innerLoupe.innerHTML = "";
+          }
+        }
+
+        function clusterCenterClient(svgEl, ranked) {
+          const hover = { clientX: lastDeskX || lastCX, clientY: lastDeskY || lastCY };
+          const at = clientToWheelXY(svgEl, hover.clientX, hover.clientY);
+          let sx = 0;
+          let sy = 0;
+          let n = 0;
+          ranked.forEach(function (h) {
+            if (h.near) {
+              sx += h.near.x;
+              sy += h.near.y;
+              n += 1;
+            }
+          });
+          if (!n) return { clientX: hover.clientX, clientY: hover.clientY };
+          return wheelToClientXY(svgEl, sx / n, sy / n);
+        }
+
+        function parkDesktopLoupe(svgEl, ranked) {
+          const keys = ranked.map(function (h) {
+            return pickKey(h.target);
+          });
+          const key = keys.slice().sort().join("||");
+          if (wheelPickState.deskPark && wheelPickState.deskPark.key === key) {
+            return;
+          }
+          const center = clusterCenterClient(svgEl, ranked);
+          ensureLoupe();
+          bindLoupeClicks();
+          desktopLoupeOn = true;
+          lastCX = center.clientX;
+          lastCY = center.clientY;
+          wheelPickState.deskPark = {
+            key: key,
+            keys: keys,
+            probeX: center.clientX,
+            probeY: center.clientY,
+          };
+          loupeEl.classList.add(
+            "chart-wheel-loupe-desktop",
+            "chart-wheel-loupe-visible",
+          );
+          let loupeLeft = center.clientX - DESK_R;
+          let loupeTop = center.clientY - DESK_R;
+          const maxL = Math.max(8, window.innerWidth - DESK_PX - 8);
+          const maxT = Math.max(8, window.innerHeight - DESK_PX - 8);
+          loupeEl.style.left = `${Math.min(Math.max(8, loupeLeft), maxL)}px`;
+          loupeEl.style.top = `${Math.min(Math.max(8, loupeTop), maxT)}px`;
+          refreshDesktopLoupeClone(svgEl);
+          setDeskHover(pickLoupeHoverTarget(svgEl, lastDeskX, lastDeskY));
+        }
+
+        function stillNearParkedCluster(svgEl, clientX, clientY) {
+          const park = wheelPickState.deskPark;
+          if (!park) return false;
+          const parked = new Set(park.keys);
+          const hits = collectWheelPickHits(svgEl, clientX, clientY);
+          return hits.some(function (h) {
+            return parked.has(pickKey(h));
+          });
+        }
+
+        function refreshDesktopLoupeClone(svgEl) {
+          const park = wheelPickState.deskPark;
+          if (!park || !loupeEl || !innerLoupe || !svgEl) return;
+          const bbox = svgEl.getBoundingClientRect();
+          const px = park.probeX - bbox.left;
+          const py = park.probeY - bbox.top;
+          const fresh = svgEl.cloneNode(true);
+          fresh.removeAttribute("id");
+          innerLoupe.innerHTML = "";
+          innerLoupe.appendChild(fresh);
+          fresh.style.width = `${bbox.width}px`;
+          fresh.style.height = `${bbox.height}px`;
+          fresh.style.transform = `translate(${DESK_R - px * DESK_MAG}px, ${DESK_R - py * DESK_MAG}px) scale(${DESK_MAG})`;
+          fresh.style.transformOrigin = "0 0";
+        }
+
+        function pickLoupeHoverTarget(svgEl, clientX, clientY) {
+          const ranked = rankWheelPickHits(svgEl, clientX, clientY, 12);
+          let pool = ranked.filter(function (h) {
+            return h.target.kind === "Aspect" || h.target.isLine;
+          });
+          if (!pool.length) pool = ranked;
+          return pool[0] ? pool[0].target : null;
+        }
+
+        function setDeskHover(target) {
+          if (lastDeskHover === target) return;
+          if (lastDeskHover && typeof lastDeskHover.unhover === "function") {
+            lastDeskHover.unhover();
+          }
+          lastDeskHover = target;
+          if (target && typeof target.hover === "function") {
+            target.hover();
+          }
+          const svgNow = chartWheel.querySelector("svg");
+          if (svgNow && desktopLoupeOn) refreshDesktopLoupeClone(svgNow);
+        }
+
+        function loupeClickToClient(clickClientX, clickClientY) {
+          const park = wheelPickState.deskPark;
+          const svgEl = chartWheel.querySelector("svg");
+          if (!park || !loupeEl || !svgEl) return null;
+          const lb = loupeEl.getBoundingClientRect();
+          const lx = clickClientX - lb.left;
+          const ly = clickClientY - lb.top;
+          const dx = lx - lb.width / 2;
+          const dy = ly - lb.height / 2;
+          if (dx * dx + dy * dy > (lb.width / 2) * (lb.width / 2)) return null;
+          const bbox = svgEl.getBoundingClientRect();
+          const probePx = park.probeX - bbox.left;
+          const probePy = park.probeY - bbox.top;
+          const sx = probePx + (lx - DESK_R) / DESK_MAG;
+          const sy = probePy + (ly - DESK_R) / DESK_MAG;
+          return { clientX: bbox.left + sx, clientY: bbox.top + sy, svgEl: svgEl };
+        }
+
+        function activateFromLoupePoint(clientX, clientY, svgEl) {
+          const ranked = rankWheelPickHits(svgEl, clientX, clientY, 9);
+          let pool = ranked.filter(function (h) {
+            return h.target.kind === "Aspect" || h.target.isLine;
+          });
+          if (!pool.length) pool = ranked;
+          if (!pool.length) return false;
+          pool[0].target.activate();
+          hideDesktopLoupe();
+          return true;
+        }
+
+        function bindLoupeClicks() {
+          if (loupeClickBound || !loupeEl) return;
+          loupeClickBound = true;
+          loupeEl.addEventListener("pointermove", function (e) {
+            if (e.pointerType === "touch") return;
+            if (!desktopLoupeOn) return;
+            const mapped = loupeClickToClient(e.clientX, e.clientY);
+            if (!mapped) {
+              setDeskHover(null);
+              return;
+            }
+            setDeskHover(
+              pickLoupeHoverTarget(mapped.svgEl, mapped.clientX, mapped.clientY),
+            );
+          });
+          loupeEl.addEventListener("click", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (lastDeskHover) {
+              lastDeskHover.activate();
+              hideDesktopLoupe();
+              return;
+            }
+            const mapped = loupeClickToClient(e.clientX, e.clientY);
+            if (!mapped) return;
+            activateFromLoupePoint(mapped.clientX, mapped.clientY, mapped.svgEl);
+          });
+          loupeEl.addEventListener("mouseleave", function (e) {
+            if (e.relatedTarget && chartWheel.contains(e.relatedTarget)) return;
+            hideDesktopLoupe();
+          });
+        }
+
+        function renderDesktopLoupe(clientX, clientY) {
+          if (loupeActive) return;
+          lastDeskX = clientX;
+          lastDeskY = clientY;
+          const svgEl = chartWheel.querySelector("svg");
+          if (!svgEl) {
+            hideDesktopLoupe();
+            return;
+          }
+          if (wheelPickState.menuEl && !wheelPickState.menuEl.hidden) {
+            hideDesktopLoupe();
+            return;
+          }
+          if (
+            desktopLoupeOn &&
+            stillNearParkedCluster(svgEl, clientX, clientY)
+          ) {
+            return;
+          }
+          const ranked = rankWheelPickHits(svgEl, clientX, clientY);
+          const overlap = ranked.filter(function (h) {
+            return h.target.kind === "Aspect" || h.target.isLine;
+          });
+          if (overlap.length < 2 && ranked.length < 2) {
+            hideDesktopLoupe();
+            return;
+          }
+          const use = overlap.length >= 2 ? overlap : ranked;
+          const key = use
+            .map(function (h) {
+              return pickKey(h.target);
+            })
+            .sort()
+            .join("||");
+          if (deskDelayKey === key) return;
+          clearDeskLoupeDelay();
+          deskDelayKey = key;
+          wheelPickState.deskDelayTimer = setTimeout(function () {
+            wheelPickState.deskDelayTimer = null;
+            const svgNow = chartWheel.querySelector("svg");
+            if (!svgNow) {
+              deskDelayKey = null;
+              return;
+            }
+            const again = rankWheelPickHits(svgNow, lastDeskX, lastDeskY);
+            const againOverlap = again.filter(function (h) {
+              return h.target.kind === "Aspect" || h.target.isLine;
+            });
+            if (againOverlap.length < 2 && again.length < 2) {
+              deskDelayKey = null;
+              return;
+            }
+            parkDesktopLoupe(
+              svgNow,
+              againOverlap.length >= 2 ? againOverlap : again,
+            );
+          }, DESK_DELAY_MS);
+        }
+
+        function scheduleDesktopLoupe(clientX, clientY) {
+          pendingDesk = { clientX: clientX, clientY: clientY };
+          if (deskRafId != null) return;
+          deskRafId = requestAnimationFrame(function () {
+            deskRafId = null;
+            if (!pendingDesk) return;
+            renderDesktopLoupe(pendingDesk.clientX, pendingDesk.clientY);
+            pendingDesk = null;
+          });
+        }
+
+        chartWheel.addEventListener("pointermove", function (e) {
+          if (e.pointerType === "touch") return;
+          if (loupeActive) return;
+          scheduleDesktopLoupe(e.clientX, e.clientY);
+        });
+        chartWheel.addEventListener("mouseleave", function (e) {
+          if (e.relatedTarget && loupeEl && loupeEl.contains(e.relatedTarget))
+            return;
+          hideDesktopLoupe();
+        });
+      })();
+
+      (function initWheelPickClicks() {
+        const chartWheel = document.getElementById("chart-wheel-container");
+        if (!chartWheel) return;
+        chartWheel.addEventListener(
+          "click",
+          function (e) {
+            if (e.target.closest && e.target.closest("#chart-wheel-pick-menu"))
+              return;
+            if (e.target.closest && e.target.closest("#chart-wheel-loupe"))
+              return;
+            const svgEl = chartWheel.querySelector("svg");
+            if (!svgEl) return;
+            if (wheelPickState.deskPark) {
+              e.preventDefault();
+              e.stopImmediatePropagation();
+              return;
+            }
+            if (typeof wheelPickState.clearDeskLoupeDelay === "function") {
+              wheelPickState.clearDeskLoupeDelay();
+            }
+          },
+          true,
+        );
+        document.addEventListener("click", function (e) {
+          const menu = wheelPickState.menuEl;
+          if (!menu || menu.hidden) return;
+          if (menu.contains(e.target)) return;
+          hideWheelPickMenu();
+        });
+        document.addEventListener("keydown", function (e) {
+          if (e.key === "Escape") hideWheelPickMenu();
+        });
       })();
 
       // Profile dropdown toggle
@@ -2996,7 +3475,14 @@
             alert("Could not find location: " + err.message);
             return;
           }
-          const timezone = Math.round(coordinates.longitude / 15);
+          const timezone = await calculateTimezone(
+            coordinates.latitude,
+            coordinates.longitude,
+            y,
+            m,
+            d,
+            coordinates.countryCode,
+          );
           const requestData = {
             year: y,
             month: m,
@@ -3008,7 +3494,7 @@
             timezone: timezone,
           };
           try {
-            const response = await fetch("/api/birth-chart", {
+            const response = await fetch(apiUrl("/api/birth-chart"), {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(requestData),
@@ -3194,6 +3680,181 @@
         }
       }
 
+      function resetWheelPickTargets(opts) {
+        wheelPickState.targets = [];
+        wheelPickState.deskPark = null;
+        const parkedLoupe = document.getElementById("chart-wheel-loupe");
+        if (parkedLoupe) {
+          parkedLoupe.classList.remove(
+            "chart-wheel-loupe-visible",
+            "chart-wheel-loupe-desktop",
+          );
+        }
+        if (!opts) return;
+        wheelPickState.centerX = opts.centerX;
+        wheelPickState.centerY = opts.centerY;
+        wheelPickState.innerRadius = opts.innerRadius || 0;
+        wheelPickState.pointRadius = opts.pointRadius || 30;
+        wheelPickState.lineRadius = opts.lineRadius || 16;
+      }
+
+      function registerWheelPickTarget(target) {
+        if (!target || !target.query || typeof target.activate !== "function")
+          return;
+        wheelPickState.targets.push(target);
+      }
+
+      function distPoint(x1, y1, x2, y2) {
+        return Math.hypot(x2 - x1, y2 - y1);
+      }
+
+      function closestOnSegment(px, py, x1, y1, x2, y2) {
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        const len2 = dx * dx + dy * dy;
+        if (len2 === 0) {
+          return { x: x1, y: y1, dist: distPoint(px, py, x1, y1) };
+        }
+        let t = ((px - x1) * dx + (py - y1) * dy) / len2;
+        t = Math.max(0, Math.min(1, t));
+        const x = x1 + t * dx;
+        const y = y1 + t * dy;
+        return { x, y, dist: distPoint(px, py, x, y) };
+      }
+
+      function clientToWheelXY(svgEl, clientX, clientY) {
+        const box = svgEl.getBoundingClientRect();
+        const vb = svgEl.viewBox && svgEl.viewBox.baseVal;
+        const vw = vb && vb.width ? vb.width : box.width;
+        const vh = vb && vb.height ? vb.height : box.height;
+        const x = ((clientX - box.left) * vw) / box.width - wheelPickState.centerX;
+        const y = ((clientY - box.top) * vh) / box.height - wheelPickState.centerY;
+        return { x, y };
+      }
+
+      function wheelToClientXY(svgEl, wx, wy) {
+        const box = svgEl.getBoundingClientRect();
+        const vb = svgEl.viewBox && svgEl.viewBox.baseVal;
+        const vw = vb && vb.width ? vb.width : box.width;
+        const vh = vb && vb.height ? vb.height : box.height;
+        return {
+          clientX: box.left + ((wx + wheelPickState.centerX) * box.width) / vw,
+          clientY: box.top + ((wy + wheelPickState.centerY) * box.height) / vh,
+        };
+      }
+
+      function rankWheelPickHits(svgEl, clientX, clientY, lineLimit) {
+        if (!svgEl || !wheelPickState.targets.length) return [];
+        const { x, y } = clientToWheelXY(svgEl, clientX, clientY);
+        const hits = [];
+        const dead = wheelPickState.innerRadius * 0.7;
+        const lineR =
+          lineLimit != null ? lineLimit : wheelPickState.lineRadius;
+        for (const t of wheelPickState.targets) {
+          let dist;
+          let nearPt = null;
+          if (t.isLine) {
+            nearPt = closestOnSegment(x, y, t.x1, t.y1, t.x2, t.y2);
+            if (t.kind === "Aspect" && Math.hypot(nearPt.x, nearPt.y) < dead) {
+              continue;
+            }
+            dist = nearPt.dist;
+          } else {
+            dist = distPoint(x, y, t.x, t.y);
+            nearPt = { x: t.x, y: t.y, dist: dist };
+          }
+          const limit =
+            t.threshold != null && lineLimit == null
+              ? t.threshold
+              : t.isLine
+                ? lineR
+                : wheelPickState.pointRadius;
+          if (dist <= limit) {
+            hits.push({ target: t, dist: dist, near: nearPt });
+          }
+        }
+        hits.sort((a, b) => {
+          if (a.dist !== b.dist) return a.dist - b.dist;
+          const rank = { Planet: 0, Angle: 1, Aspect: 2, Sign: 3, House: 4 };
+          return (rank[a.target.kind] || 9) - (rank[b.target.kind] || 9);
+        });
+        const seen = new Set();
+        const unique = [];
+        for (const h of hits) {
+          const key = h.target.kind + "|" + h.target.query;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          unique.push(h);
+        }
+        return unique;
+      }
+
+      function collectWheelPickHits(svgEl, clientX, clientY) {
+        return rankWheelPickHits(svgEl, clientX, clientY).map((h) => h.target);
+      }
+
+      function pickKey(t) {
+        return t.kind + "|" + t.query;
+      }
+
+      function ensureWheelPickMenu() {
+        if (wheelPickState.menuEl) return wheelPickState.menuEl;
+        const menu = document.createElement("div");
+        menu.id = "chart-wheel-pick-menu";
+        menu.className = "chart-wheel-pick-menu";
+        menu.hidden = true;
+        menu.setAttribute("role", "menu");
+        document.body.appendChild(menu);
+        wheelPickState.menuEl = menu;
+        return menu;
+      }
+
+      function showWheelPickMenu(targets, clientX, clientY) {
+        const menu = ensureWheelPickMenu();
+        menu.innerHTML = "";
+        const title = document.createElement("div");
+        title.className = "chart-wheel-pick-title";
+        title.textContent = "Choose what to ask about";
+        menu.appendChild(title);
+        targets.forEach((t) => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "chart-wheel-pick-item";
+          btn.setAttribute("role", "menuitem");
+          const kind = document.createElement("span");
+          kind.className = "chart-wheel-pick-kind";
+          kind.textContent = t.kind;
+          btn.appendChild(kind);
+          btn.appendChild(document.createTextNode(t.label));
+          btn.addEventListener("click", function (ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            hideWheelPickMenu();
+            t.activate();
+          });
+          menu.appendChild(btn);
+        });
+        menu.hidden = false;
+        const pad = 8;
+        const mw = menu.offsetWidth || 220;
+        const mh = menu.offsetHeight || 160;
+        let left = clientX + 12;
+        let top = clientY + 12;
+        if (left + mw > window.innerWidth - pad)
+          left = Math.max(pad, clientX - mw - 12);
+        if (top + mh > window.innerHeight - pad)
+          top = Math.max(pad, window.innerHeight - mh - pad);
+        menu.style.left = `${left}px`;
+        menu.style.top = `${top}px`;
+      }
+
+      function resolveWheelPick(svgEl, clientX, clientY) {
+        const ranked = rankWheelPickHits(svgEl, clientX, clientY);
+        if (!ranked.length) return "none";
+        ranked[0].target.activate();
+        return "one";
+      }
+
       /**
        * Render birth chart wheel with counter-clockwise progression (mirrored/reverse clock)
        *
@@ -3281,6 +3942,14 @@
           const outerRadius = totalRadius;
           const centerX = width / 2;
           const centerY = height / 2;
+          resetWheelPickTargets({
+            centerX: centerX,
+            centerY: centerY,
+            innerRadius: innerRadius,
+            pointRadius: isMobileChart ? 36 : 28,
+            lineRadius: isMobileChart ? 18 : 14,
+          });
+          hideWheelPickMenu();
 
           // Get Ascendant degree for rotation - normalize to 0-360 range
           let ascendantDegree = birthChart.angles?.ascendant?.degree;
@@ -3526,6 +4195,21 @@
                   );
                 });
 
+              const houseQuery = `House ${house.number}${house.sign ? ` ${house.sign}` : ""}`;
+              registerWheelPickTarget({
+                kind: "House",
+                label: houseQuery,
+                query: houseQuery,
+                isLine: true,
+                x1: innerPos.x,
+                y1: innerPos.y,
+                x2: pos.x,
+                y2: pos.y,
+                activate: function () {
+                  queryChartElement(houseQuery);
+                },
+              });
+
               const houseLine = svg
                 .append("line")
                 .attr("x1", innerPos.x)
@@ -3614,6 +4298,17 @@
                     `House ${house.number}${houseSign ? ` ${houseSign}` : ""}`,
                   );
                 });
+              registerWheelPickTarget({
+                kind: "House",
+                label: houseQuery,
+                query: houseQuery,
+                x: labelPos.x,
+                y: labelPos.y,
+                threshold: wheelProfile.houseLabelHitR + 8,
+                activate: function () {
+                  queryChartElement(houseQuery);
+                },
+              });
             }
           });
 
@@ -3771,6 +4466,17 @@
               .on("click", function () {
                 queryChartElement(signFullNames[i]);
               });
+            registerWheelPickTarget({
+              kind: "Sign",
+              label: signFullNames[i],
+              query: signFullNames[i],
+              x: pos.x,
+              y: pos.y,
+              threshold: wheelProfile.zodiacHit + 8,
+              activate: function () {
+                queryChartElement(signFullNames[i]);
+              },
+            });
           }
 
           // Shared planet glyph color and registry so aspects can bump planets on hover
@@ -4008,6 +4714,20 @@
                   `${planet1Name} ${aspectName} ${planet2Name}`,
                 );
               }
+              const aspectQuery = `${aspect.planet1.charAt(0).toUpperCase()}${aspect.planet1.slice(1)} ${aspect.aspect.toLowerCase()} ${aspect.planet2.charAt(0).toUpperCase()}${aspect.planet2.slice(1)}`;
+              registerWheelPickTarget({
+                kind: "Aspect",
+                label: aspectQuery,
+                query: aspectQuery,
+                isLine: true,
+                x1: pos1.x,
+                y1: pos1.y,
+                x2: pos2.x,
+                y2: pos2.y,
+                hover: handleAspectEnter,
+                unhover: handleAspectLeave,
+                activate: aspectClickQuery,
+              });
 
               deferredAspectHitAppends.push(function (overlayG) {
                 hitArea = overlayG
@@ -4149,7 +4869,7 @@
               } else {
                 label.text(labelText);
               }
-              g.on("mouseenter", function () {
+              function handleAngleEnter() {
                 const strokeHover = hoverColor || "#10b981";
                 visLine
                   .attr("stroke-width", 3.5)
@@ -4161,24 +4881,52 @@
                   label.select(".angle-degree-line").attr("font-size", "14px");
                   label.select(".angle-degree-min").attr("font-size", "9px");
                 }
-              })
-                .on("mouseleave", function () {
-                  visLine
-                    .attr("stroke-width", 2.5)
-                    .attr("opacity", 1)
-                    .attr("stroke", angleLineColor);
-                  if (hoverColor) label.attr("fill", color);
-                  label.attr("font-size", "16px");
-                  if (labelLine2 != null && labelLine2 !== "") {
-                    label
-                      .select(".angle-degree-line")
-                      .attr("font-size", "12px");
-                    label.select(".angle-degree-min").attr("font-size", "8px");
-                  }
-                })
+              }
+              function handleAngleLeave() {
+                visLine
+                  .attr("stroke-width", 2.5)
+                  .attr("opacity", 1)
+                  .attr("stroke", angleLineColor);
+                if (hoverColor) label.attr("fill", color);
+                label.attr("font-size", "16px");
+                if (labelLine2 != null && labelLine2 !== "") {
+                  label
+                    .select(".angle-degree-line")
+                    .attr("font-size", "12px");
+                  label.select(".angle-degree-min").attr("font-size", "8px");
+                }
+              }
+              g.on("mouseenter", handleAngleEnter)
+                .on("mouseleave", handleAngleLeave)
                 .on("click", function () {
                   queryChartElement(queryText);
                 });
+              registerWheelPickTarget({
+                kind: "Angle",
+                label: queryText,
+                query: queryText,
+                isLine: true,
+                x1: innerPos.x,
+                y1: innerPos.y,
+                x2: outerPos.x,
+                y2: outerPos.y,
+                hover: handleAngleEnter,
+                unhover: handleAngleLeave,
+                activate: function () {
+                  queryChartElement(queryText);
+                },
+              });
+              registerWheelPickTarget({
+                kind: "Angle",
+                label: queryText,
+                query: queryText,
+                x: labelPos.x,
+                y: labelPos.y,
+                threshold: 22,
+                activate: function () {
+                  queryChartElement(queryText);
+                },
+              });
             }
 
             // Angle labels outside the wheel (past zodiac ring); AC/DC further out with degree below
@@ -4523,6 +5271,30 @@
                       `${planetDisplayName}${planetSign ? ` ${planetSign}` : ""}`,
                     );
                   });
+                const planetDisplayName =
+                  planetName.charAt(0).toUpperCase() + planetName.slice(1);
+                const planetQuery = `${planetDisplayName}${planetData.sign ? ` ${planetData.sign}` : ""}`;
+                registerWheelPickTarget({
+                  kind: "Planet",
+                  label: planetQuery,
+                  query: planetQuery,
+                  x: pos.x,
+                  y: pos.y,
+                  threshold: wheelProfile.planetHit + 10,
+                  hover: function () {
+                    planetSymbol
+                      .attr("font-size", `${wheelProfile.planetGlyphHi}px`)
+                      .attr("fill", "#10b981");
+                  },
+                  unhover: function () {
+                    planetSymbol
+                      .attr("font-size", `${wheelProfile.planetGlyph}px`)
+                      .attr("fill", planetGlyphColor);
+                  },
+                  activate: function () {
+                    queryChartElement(planetQuery);
+                  },
+                });
               },
             );
           }

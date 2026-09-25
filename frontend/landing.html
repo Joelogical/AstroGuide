@@ -9,8 +9,61 @@
     <meta name="theme-color" content="#1a1a2e" />
     <title>AstroGuide - Welcome</title>
     <link rel="stylesheet" href="styles.css" />
+    <style>
+      .live-server-dev-banner {
+        display: none;
+        padding: 12px 14px;
+        margin: 0;
+        background: #422006;
+        color: #ffedd5;
+        border-bottom: 2px solid #f97316;
+        font-size: 0.95rem;
+        line-height: 1.45;
+      }
+      .live-server-dev-banner:not([hidden]) {
+        display: block;
+      }
+      .live-server-dev-banner a {
+        color: #fde68a;
+        font-weight: 600;
+      }
+    </style>
   </head>
   <body>
+    <div
+      id="live-server-dev-banner"
+      class="live-server-dev-banner"
+      hidden
+      role="alert"
+    >
+      <strong>Wrong URL in the address bar.</strong>
+      Open the app from the server, not this file.
+      <a href="http://127.0.0.1:3000/landing.html">http://127.0.0.1:3000/landing.html</a>
+    </div>
+    <script>
+      (function () {
+        if (location.protocol === "file:") {
+          location.replace("http://127.0.0.1:3000/landing.html");
+          return;
+        }
+        var p = String(location.port || "");
+        if (p === "5500" || p === "5501") {
+          var el = document.getElementById("live-server-dev-banner");
+          if (el) el.removeAttribute("hidden");
+        }
+      })();
+      function apiUrl(path) {
+        var p = path.charAt(0) === "/" ? path : "/" + path;
+        if (
+          location.protocol === "file:" ||
+          location.port === "5500" ||
+          location.port === "5501"
+        ) {
+          return "http://127.0.0.1:3000" + p;
+        }
+        return p;
+      }
+    </script>
     <div class="landing-container">
       <div class="auth-container">
         <h1>AstroGuide</h1>
@@ -113,7 +166,7 @@
         submitButton.textContent = "Logging in...";
 
         try {
-          const response = await fetch("/api/login", {
+          const response = await fetch(apiUrl("/api/login"), {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -216,7 +269,7 @@
           submitButton.textContent = "Signing up...";
 
           try {
-            const response = await fetch("/api/signup", {
+            const response = await fetch(apiUrl("/api/signup"), {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",

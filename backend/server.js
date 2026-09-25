@@ -38,6 +38,7 @@ const {
   composeSystemContent,
 } = require("./prompt_layers");
 const { generateFollowUpSuggestionsLLM } = require("./followup_suggestions");
+const { handleQuestion } = require("./enhanced_question_handler");
 
 // Debug logging for environment variables
 console.log("Environment variables loaded:");
@@ -840,6 +841,104 @@ function wantsChartInterpretation(message, conversationHistory = []) {
   return false;
 }
 
+function isOpenAIQuotaOrBillingError(err) {
+  if (!err) return false;
+  const status = err.status || err.statusCode;
+  const text = [err.message, err.code, err.error && err.error.message]
+    .filter(Boolean)
+    .join(" ");
+  if (status === 429) return true;
+  return /429|insufficient_quota|no credits remaining|billing/i.test(text);
+}
+
+function wrapOpenAIError(openaiErr) {
+  const wrapped = new Error("[OpenAI create] " + (openaiErr.message || ""));
+  wrapped.stack = openaiErr.stack;
+  wrapped.status = openaiErr.status || openaiErr.statusCode;
+  wrapped.code = openaiErr.code;
+  return wrapped;
+}
+
+function buildLocalChartSynthesis(birthChart) {
+  const planets = (birthChart && birthChart.planets) || {};
+  const sun = planets.sun;
+  const moon = planets.moon;
+  const asc = birthChart && birthChart.angles && birthChart.angles.ascendant;
+  const parts = [];
+  if (sun && moon && asc) {
+    parts.push(
+      `Your Sun is in ${sun.sign} (house ${sun.house}), the Moon is in ${moon.sign} (house ${moon.house}), and the Ascendant is ${asc.sign}.`,
+    );
+  }
+  try {
+    const interp = generateChartInterpretation(birthChart);
+    const ruler = interp.coreSynthesis && interp.coreSynthesis.chartRuler;
+    if (ruler) {
+      parts.push(
+        `The chart ruler is ${ruler.planet} in ${ruler.sign} in house ${ruler.house}.`,
+      );
+    }
+    const themes = interp.keyThemes || [];
+    if (themes.length) {
+      parts.push(`Themes that stand out: ${themes.slice(0, 3).join("; ")}.`);
+    }
+  } catch (synthErr) {
+    console.warn("[CHAT] local synthesis failed:", synthErr.message);
+  }
+  if (!parts.length) {
+    parts.push("I can still read the stored chart, but I need a more specific question.");
+  }
+  return parts.join(" ");
+}
+
+function buildLocalChatReply(message, birthChart, conversationHistory) {
+  if (!birthChart) {
+    return "I need a birth chart loaded before I can answer that.";
+  }
+  if (
+    isCasualMessage(message) &&
+    !wantsChartInterpretation(message, conversationHistory || [])
+  ) {
+    return "Hi — I'm here. Ask about a planet, house, or how the chart fits together.";
+  }
+  if (isFactualQuestion(message)) {
+    const factual = answerFactualQuestion(message, birthChart);
+    if (factual) return factual;
+  }
+  try {
+    const asked = handleQuestion(message, birthChart);
+    if (asked && asked.answer) return asked.answer;
+  } catch (handlerErr) {
+    console.warn("[CHAT] local handleQuestion failed:", handlerErr.message);
+  }
+  return buildLocalChartSynthesis(birthChart);
+}
+
+function sendLocalChatFallback(res, payload) {
+  if (res.headersSent) return;
+  const response = buildLocalChatReply(
+    payload.message,
+    payload.birthChart,
+    payload.conversationHistory,
+  );
+  console.warn("[CHAT] Using local fallback (OpenAI unavailable)");
+  return res.json({
+    response,
+    followUpSuggestions: [],
+    followUpQuestion: null,
+    usedLocalFallback: true,
+  });
+}
+
+function fallbackPayloadFromReq(req) {
+  const body = (req && req.body) || {};
+  return {
+    message: body.message,
+    birthChart: body.birthChart,
+    conversationHistory: body.conversationHistory || [],
+  };
+}
+
 // Chat endpoint for follow-up questions (wrapped so async rejections return detailed 500 with stage/stack)
 app.post("/api/chat", (req, res) => {
   console.log("[CHAT] *** Request received ***");
@@ -1165,11 +1264,7 @@ app.post("/api/chat", (req, res) => {
             frequency_penalty: 0.0,
           });
         } catch (openaiErr) {
-          const wrapped = new Error(
-            "[OpenAI create] " + (openaiErr.message || ""),
-          );
-          wrapped.stack = openaiErr.stack;
-          throw wrapped;
+          throw wrapOpenAIError(openaiErr);
         }
 
         const finalResponse = completion.choices[0].message.content || "";
@@ -1451,11 +1546,7 @@ app.post("/api/chat", (req, res) => {
           frequency_penalty: 0.0,
         });
       } catch (openaiErr) {
-        const wrapped = new Error(
-          "[OpenAI create] " + (openaiErr.message || ""),
-        );
-        wrapped.stack = openaiErr.stack;
-        throw wrapped;
+        throw wrapOpenAIError(openaiErr);
       }
 
       let completionPlain;
@@ -1565,9 +1656,17 @@ app.post("/api/chat", (req, res) => {
           : {}),
       });
     } catch (error) {
+      if (isOpenAIQuotaOrBillingError(error)) {
+        return sendLocalChatFallback(res, fallbackPayloadFromReq(req));
+      }
       send500(error);
     }
-  })().catch(send500);
+  })().catch((err) => {
+    if (isOpenAIQuotaOrBillingError(err)) {
+      return sendLocalChatFallback(res, fallbackPayloadFromReq(req));
+    }
+    send500(err);
+  });
 }); // handler returns promise so .catch(send500) handles async rejections
 
 // Debug: run chat flow without OpenAI to find "Assignment to constant variable"
@@ -1688,7 +1787,17 @@ app.post("/api/test-general-question", (req, res) => {
 });
 
 // Static frontend after all /api routes so API handlers always run first
-app.use(express.static(path.join(__dirname, "../frontend")));
+app.use(
+  express.static(path.join(__dirname, "../frontend"), {
+    etag: false,
+    lastModified: false,
+    setHeaders(res, filePath) {
+      if (/\.html?$/i.test(filePath)) {
+        res.setHeader("Cache-Control", "no-store");
+      }
+    },
+  }),
+);
 
 // Catch-all error handler so 500s are logged and returned safely
 app.use((err, req, res, next) => {
