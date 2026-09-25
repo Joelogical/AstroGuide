@@ -820,6 +820,42 @@
           0 0 0 1px rgba(16, 185, 129, 0.35),
           0 12px 36px rgba(0, 0, 0, 0.55);
         pointer-events: auto !important;
+        transform: scale(0.28);
+        opacity: 0;
+        transform-origin: 50% 50%;
+        will-change: transform, opacity;
+      }
+      .chart-wheel-loupe.chart-wheel-loupe-desktop.chart-wheel-loupe-open {
+        animation: chart-wheel-loupe-expand 0.48s cubic-bezier(0.16, 1, 0.3, 1)
+          both;
+      }
+      .chart-wheel-loupe.chart-wheel-loupe-desktop.chart-wheel-loupe-closing {
+        animation: chart-wheel-loupe-shrink 0.22s ease-in both;
+        pointer-events: none !important;
+      }
+      @keyframes chart-wheel-loupe-expand {
+        0% {
+          transform: scale(0.28);
+          opacity: 0;
+        }
+        68% {
+          transform: scale(1.055);
+          opacity: 1;
+        }
+        100% {
+          transform: scale(1);
+          opacity: 1;
+        }
+      }
+      @keyframes chart-wheel-loupe-shrink {
+        from {
+          transform: scale(1);
+          opacity: 1;
+        }
+        to {
+          transform: scale(0.5);
+          opacity: 0;
+        }
       }
       .chart-wheel-loupe.chart-wheel-loupe-desktop * {
         pointer-events: none !important;
@@ -859,6 +895,51 @@
       }
       .chart-wheel-loupe-inner svg {
         display: block;
+      }
+      .chart-wheel-loupe-caption {
+        display: none;
+        position: fixed;
+        z-index: 210;
+        max-width: 240px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        background: rgba(15, 23, 42, 0.96);
+        border: 1px solid #475569;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+        color: #e2e8f0;
+        font-size: 0.8rem;
+        line-height: 1.35;
+        pointer-events: none;
+      }
+      .chart-wheel-loupe-caption.chart-wheel-loupe-caption-visible {
+        display: block;
+        animation: chart-wheel-loupe-caption-in 0.28s ease-out 0.14s both;
+      }
+      @keyframes chart-wheel-loupe-caption-in {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .chart-wheel-loupe.chart-wheel-loupe-desktop,
+        .chart-wheel-loupe.chart-wheel-loupe-desktop.chart-wheel-loupe-open,
+        .chart-wheel-loupe.chart-wheel-loupe-desktop.chart-wheel-loupe-closing,
+        .chart-wheel-loupe-caption.chart-wheel-loupe-caption-visible {
+          animation: none !important;
+          transform: none !important;
+          opacity: 1 !important;
+        }
+      }
+      .chart-wheel-loupe-caption-name {
+        display: block;
+        font-weight: 600;
+        color: #f8fafc;
+        margin-bottom: 2px;
       }
       body.chart-wheel-loupe-mode .chart-wheel-container.chart-wheel-loupe-active {
         touch-action: none;
@@ -2707,6 +2788,7 @@
         let lastCY = 0;
         let lastHoverTarget = null;
         let loupeEl = null;
+        let loupeCaptionEl = null;
         let innerLoupe = null;
         let loupeRafId = null;
         let pendingLoupeTouch = null;
@@ -2792,6 +2874,67 @@
           innerLoupe.className = "chart-wheel-loupe-inner";
           loupeEl.appendChild(innerLoupe);
           document.body.appendChild(loupeEl);
+          loupeCaptionEl = document.createElement("div");
+          loupeCaptionEl.id = "chart-wheel-loupe-caption";
+          loupeCaptionEl.className = "chart-wheel-loupe-caption";
+          loupeCaptionEl.setAttribute("aria-hidden", "true");
+          document.body.appendChild(loupeCaptionEl);
+        }
+
+        function hideLoupeCaption() {
+          if (!loupeCaptionEl) return;
+          loupeCaptionEl.classList.remove("chart-wheel-loupe-caption-visible");
+          loupeCaptionEl.textContent = "";
+        }
+
+        function showLoupeCaption(target) {
+          if (!loupeCaptionEl || !loupeEl || !target) {
+            hideLoupeCaption();
+            return;
+          }
+          const name = target.label || target.query || "";
+          if (!name) {
+            hideLoupeCaption();
+            return;
+          }
+          const hint =
+            target.kind === "Aspect"
+              ? "Click to ask about this aspect"
+              : "Click to ask about this";
+          loupeCaptionEl.innerHTML = "";
+          const nameEl = document.createElement("span");
+          nameEl.className = "chart-wheel-loupe-caption-name";
+          nameEl.textContent = name;
+          const hintEl = document.createElement("span");
+          hintEl.textContent = hint;
+          loupeCaptionEl.appendChild(nameEl);
+          loupeCaptionEl.appendChild(hintEl);
+          loupeCaptionEl.classList.add("chart-wheel-loupe-caption-visible");
+          const loupeLeft = parseFloat(loupeEl.style.left);
+          const loupeTop = parseFloat(loupeEl.style.top);
+          const lb = {
+            left: Number.isFinite(loupeLeft) ? loupeLeft : loupeEl.offsetLeft,
+            top: Number.isFinite(loupeTop) ? loupeTop : 0,
+            width: loupeEl.offsetWidth,
+            height: loupeEl.offsetHeight,
+          };
+          lb.bottom = lb.top + lb.height;
+          const gap = 10;
+          const cw = loupeCaptionEl.offsetWidth || 200;
+          const ch = loupeCaptionEl.offsetHeight || 48;
+          let left = lb.left + (lb.width - cw) / 2;
+          let top = lb.bottom + gap;
+          if (top + ch > window.innerHeight - 8) top = lb.top - ch - gap;
+          left = Math.min(
+            Math.max(8, left),
+            Math.max(8, window.innerWidth - cw - 8),
+          );
+          top = Math.min(
+            Math.max(8, top),
+            Math.max(8, window.innerHeight - ch - 8),
+          );
+          loupeCaptionEl.style.left = `${left}px`;
+          loupeCaptionEl.style.top = `${top}px`;
         }
 
         function probeFromTouch(touch) {
@@ -3010,6 +3153,35 @@
         let loupeClickBound = false;
         let deskDelayKey = null;
         let lastDeskHover = null;
+        let deskCloseTimer = null;
+
+        function finishHideDesktopLoupeEl() {
+          if (deskCloseTimer) {
+            clearTimeout(deskCloseTimer);
+            deskCloseTimer = null;
+          }
+          if (!loupeEl) return;
+          loupeEl.classList.remove(
+            "chart-wheel-loupe-visible",
+            "chart-wheel-loupe-desktop",
+            "chart-wheel-loupe-open",
+            "chart-wheel-loupe-closing",
+          );
+          if (innerLoupe) innerLoupe.innerHTML = "";
+        }
+
+        function playDesktopLoupeOpen() {
+          if (!loupeEl) return;
+          loupeEl.classList.remove(
+            "chart-wheel-loupe-closing",
+            "chart-wheel-loupe-open",
+          );
+          void loupeEl.offsetWidth;
+          requestAnimationFrame(function () {
+            if (!desktopLoupeOn || !loupeEl) return;
+            loupeEl.classList.add("chart-wheel-loupe-open");
+          });
+        }
 
         function clearDeskLoupeDelay() {
           if (wheelPickState.deskDelayTimer) {
@@ -3033,6 +3205,7 @@
             lastDeskHover.unhover();
           }
           lastDeskHover = null;
+          hideLoupeCaption();
           if (!desktopLoupeOn) return;
           desktopLoupeOn = false;
           const svgRoot = chartWheel.querySelector("svg");
@@ -3040,13 +3213,15 @@
             dispatchLoupeLeave(lastHoverTarget, lastCX, lastCY);
           }
           lastHoverTarget = null;
-          if (loupeEl) {
-            loupeEl.classList.remove(
-              "chart-wheel-loupe-visible",
-              "chart-wheel-loupe-desktop",
-            );
-            if (innerLoupe) innerLoupe.innerHTML = "";
+          if (!loupeEl) return;
+          if (loupeEl.classList.contains("chart-wheel-loupe-visible")) {
+            loupeEl.classList.remove("chart-wheel-loupe-open");
+            loupeEl.classList.add("chart-wheel-loupe-closing");
+            if (deskCloseTimer) clearTimeout(deskCloseTimer);
+            deskCloseTimer = setTimeout(finishHideDesktopLoupeEl, 230);
+            return;
           }
+          finishHideDesktopLoupeEl();
         }
 
         function clusterCenterClient(svgEl, ranked) {
@@ -3086,6 +3261,11 @@
             probeX: center.clientX,
             probeY: center.clientY,
           };
+          if (deskCloseTimer) {
+            clearTimeout(deskCloseTimer);
+            deskCloseTimer = null;
+          }
+          loupeEl.classList.remove("chart-wheel-loupe-closing");
           loupeEl.classList.add(
             "chart-wheel-loupe-desktop",
             "chart-wheel-loupe-visible",
@@ -3097,6 +3277,7 @@
           loupeEl.style.left = `${Math.min(Math.max(8, loupeLeft), maxL)}px`;
           loupeEl.style.top = `${Math.min(Math.max(8, loupeTop), maxT)}px`;
           refreshDesktopLoupeClone(svgEl);
+          playDesktopLoupeOpen();
           setDeskHover(pickLoupeHoverTarget(svgEl, lastDeskX, lastDeskY));
         }
 
@@ -3144,6 +3325,8 @@
           if (target && typeof target.hover === "function") {
             target.hover();
           }
+          if (target) showLoupeCaption(target);
+          else hideLoupeCaption();
           const svgNow = chartWheel.querySelector("svg");
           if (svgNow && desktopLoupeOn) refreshDesktopLoupeClone(svgNow);
         }
@@ -3689,6 +3872,11 @@
             "chart-wheel-loupe-visible",
             "chart-wheel-loupe-desktop",
           );
+        }
+        const parkedCaption = document.getElementById("chart-wheel-loupe-caption");
+        if (parkedCaption) {
+          parkedCaption.classList.remove("chart-wheel-loupe-caption-visible");
+          parkedCaption.textContent = "";
         }
         if (!opts) return;
         wheelPickState.centerX = opts.centerX;
