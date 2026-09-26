@@ -195,7 +195,7 @@ function getPrioritizedChartPoints(birthChart, userMessage = "", transits = null
   const prioritizedBlock = [
     "--- PRIORITIZED CHART POINTS (use these first; do not list 25 scattered facts) ---",
     "",
-    "TOP STRENGTHS (emphasize these as the main reasons something is likely):",
+    "TOP STRENGTHS (emphasize these as the main supports in how this person lives):",
     ...topStrengths.map((t, i) => `${i + 1}. ${t}`),
     "",
     "TOP CAVEATS (mention these as the main cautions or tensions):",

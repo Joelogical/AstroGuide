@@ -179,7 +179,9 @@ async function generateFollowUpSuggestionsLLM(openai, params) {
     conversationHistory,
     isGeneralQuestion = false,
     lastMode = "",
+    preferredMode = "beginner",
   } = params;
+  const advanced = String(preferredMode || "").toLowerCase() === "advanced";
 
   if (!shouldOfferFollowUps(userMessage, assistantResponse)) {
     return [];
@@ -189,14 +191,27 @@ async function generateFollowUpSuggestionsLLM(openai, params) {
   const summaryStr = summarizeChartSummary(chartSummary);
   const excerpts = recentAssistantExcerpts(conversationHistory, 4);
   const claims = claimsFromChart(birthChart);
-  const modeNote =
-    lastMode === "portrait"
+  const modeNote = advanced
+    ? lastMode === "portrait"
+      ? "Last reply synthesized the person. Invite one more interaction among those factors (ruler, tight aspect, dispositor, configuration)."
+      : lastMode === "topic"
+        ? "Last reply stayed in one life area. Invite one more interaction there (house ruler, reception, applying contact)."
+        : lastMode === "aspect"
+          ? "Last reply was one aspect. Invite orb, applying/separating, or the configuration it sits in. No other pairs."
+          : lastMode === "chart_analysis"
+            ? "Last reply inspected chart architecture. Invite one more structural cut (ruler condition, tight aspect, configuration, unaspected body). Not a personality thread."
+            : lastMode === "chart"
+            ? "Last reply walked the chart. Invite one further interaction from that reply, not a restated conclusion."
+            : "Invite a precise analytical follow-up from the last reply."
+    : lastMode === "portrait"
       ? "Last reply was a portrait. Ask if they want to talk about one concrete thread already in that reply."
       : lastMode === "topic"
         ? "Last reply stayed in one life area. Ask if they want one more turn there."
         : lastMode === "aspect"
           ? "Last reply was one clicked connection. Ask if they want to stay with that thread. No other pairs."
-          : lastMode === "chart"
+          : lastMode === "chart_analysis"
+            ? "Last reply inspected the chart as a system. Ask if they want one more structural feature, not a personality portrait."
+            : lastMode === "chart"
             ? "Last reply walked the chart. Ask if they want one lived-life thread, not more placements."
             : "";
 
@@ -211,7 +226,27 @@ async function generateFollowUpSuggestionsLLM(openai, params) {
     }
   });
 
-  const system = `You write tap-to-continue QUESTIONS for an astrology chat. You are asking the person whether they want to talk about something next.
+  const system = advanced
+    ? `You write tap-to-continue QUESTIONS for an expert-level astrology analysis.
+
+Output ONLY valid JSON: {"suggestions":["..."]}
+One question, or two if they invite truly different threads. Never more than 2.
+
+REGISTER: another knowledgeable practitioner, not a teacher. The chips must match Advanced Mode: precise terms, no definitions, no beginner translations.
+
+Each line:
+- Is a question (use a question mark).
+- Invites the next analytical cut: a specific interaction (ruler + house, applying/separating contact, reception, dispositor, configuration, angular vs cadent weight).
+- Name the factor as it stands (e.g. "the 2° applying Mars–Saturn square", "Saturn’s 10th-house rulership", "the Moon’s dispositor"). Do not convert it into life-language.
+- "I" is you, the helper. Their chart is "you" / "your". Never "my".
+- Fluid. Change the opener every time. Do not reuse a banned opener or a banned line.
+- Possible shapes (invent others): "Want the applying side of…?", "Should we take the reception between…?", "Stay with the house ruler of…?", "The dispositor chain from…?"
+- Pick a concrete detail from the last reply. Short. Max ~160 characters.
+- Both chips should be technical.
+- No pedagogical filler. No "you should". No fortune-telling or future-event chips.
+
+If you only have one good question, return one.`
+    : `You write tap-to-continue QUESTIONS for an astrology chat. You are asking the person whether they want to talk about something next.
 
 Output ONLY valid JSON: {"suggestions":["..."]}
 One question, or two if they invite truly different threads. Never more than 2.
@@ -223,10 +258,9 @@ Each line:
 - Fluid and improvised. Change the opener every time. Do not reuse a banned opener or a banned line.
 - Possible shapes (invent others; do not cycle these in order): "Want to talk about…?", "Should we stay with…?", "Would you like to look at…?", "Curious to go into…?", "If you want, we could…?", "Up for the part about…?"
 - Pick a concrete detail from the last reply. Short. Max ~160 characters.
-- At least one question stays in ordinary life language.
-- You MAY offer one technical invitation (a planet, house, or aspect) if it fits, in helper voice: e.g. "Want to look at your Saturn?" Do not make both chips technical.
+- Stay in ordinary life language. Do not name planets, houses, or aspects.
 - Not therapy-speak: avoid "impacts", "your tendency", "emotional safety", "cycles of effort", "unpack".
-- No "you should". No fortune-telling.
+- No "you should". No fortune-telling. Never ask what will happen, when something will happen, or about this year / next month as an event.
 
 If you only have one good question, return one.`;
 
@@ -235,7 +269,9 @@ If you only have one good question, return one.`;
       ? `--- INTERNAL CLAIMS (through-line; write questions from these, do not quote them) ---\n${claims.map((c, i) => i + 1 + ". " + c).join("\n")}\n---`
       : "",
     chartFacts
-      ? `--- NATIVE CHART FACTS (background only; do not name placements) ---\n${chartFacts}\n---`
+      ? advanced
+        ? `--- NATIVE CHART FACTS (you MAY name placements and techniques) ---\n${chartFacts}\n---`
+        : `--- NATIVE CHART FACTS (background only; do not name placements) ---\n${chartFacts}\n---`
       : "--- NATIVE CHART FACTS: unavailable ---",
     summaryStr
       ? `--- STORED CHART SUMMARY ---\n${summaryStr}\n---`
@@ -299,7 +335,9 @@ If you only have one good question, return one.`;
     const sessionSpeak =
       /your tendency|emotional safety|cycles of effort|\bunpack\b|how (that|this|your) (impacts?|affects?)/i;
     const pool = uniq.filter(function (s) {
-      return !jargon.test(s) && !sessionSpeak.test(s) && looksLikeQuestion(s);
+      if (!looksLikeQuestion(s) || sessionSpeak.test(s)) return false;
+      if (advanced) return true;
+      return !jargon.test(s);
     });
     const fresh = [];
     (pool.length ? pool : uniq).forEach(function (s) {

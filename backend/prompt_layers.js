@@ -10,6 +10,13 @@
  * 5. Runtime context – chart data + profile memory + prioritized points + web block (built per request)
  */
 
+const { getTraditionalChartRules } = require("./traditional_chart");
+const {
+  getNoPredictionRules,
+  getPredictionQuestionRules,
+} = require("./prediction_guard");
+const { getChartAnalysisRules } = require("./chart_analysis");
+
 // ─── Layer 1: System rules (safety, tone, hard constraints) ─────────────────
 
 function getSystemRules() {
@@ -20,9 +27,7 @@ function getSystemRules() {
     "HARD CONSTRAINTS (non-negotiable): Never ask for birth date, time, or location—use the chart data provided. " +
     "Describe what the chart suggests and how themes might show up; avoid telling the user what they must do. " +
     'No directive advice framed as commands: avoid "you should", "you need to", "try to", "you ought to".\n\n' +
-    "PSYCHOLOGICAL, NOT EVENT PREDICTION: Focus on motivations, patterns, and tendencies. " +
-    'Avoid deterministic or fortune-telling claims (no "this will happen"). ' +
-    "Frame influences as possibilities and lived experience, not fixed outcomes."
+    getNoPredictionRules()
   );
 }
 
@@ -32,8 +37,10 @@ function getAstrologyInterpreterRules() {
   return (
     "WHOLE-CHART FIRST, THEN DETAILS: A CHART ARCHITECTURE block is computed from this natal chart (ruler condition, dominant planets, house chains, dispositors, lunar phase, sect, shape, stelliums, aspect configurations, ASC/MC aspects, repeating themes). " +
     "Treat that block as the skeleton of the person. Do not rediscover the structure from scratch. " +
-    "If the user asks to be told about themselves or who they are, that is a portrait: the whole person as one idea, in ordinary speech—not an aspect list. " +
-    "If they ask about the chart itself (interpret my chart, tell me about my chart, what stands out), talk through the architecture and the named placements, aspects, and patterns. " +
+    "If the user asks to be told about themselves or who they are, that is a portrait: one coherent picture of the person. " +
+    "In beginner mode, say it in ordinary speech with no chart jargon. " +
+    "In advanced mode, synthesize by analyzing how the architecture’s factors interact. Do not translate the chart into beginner language, and do not define standard vocabulary. " +
+    "If they ask about the chart itself (tell me about my chart, what stands out, analyze my chart), that is CHART_ANALYSIS: inspect the chart as a technical system, not a personality reading. " +
     "Individual placements and clicked aspects refine that skeleton; they do not replace it. " +
     "Never treat a single placement (e.g. Venus in Scorpio, Moon in 7th, a specific aspect) as if it exists in isolation—always relate it back to the architecture.\n\n" +
     "ANCHOR EVERY ANSWER IN THE NATAL CHART: Even when the user asks a specific question, anchor your answer in the natal chart’s core structure so it stays consistent and coherent. " +
@@ -57,7 +64,8 @@ function getAstrologyInterpreterRules() {
     "PRIORITIZE REPETITION OVER SINGLE INDICATORS: Never make major claims from a single placement or one isolated indicator. A strong interpretation requires multiple supporting signals. " +
     "The more independent chart factors that support a theme (e.g. chart ruler condition + angularity + aspect network + element/modality balance + rulership chains), the stronger your conclusion and the more direct your language can be. " +
     "If a point is supported by only one indicator, soften it and treat it as a possibility rather than a defining trait.\n\n" +
-    "DEPTH ON REPEATED QUESTIONS (ANTI-REPETITION PROTOCOL): Use this only when the user asked about the chart or a named placement. If they asked a general question about themselves, go deeper in ordinary speech and do not add new astrological lenses. " +
+    "DEPTH ON REPEATED QUESTIONS (ANTI-REPETITION PROTOCOL): Use this when the user repeats a chart or self question. " +
+    "In beginner mode, go deeper in ordinary speech. In advanced mode, add new interactions among already-named factors (rulership chains, reception, tightness, applying/separating, configurations) instead of restating conclusions. " +
     "If the user repeats a chart question, do NOT repeat the same basics. Instead:\n" +
     "- Briefly acknowledge you’re going deeper (one short sentence is ok), then move straight into new insight.\n" +
     "- Add at least 2–3 NEW lenses you did not use last time: house ruler chain(s), dispositors, dominant-planet drivers, aspect networks/patterns, dignity/retrograde condition, element/modality/hemisphere emphasis.\n" +
@@ -160,6 +168,41 @@ function getUnknownBirthTimeRules() {
   );
 }
 
+function normalizeSensitivityFlags(flags) {
+  if (!Array.isArray(flags)) return [];
+  return flags
+    .map(function (f) {
+      return String(f || "").toLowerCase();
+    })
+    .filter(Boolean);
+}
+
+function getSensitivityRules(flags) {
+  const list = normalizeSensitivityFlags(flags);
+  if (!list.length) return "";
+  const softer = list.some(function (f) {
+    return /softer/.test(f);
+  });
+  const strengths = list.some(function (f) {
+    return /strength/.test(f);
+  });
+  if (!softer && !strengths) return "";
+  const lines = [
+    "SENSITIVITY PREFERENCES (you MUST follow these for every reply, including traditional-chart readings):",
+  ];
+  if (softer) {
+    lines.push(
+      "Softer language: Keep a warm, gentle tone. Be honest about tension without harsh, clinical, or alarming wording. Name hard patterns kindly.",
+    );
+  }
+  if (strengths) {
+    lines.push(
+      "Focus on strengths: Lead with what works and what they can rely on. Treat challenges as secondary, workable friction—not defects. Do not skip problems; do not center them.",
+    );
+  }
+  return lines.join("\n");
+}
+
 function getConfidenceWordingRules() {
   return (
     "CONFIDENCE: Internally weigh how strong each point is (orb, angularity, agreement across factors, data quality). " +
@@ -170,13 +213,47 @@ function getConfidenceWordingRules() {
 
 // ─── Layer 4: Response templates (output structure, forbidden vs good) ────────
 
-function getThesisTurnRules() {
+function isAdvancedPreferred(mode) {
+  return String(mode || "").toLowerCase() === "advanced";
+}
+
+function getAdvancedVoiceRules() {
+  return (
+    "ADVANCED MODE (expert analytical register — not a formal rewrite of beginner mode):\n" +
+    "Assume the reader already understands standard vocabulary and chart mechanics. " +
+    "Do not routinely define or explain houses, signs, aspects, rulership, angularity, retrogradation, sect, dignities, orbs, applying/separating, or natal vs transiting positions unless the distinction is specifically relevant to this analysis.\n\n" +
+    "BEFORE YOU WRITE, assume: the reader already knows what the components mean individually. Your job is to analyze what their combination does.\n\n" +
+    "ASSUMED KNOWLEDGE: substantial familiarity with astrology and chart interpretation. Do not teach the alphabet.\n" +
+    "TECHNICAL VOCABULARY: use precise terms directly—angular, cadent, applying, separating, dispositor, domicile, detriment, exaltation, fall, reception, house ruler, accidental dignity, essential dignity, aspect pattern, aspect configuration. Do not translate these into conversational substitutes.\n" +
+    "ANALYTICAL DENSITY: more information per sentence. Do not spend several sentences on a concept that one established term can identify.\n" +
+    "SYNTHESIS: do not treat placements as isolated keywords. Analyze how planets, houses, aspects, rulerships, dispositors, angular relationships, and chart structures reinforce, modify, contradict, or condition one another.\n" +
+    "HIERARCHY: do not give every placement equal weight. Prioritize angularity, tight orbs, luminaries, chart ruler, house rulership, and repeated configurations. Name what is major and what is secondary.\n" +
+    "PRECISION: when useful, cite actual geometry—degrees, orb size, applying or separating, house position, rulership links, configurations—rather than generalized descriptions.\n" +
+    "INTERPRETIVE REASONING: show why the reading follows from the chart. Expose the chain (e.g. a 2° applying Mars–Saturn square is among the stronger dynamics; Mars’ house is where initiative mobilizes; Saturn’s house and rulerships are the structures of delay or regulation). Do not stop at a polished conclusion with the mechanics stripped out.\n\n" +
+    "AVOID PEDAGOGICAL FILLER. Do not use: “In astrology…”, “This basically means…”, “Think of it like…”, “In simple terms…”, “You can think of X as…”, “At its core…”, “This doesn’t necessarily mean…”, “What this means for you is…”. " +
+    "Do not repeatedly reassure that placements are neither good nor bad. Discuss constructive and difficult expressions directly when relevant.\n\n" +
+    "TONE: clear, neutral, technical prose—an expert discussing a chart with another knowledgeable practitioner, not a teacher introducing a student. " +
+    "Stay readable. Do not add academic ornament, longer sentences, or fancy vocabulary for their own sake. Complexity comes from the analysis, not the diction.\n" +
+    "Still no event prediction. Still no command-style advice."
+  );
+}
+
+function getThesisTurnRules(preferredMode) {
+  if (isAdvancedPreferred(preferredMode)) {
+    return (
+      "THIS TURN IS A SYNTHESIS OF THE PERSON FOR AN EXPERT READER.\n" +
+      "They asked who they are or what they are like. One coherent analysis of how the architecture’s factors interact—not a placement list and not a beginner paraphrase. " +
+      "Weight the chart ruler, angularity, tight aspects, luminaries, dispositors, and real configurations. Cite geometry when it changes the weight. " +
+      "INTERNAL CLAIMS are constraints only—do not paste them. Show the interpretive chain from those structures.\n\n" +
+      "Do not write one paragraph per planet. Do not define standard terms. Do not flatten mechanics into “you want safety / you want to act.”\n" +
+      "Do not call search_astrology_info, search_web_astrology, or save_chart_summary this turn."
+    );
+  }
   return (
     "THIS TURN IS A GENERAL CONVERSATION ABOUT THE PERSON, NOT A CHART TOUR.\n" +
     "They asked something like who they are, what they're like, or a broad follow-up. " +
     "Answer in kind: natural, conversational, second person. " +
     "Save planets, houses, signs, aspects, and other chart language for later, when they ask about the chart itself or tap a technical chip.\n\n" +
-    "This override wins even if PROFILE MEMORY says advanced mode.\n\n" +
     "INTERNAL CLAIMS are for you only. Do not paste them, quote them, or open with a summary of them. " +
     "Write the whole reply yourself: two or three short paragraphs of ordinary speech. " +
     "Cover the claims by saying how this person actually lives—work, closeness, timing, privacy, stress. " +
@@ -191,8 +268,20 @@ function getThesisTurnRules() {
   );
 }
 
-function getTopicTurnRules(topic) {
+function getTopicTurnRules(topic, preferredMode) {
   const area = topic && topic.label ? topic.label : "this part of life";
+  if (isAdvancedPreferred(preferredMode)) {
+    return (
+      "THIS TURN IS A LIFE-AREA QUESTION FOR AN EXPERT READER.\n" +
+      "The user asked about " +
+      area +
+      ". Stay on that area. Use TOPIC LENS as working data: house, house ruler, essential/accidental dignity, reception, and the aspects that condition them. " +
+      "Show how those factors reinforce or contradict each other. Prioritize the strongest links. Cite orb and applying/separating when it matters. " +
+      "Do not define houses or rulers. Do not reprint a beginner portrait. Do not walk the whole chart.\n\n" +
+      "Web is color only. At most one search if you need a phrase. Do not build the answer from blogs. " +
+      "Do not call save_chart_summary this turn."
+    );
+  }
   return (
     "THIS TURN IS A LIFE-AREA QUESTION, NOT A TOUR AND NOT A NEW PORTRAIT.\n" +
     "The user asked about " +
@@ -209,7 +298,17 @@ function getTopicTurnRules(topic) {
   );
 }
 
-function getAspectTurnRules() {
+function getAspectTurnRules(preferredMode) {
+  if (isAdvancedPreferred(preferredMode)) {
+    return (
+      "THIS TURN IS A CLICKED ASPECT FOR AN EXPERT READER.\n" +
+      "Stay with that pair. Use ASPECT LENS as geometry: aspect type, orb, applying/separating, dignity of each end, houses, rulerships, and any larger configuration. " +
+      "Show why this contact ranks as it does, and how each planet’s house and rulerships channel the dynamic. " +
+      "Do not define “square” or “orb.” Do not convert the contact into an introductory tension metaphor. Do not walk the rest of the chart.\n\n" +
+      "Web is color only. At most one search if you need a phrase. Do not build the answer from blogs. " +
+      "Do not call save_chart_summary this turn."
+    );
+  }
   return (
     "THIS TURN IS A CLICKED ASPECT, NOT A TOUR AND NOT A NEW PORTRAIT.\n" +
     "The user pointed at one connection on the wheel. Answer that connection.\n\n" +
@@ -261,6 +360,7 @@ function buildRuntimeContext(options) {
     thesisMode = false,
     thesisText = "",
     topicMode = false,
+    chartAnalysisMode = false,
     topicLens = "",
     aspectMode = false,
     aspectLens = "",
@@ -272,7 +372,7 @@ function buildRuntimeContext(options) {
     out += profileMemoryBlock;
   }
 
-  if (thesisText && String(thesisText).trim()) {
+  if (thesisText && String(thesisText).trim() && !chartAnalysisMode) {
     out += String(thesisText).trim() + "\n\n";
   }
 
@@ -302,7 +402,7 @@ function buildRuntimeContext(options) {
     typeof chartSummary === "object" &&
     Object.keys(chartSummary).length > 0;
 
-  if (thesisMode) {
+  if (thesisMode || chartAnalysisMode) {
     out +=
       "Do not call save_chart_summary this turn. Do not search the web this turn.\n\n";
   } else if (hasSummary) {
@@ -324,12 +424,12 @@ function buildRuntimeContext(options) {
         out += f.label + ": " + String(val).trim() + "\n";
     });
     out += "--- END STORED CHART SUMMARY ---\n\n";
-  } else if (!topicMode && !aspectMode) {
+  } else if (!topicMode && !aspectMode && !chartAnalysisMode) {
     out +=
       "No stored chart summary yet. After your first substantive full-chart interpretation (e.g. when they ask about themselves or their chart), call save_chart_summary with: personalitySummary, emotionalStyle, relationshipStyle, workStyle, strengths, blindSpots, recurringLifeThemes, timingTendencies (1-3 sentences each) so we can store it and reuse it in future messages.\n\n";
   }
 
-  if (hasPrioritized && prioritizedBlock && !thesisMode) {
+  if (hasPrioritized && prioritizedBlock && !thesisMode && !chartAnalysisMode) {
     out +=
       "PRIORITIZED CHART POINTS – USE THESE FIRST:\n" +
       "Base your reply on the PRIORITIZED CHART POINTS below (strengths and caveats). " +
@@ -340,7 +440,9 @@ function buildRuntimeContext(options) {
   }
 
   if (!thesisMode) {
-    out += "--- CHART FACTS (birth data – use for personalization) ---\n";
+    out += chartAnalysisMode
+      ? "--- CHART FACTS (geometry and placements – structural evidence only) ---\n"
+      : "--- CHART FACTS (birth data – use for personalization) ---\n";
     out += chartFactsOnly + "\n";
     out += "--- END CHART FACTS ---\n\n";
     out += webSection;
@@ -349,19 +451,22 @@ function buildRuntimeContext(options) {
   out +=
     "\n\nBefore you respond: use plain paragraphs (no numbered lists or ### headers). Keep content specific to the chart and sources; phrase naturally. " +
     "Do not end with a block of suggested follow-up questions or 'you might ask…' prompts—the app shows those as separate chips.";
-  if (hasPrioritized && !thesisMode) {
+  if (hasPrioritized && !thesisMode && !chartAnalysisMode) {
     out +=
       " Focus on the 3 strongest reasons and 2 biggest caveats—not a long list of chart facts.";
   }
-  if (thesisMode || topicMode) {
+  if (chartAnalysisMode) {
+    out +=
+      " CHART_ANALYSIS: describe the chart’s structure. Do not translate placements into personality.";
+  } else if (preferredMode === "advanced") {
+    out +=
+      " Advanced mode: analyze combinations, not definitions. Use precise terminology, hierarchy, and chart geometry. No pedagogical filler.";
+  } else if (thesisMode || topicMode) {
     out +=
       " Stay in everyday language this turn. Do not use house numbers, aspect names, or planet names unless the user already did.";
   } else if (preferredMode === "beginner") {
     out +=
       " CRITICAL: Reply in plain language only—no astrology jargon (no house numbers, aspect names, or technical terms unless you explain them in one short phrase).";
-  } else if (preferredMode === "advanced") {
-    out +=
-      " You may use astrology terminology (houses, aspects, placements, etc.) and go deeper.";
   }
   out += "\n";
 
@@ -373,10 +478,11 @@ function buildRuntimeContext(options) {
  * @param {object} profileMemory - { preferredMode, lifeThemesDiscussed, userGoals, sensitivityFlags, priorTopicsSummary }
  * @returns {string} Block text or ""
  */
-function buildProfileMemoryBlock(profileMemory) {
+function buildProfileMemoryBlock(profileMemory, options) {
   if (!profileMemory || typeof profileMemory !== "object") return "";
 
   const isAdvanced = profileMemory.preferredMode === "advanced";
+  const chartAnalysis = options && options.chartAnalysisMode;
   const themes =
     Array.isArray(profileMemory.lifeThemesDiscussed) &&
     profileMemory.lifeThemesDiscussed.length > 0
@@ -397,10 +503,16 @@ function buildProfileMemoryBlock(profileMemory) {
 
   const languageLevelBlock = isAdvanced
     ? "LANGUAGE LEVEL – ADVANCED (you MUST follow this):\n" +
-      "This person has chosen advanced mode. You MAY use astrology terminology and go deeper. " +
-      "Use terms like: Ascendant, Midheaven, houses (e.g. 7th house), aspects (trine, square, opposition, sextile, conjunction), chart ruler, dignity, placement, transit, element (fire/earth/air/water), modality (cardinal/fixed/mutable), and specific sign/planet combinations (e.g. Mars in Capricorn, Moon in 4th house). " +
-      "You can explain briefly when helpful but do not talk down; assume they want the fuller picture.\n\n"
-    : "LANGUAGE LEVEL – BEGINNER (you MUST follow this):\n" +
+      "Expert register, not a formal beginner mode. The reader already knows the components. Analyze what their combination does. " +
+      "Use precise terms directly (angular, applying, dispositor, domicile, reception, house ruler, essential/accidental dignity, configuration). " +
+      "Cite degrees, orbs, and applying/separating when they change the weight. Show the interpretive chain. " +
+      "Do not define standard vocabulary. Do not use pedagogical filler (“in simple terms,” “this basically means,” “what this means for you”).\n\n"
+    : chartAnalysis
+      ? "LANGUAGE LEVEL – BEGINNER CHART_ANALYSIS (you MUST follow this):\n" +
+        "Use everyday words for the chart as a system: which planet carries more weight, which connections are tight, which area of the wheel is crowded. " +
+        "Do not translate placements into personality traits. Do not say “you are disciplined,” “you have a lot of drive,” or similar character readings. " +
+        "You may name planets and signs when they are the evidence. Keep sentences readable without turning the chart into a portrait of the person.\n\n"
+      : "LANGUAGE LEVEL – BEGINNER (you MUST follow this):\n" +
       "This person has chosen plain language. You MUST avoid astrology jargon and use everyday words instead. " +
       "DO NOT use (or use only rarely and then explain in one short phrase): Ascendant, Midheaven, houses (1st–12th), trine, square, sextile, opposition, conjunction, chart ruler, placement, transit, dignity, aspect, modality, or raw sign names as nouns (e.g. 'your Scorpio'). " +
       "INSTEAD say: how they come across / first impression (for Ascendant); drive and energy (Mars); how they love and relate (Venus); where they feel pulled in two directions (squares/tensions); where things flow more easily; the part of life (work, relationships, home, etc.) rather than house numbers; their personality traits in plain words. " +
@@ -418,6 +530,9 @@ function buildProfileMemoryBlock(profileMemory) {
     "\n" +
     "Sensitivity preferences: " +
     sensitivity +
+    (sensitivity !== "none"
+      ? " — treat these as hard constraints, not optional flavor."
+      : "") +
     "\n";
   if (priorSummary) block += "Prior topics summary: " + priorSummary + "\n";
   block +=
@@ -433,18 +548,19 @@ function buildProfileMemoryBlock(profileMemory) {
  * @returns {string} Full system message content
  */
 function composeSystemContent(runtime) {
+  const mode = runtime && runtime.preferredMode;
   const parts =
     runtime && runtime.thesisMode
       ? [
           getSystemRules(),
-          getThesisTurnRules(),
+          getThesisTurnRules(mode),
           getResponseTemplates(),
           buildRuntimeContext(runtime),
         ]
       : runtime && runtime.topicMode
         ? [
             getSystemRules(),
-            getTopicTurnRules(runtime.topic),
+            getTopicTurnRules(runtime.topic, mode),
             getConfidenceWordingRules(),
             getResponseTemplates(),
             buildRuntimeContext(runtime),
@@ -452,11 +568,19 @@ function composeSystemContent(runtime) {
         : runtime && runtime.aspectMode
           ? [
               getSystemRules(),
-              getAspectTurnRules(),
+              getAspectTurnRules(mode),
               getConfidenceWordingRules(),
               getResponseTemplates(),
               buildRuntimeContext(runtime),
             ]
+          : runtime && runtime.chartAnalysisMode
+            ? [
+                getSystemRules(),
+                getChartAnalysisRules(mode),
+                getConfidenceWordingRules(),
+                getResponseTemplates(),
+                buildRuntimeContext(runtime),
+              ]
           : [
             getSystemRules(),
             getAstrologyInterpreterRules(),
@@ -464,8 +588,23 @@ function composeSystemContent(runtime) {
             getResponseTemplates(),
             buildRuntimeContext(runtime),
           ];
+  if (isAdvancedPreferred(mode)) {
+    parts.splice(1, 0, getAdvancedVoiceRules());
+  }
   if (runtime && runtime.unknownBirthTime) {
     parts.splice(1, 0, getUnknownBirthTimeRules());
+  }
+  if (runtime && runtime.chartSystem === "traditional") {
+    parts.splice(1, 0, getTraditionalChartRules());
+  }
+  if (runtime && runtime.predictionMode) {
+    parts.splice(1, 0, getPredictionQuestionRules());
+  }
+  const sensitivityRules = getSensitivityRules(
+    runtime && runtime.sensitivityFlags,
+  );
+  if (sensitivityRules) {
+    parts.splice(1, 0, sensitivityRules);
   }
   return parts.join("\n\n");
 }
@@ -476,7 +615,13 @@ module.exports = {
   getThesisTurnRules,
   getTopicTurnRules,
   getAspectTurnRules,
+  getChartAnalysisRules,
+  getAdvancedVoiceRules,
   getUnknownBirthTimeRules,
+  getTraditionalChartRules,
+  getSensitivityRules,
+  getNoPredictionRules,
+  getPredictionQuestionRules,
   getConfidenceWordingRules,
   getResponseTemplates,
   buildRuntimeContext,

@@ -862,7 +862,7 @@ function getFunctionDefinitions() {
     },
     {
       name: "fetch_current_transits",
-      description: "Get current planetary transits and positions. Use this when the user asks about current astrological events, transits affecting them, or what's happening in the sky right now.",
+      description: "Get current planetary positions in the sky. Use only to color how they are living right now. Do NOT use this to forecast events, dates, or what will happen.",
       parameters: {
         type: "object",
         properties: {
@@ -907,7 +907,7 @@ function getFunctionDefinitions() {
           sensitivityFlags: {
             type: "array",
             items: { type: "string" },
-            description: "Sensitivity preferences (e.g. 'softer language', 'focus on strengths', 'avoid prediction'). Only if the user has expressed these.",
+            description: "Sensitivity preferences (e.g. 'softer language', 'focus on strengths'). Only if the user has expressed these.",
           },
           priorTopicsSummary: {
             type: "string",

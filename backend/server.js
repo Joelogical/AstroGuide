@@ -38,6 +38,7 @@ const {
 } = require("./prompt_layers");
 const { generateFollowUpSuggestionsLLM } = require("./followup_suggestions");
 const { isGibberishPrompt, gibberishReply } = require("./gibberish_prompt");
+const { isPredictionQuestion } = require("./prediction_guard");
 const { handleQuestion } = require("./enhanced_question_handler");
 const {
   buildChartArchitecture,
@@ -49,7 +50,13 @@ const {
   parseClickedAspect,
   formatAspectLensForModel,
 } = require("./chart_architecture");
+const { isChartAnalysisQuestion } = require("./chart_analysis");
 const { calculateNatalChart } = require("./birth_chart_service");
+const {
+  isTraditionalChart,
+  applyTraditionalChartView,
+  traditionalMissingBodyReply,
+} = require("./traditional_chart");
 
 // Debug logging for environment variables
 console.log("Environment variables loaded:");
@@ -352,6 +359,9 @@ app.post("/api/birth-chart", async (req, res) => {
       );
 
       birthChart.architecture = buildChartArchitecture(birthChart);
+      birthChart.architectureTraditional = buildChartArchitecture(
+        applyTraditionalChartView(birthChart),
+      );
 
       const deterministicInterpretation =
         generateChartInterpretation(birthChart);
@@ -609,7 +619,10 @@ function wrapOpenAIError(openaiErr) {
 }
 
 function buildLocalChartSynthesis(birthChart) {
-  const planets = (birthChart && birthChart.planets) || {};
+  const reading = isTraditionalChart(birthChart)
+    ? applyTraditionalChartView(birthChart)
+    : birthChart;
+  const planets = (reading && reading.planets) || {};
   const sun = planets.sun;
   const moon = planets.moon;
   const asc = birthChart && birthChart.angles && birthChart.angles.ascendant;
@@ -631,7 +644,7 @@ function buildLocalChartSynthesis(birthChart) {
     );
   }
   try {
-    const interp = generateChartInterpretation(birthChart);
+    const interp = generateChartInterpretation(reading);
     const ruler = interp.coreSynthesis && interp.coreSynthesis.chartRuler;
     if (ruler && !parts.some((p) => /chart is steered/i.test(p))) {
       parts.push(
@@ -692,9 +705,18 @@ function sendLocalChatFallback(res, payload) {
 
 function fallbackPayloadFromReq(req) {
   const body = (req && req.body) || {};
+  const birthChart = body.birthChart;
+  if (birthChart && typeof birthChart === "object") {
+    const system =
+      String(body.chartSystem || birthChart.chartSystem || "modern").toLowerCase() ===
+      "traditional"
+        ? "traditional"
+        : "modern";
+    birthChart.chartSystem = system;
+  }
   return {
     message: body.message,
-    birthChart: body.birthChart,
+    birthChart: birthChart,
     conversationHistory: body.conversationHistory || [],
   };
 }
@@ -726,6 +748,18 @@ app.post("/api/chat", (req, res) => {
       const conversationHistory = body.conversationHistory || [];
       const profileMemory = body.profileMemory || null;
       const chartSummary = body.chartSummary || null;
+      const chartSystem =
+        String(body.chartSystem || (birthChart && birthChart.chartSystem) || "modern")
+          .toLowerCase() === "traditional"
+          ? "traditional"
+          : "modern";
+      if (birthChart && typeof birthChart === "object") {
+        birthChart.chartSystem = chartSystem;
+      }
+      const readingChart =
+        chartSystem === "traditional" && birthChart
+          ? applyTraditionalChartView(birthChart)
+          : birthChart;
       stage = "after-body";
 
       if (!message || !birthChart) {
@@ -745,8 +779,20 @@ app.post("/api/chat", (req, res) => {
         });
       }
 
+      const missingTraditionalBody = traditionalMissingBodyReply(
+        message,
+        birthChart,
+      );
+      if (missingTraditionalBody) {
+        return res.json({
+          response: missingTraditionalBody,
+          followUpSuggestions: [],
+          followUpQuestion: null,
+        });
+      }
+
       if (isFactualQuestion(message)) {
-        const factualAnswer = answerFactualQuestion(message, birthChart);
+        const factualAnswer = answerFactualQuestion(message, readingChart);
         if (factualAnswer) {
           console.log("[FACTUAL] Answered factual question deterministically");
           return res.json({
@@ -902,6 +948,10 @@ app.post("/api/chat", (req, res) => {
                 conversationHistory,
                 isGeneralQuestion: true,
                 lastMode: "general",
+                preferredMode:
+                  profileMemory && profileMemory.preferredMode === "advanced"
+                    ? "advanced"
+                    : "beginner",
               },
             );
           } catch (fuErr) {
@@ -1025,12 +1075,22 @@ app.post("/api/chat", (req, res) => {
       const questionForMode = effectiveQuestion(message, conversationHistory);
       const clickedAspect = parseClickedAspect(message);
       const aspectMode = !!clickedAspect;
+      const chartAnalysisMode =
+        !aspectMode && isChartAnalysisQuestion(questionForMode);
       const chartMode =
-        !aspectMode && isChartSpecificQuestion(questionForMode);
+        !aspectMode &&
+        !chartAnalysisMode &&
+        isChartSpecificQuestion(questionForMode);
       const topic =
-        !aspectMode && !chartMode ? detectLifeTopic(questionForMode) : null;
+        !aspectMode && !chartAnalysisMode && !chartMode
+          ? detectLifeTopic(questionForMode)
+          : null;
       const topicMode = !!topic;
-      const thesisMode = !aspectMode && !chartMode && !topicMode;
+      const thesisMode =
+        !aspectMode && !chartAnalysisMode && !chartMode && !topicMode;
+      if (chartAnalysisMode) {
+        console.log("[CHAT] CHART_ANALYSIS intent — inspect chart as a system");
+      }
       let architectureBlock = "";
       let thesisText = "";
       let topicLens = "";
@@ -1049,7 +1109,7 @@ app.post("/api/chat", (req, res) => {
               clickedAspect,
               birthChart,
             );
-          } else if (chartMode) {
+          } else if (chartMode || chartAnalysisMode) {
             architectureBlock = formatArchitectureForAI(arch);
           }
         }
@@ -1096,7 +1156,7 @@ app.post("/api/chat", (req, res) => {
 
       let chartFactsOnly;
       try {
-        chartFactsOnly = formatBirthChartForChatGPT(birthChart);
+        chartFactsOnly = formatBirthChartForChatGPT(readingChart);
       } catch (formatErr) {
         console.error(
           "[CHAT] formatBirthChartForChatGPT failed:",
@@ -1141,9 +1201,9 @@ app.post("/api/chat", (req, res) => {
       if (chartMode) {
         try {
           const { prioritizedBlock: block } = getPrioritizedChartPoints(
-            birthChart,
+            readingChart,
             message,
-            birthChart.currentTransits || null,
+            readingChart.currentTransits || null,
           );
           prioritizedBlock = block;
         } catch (err) {
@@ -1151,7 +1211,9 @@ app.post("/api/chat", (req, res) => {
         }
       }
 
-      const profileMemoryBlock = buildProfileMemoryBlock(profileMemory);
+      const profileMemoryBlock = buildProfileMemoryBlock(profileMemory, {
+        chartAnalysisMode,
+      });
 
       // System content is composed from prompt_layers.js (system rules, interpreter rules, response templates, runtime context)
       const systemContent = composeSystemContent({
@@ -1160,6 +1222,7 @@ app.post("/api/chat", (req, res) => {
         thesisMode,
         thesisText,
         topicMode,
+        chartAnalysisMode,
         topic,
         topicLens,
         aspectMode,
@@ -1168,20 +1231,32 @@ app.post("/api/chat", (req, res) => {
         chartFactsOnly,
         webSection: thesisMode
           ? "Do not use web sources this turn. Stay with the thesis."
+          : chartAnalysisMode
+            ? "Do not use web sources this turn. Stay with computed architecture and chart facts."
           : topicMode || aspectMode
             ? "Web is color only this turn. Do not build the answer from blogs."
             : webSection,
         hasPrioritized:
-          !!prioritizedBlock && !thesisMode && !topicMode && !aspectMode,
+          !!prioritizedBlock &&
+          !thesisMode &&
+          !topicMode &&
+          !aspectMode &&
+          !chartAnalysisMode,
         preferredMode:
-          profileMemory && profileMemory.preferredMode
-            ? profileMemory.preferredMode
-            : null,
+          profileMemory && profileMemory.preferredMode === "advanced"
+            ? "advanced"
+            : "beginner",
+        sensitivityFlags:
+          profileMemory && Array.isArray(profileMemory.sensitivityFlags)
+            ? profileMemory.sensitivityFlags
+            : [],
         chartSummary:
           chartSummary && typeof chartSummary === "object"
             ? chartSummary
             : null,
         unknownBirthTime: !!(birthChart && birthChart.unknownBirthTime),
+        chartSystem,
+        predictionMode: isPredictionQuestion(message),
       });
 
       const messages = [
@@ -1321,15 +1396,28 @@ app.post("/api/chat", (req, res) => {
       }
       const isRepeatedPrompt = isRepeatPrompt(message, conversationHistory);
 
-      const userContent = thesisMode
+      const advancedMode =
+        profileMemory && profileMemory.preferredMode === "advanced";
+      const userContent = chartAnalysisMode
         ? message +
-          "\n\n[This is a general question about the person, not about the chart. Do not search the web. Do not name planets, houses, signs, or aspects. Internal claims are constraints only—write the whole reply in everyday conversational language. Do not paste or echo those claims.]"
+          (advancedMode
+            ? "\n\n[CHART_ANALYSIS. Inspect the natal chart as a technical system. Hierarchy, geometry, configurations. Do not translate into personality. No pedagogical filler.]"
+            : "\n\n[CHART_ANALYSIS. Describe what is happening in the chart as a system—weights, tight links, crowded areas. Do not turn placements into personality traits.]")
+        : thesisMode
+        ? message +
+          (advancedMode
+            ? "\n\n[Expert synthesis. Analyze how architecture factors interact. Use precise terms and geometry. Do not define standard vocabulary. Do not paste internal claims. No pedagogical filler.]"
+            : "\n\n[This is a general question about the person, not about the chart. Do not search the web. Do not name planets, houses, signs, or aspects. Internal claims are constraints only—write the whole reply in everyday conversational language. Do not paste or echo those claims.]")
         : topicMode
           ? message +
-            "\n\n[This is a life-area question. Answer that area in everyday language. Re-anchor to the internal claims, then stay on this topic. Do not name planets, houses, or aspects unless the user already did. Do not reprint the portrait. Do not tour the whole chart.]"
+            (advancedMode
+              ? "\n\n[Expert life-area cut. Stay on this topic. Analyze house, ruler, dignity, reception, and conditioning aspects. Show hierarchy and the interpretive chain. Do not define terms. Do not tour the whole chart.]"
+              : "\n\n[This is a life-area question. Answer that area in everyday language. Re-anchor to the internal claims, then stay on this topic. Do not name planets, houses, or aspects unless the user already did. Do not reprint the portrait. Do not tour the whole chart.]")
           : aspectMode
             ? message +
-              "\n\n[This is a clicked aspect. Answer that connection. Re-anchor to the internal claims, then stay with these two needs. Do not reprint the portrait. Do not tour the whole chart.]"
+              (advancedMode
+                ? "\n\n[Expert aspect cut. Cite type, orb, applying/separating, dignity, houses, rulerships, and any configuration. Show why the contact ranks as it does. Do not define “square” or convert it into an intro metaphor.]"
+                : "\n\n[This is a clicked aspect. Answer that connection. Re-anchor to the internal claims, then stay with these two needs. Do not reprint the portrait. Do not tour the whole chart.]")
         : message +
           (isRepeatedPrompt
             ? "\n\n[NOTE: The user is repeating a chart question. Do NOT repeat prior basic explanations. Go deeper on that chart question: add new angles (rulership chains, dispositors, aspect networks/patterns, dignity/retrograde, dominant planets/houses, repeating themes). Use MORE targeted web searches (search_astrology_info/search_web_astrology) based on the exact wording of this question so the answer adds new insight instead of rephrasing the same content.]"
@@ -1352,7 +1440,7 @@ app.post("/api/chat", (req, res) => {
           model: "gpt-4o",
           messages: messages,
           temperature: 0.7,
-          max_tokens: thesisMode ? 700 : 1000,
+          max_tokens: thesisMode ? 700 : chartAnalysisMode ? 1200 : 1000,
           presence_penalty: 0.1,
           frequency_penalty: 0.0,
         };
@@ -1451,15 +1539,21 @@ app.post("/api/chat", (req, res) => {
           chartSummary,
           conversationHistory,
           isGeneralQuestion: false,
+          preferredMode:
+            profileMemory && profileMemory.preferredMode === "advanced"
+              ? "advanced"
+              : "beginner",
           lastMode: thesisMode
             ? "portrait"
             : topicMode
               ? "topic"
               : aspectMode
                 ? "aspect"
-                : chartMode
-                  ? "chart"
-                  : "portrait",
+                : chartAnalysisMode
+                  ? "chart_analysis"
+                  : chartMode
+                    ? "chart"
+                    : "portrait",
         });
       } catch (fuErr) {
         console.warn(

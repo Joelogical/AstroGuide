@@ -78,6 +78,7 @@
         <div class="chat-header">
           <h1 class="app-title">AstroGuide</h1>
           <div class="profile-switcher chat-header-controls">
+            <div class="profile-menu">
             <button
               type="button"
               id="profile-dropdown-btn"
@@ -87,7 +88,7 @@
             >
               Chart: <span id="active-profile-name">—</span> ▼
             </button>
-            <div id="profile-dropdown" class="profile-dropdown hidden">
+            <div id="profile-dropdown" class="profile-dropdown">
               <div id="profile-list"></div>
               <button
                 type="button"
@@ -104,6 +105,7 @@
                 Clear Chat
               </button>
             </div>
+            </div>
             <div class="settings-switcher">
               <button
                 type="button"
@@ -115,7 +117,7 @@
               >
                 ⚙
               </button>
-              <div id="settings-dropdown" class="settings-dropdown hidden">
+              <div id="settings-dropdown" class="settings-dropdown">
                 <button
                   type="button"
                   id="settings-profile-preferences-btn"
@@ -182,7 +184,16 @@
                 />
               </div>
               <div class="form-group">
-                <label>Asteroids (optional)</label>
+                <div class="asteroid-label-row">
+                  <label>Asteroids (optional)</label>
+                  <button
+                    type="button"
+                    id="asteroid-select-all"
+                    class="asteroid-select-all"
+                  >
+                    Select all
+                  </button>
+                </div>
                 <p class="asteroid-hint">
                   Add any you want on the wheel and in readings.
                 </p>
@@ -207,6 +218,34 @@
                     <input type="checkbox" id="asteroid-vesta" value="vesta" />
                     <label for="asteroid-vesta">Vesta</label>
                   </div>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Chart system</label>
+                <p class="asteroid-hint">
+                  New charts start modern. Traditional uses only the Sun,
+                  Moon, and five visible planets, with classical rulerships.
+                </p>
+                <div class="chart-system-toggle" id="chart-system-toggle">
+                  <button
+                    type="button"
+                    class="chart-system-btn is-active"
+                    data-system="modern"
+                    id="chart-system-modern"
+                  >
+                    Modern
+                  </button>
+                  <button
+                    type="button"
+                    class="chart-system-btn"
+                    data-system="traditional"
+                    id="chart-system-traditional"
+                  >
+                    Traditional
+                  </button>
+                  <p class="chart-system-hint" id="chart-system-hint">
+                    Sun through Pluto, plus any asteroids you enabled.
+                  </p>
                 </div>
               </div>
               <div class="modal-actions">
@@ -242,7 +281,7 @@
                   Beginner – plain language, avoid jargon
                 </option>
                 <option value="advanced">
-                  Advanced – deeper, can use terminology
+                  Advanced – expert analysis, assumed knowledge
                 </option>
               </select>
             </div>
@@ -263,14 +302,6 @@
                   value="focus on strengths"
                 />
                 <label for="pref-strengths">Focus on strengths</label>
-              </div>
-              <div class="preference-checkbox">
-                <input
-                  type="checkbox"
-                  id="pref-no-prediction"
-                  value="avoid prediction"
-                />
-                <label for="pref-no-prediction">Avoid prediction</label>
               </div>
             </div>
             <div class="modal-actions">
@@ -293,7 +324,7 @@
         </div>
         <div class="chat-messages" id="chat-messages">
           <div
-            class="message unknown-time-disclaimer"
+            class="message chat-disclaimer unknown-time-disclaimer"
             id="unknown-time-disclaimer"
             hidden
           >
@@ -301,6 +332,20 @@
               Birth time is unknown for this chart. Planet positions are an
               approximation and will naturally nudge—especially the Moon—without
               an exact time. Houses and rising sign are not used.
+            </p>
+          </div>
+          <div
+            class="message chat-disclaimer traditional-chart-disclaimer"
+            id="traditional-chart-disclaimer"
+            hidden
+          >
+            <p id="traditional-chart-disclaimer-text">
+              This reading uses the older, simpler chart: the Sun, the Moon, and
+              the five planets you can see in the sky. Uranus, Neptune, and Pluto
+              were found in the last few centuries, and the modern asteroids later
+              still—those belong to the modern chart. This version leaves them off
+              so the picture stays closer to how astrology was practiced before
+              those discoveries.
             </p>
           </div>
           <div class="message bot-message initial-message">
@@ -398,6 +443,7 @@
         flex: 1;
         min-width: 0;
         min-height: 0;
+        max-width: 640px;
         background: #18192b;
         border-radius: 12px;
         box-shadow: 0 2px 16px rgba(0, 0, 0, 0.3);
@@ -417,7 +463,7 @@
         margin: 10px;
         padding: 12px 16px;
         border-radius: 8px;
-        max-width: 80%;
+        max-width: 88%;
         word-wrap: break-word;
         font-size: 1.08em;
       }
@@ -463,20 +509,27 @@
         }
       }
       /* Welcome bubble: avoid pre-wrap (awkward breaks from source); comfortable reading measure */
-      .unknown-time-disclaimer {
-        background: #3b2f14;
-        color: #fde68a;
-        border: 1px solid #a16207;
+      .chat-disclaimer {
         border-radius: 10px;
         padding: 10px 14px;
         margin: 0 10px 10px;
         max-width: 100%;
         white-space: normal;
       }
-      .unknown-time-disclaimer p {
+      .chat-disclaimer p {
         margin: 0;
         line-height: 1.55;
         font-size: 0.92em;
+      }
+      .unknown-time-disclaimer {
+        background: #3b2f14;
+        color: #fde68a;
+        border: 1px solid #a16207;
+      }
+      .traditional-chart-disclaimer {
+        background: #1e2a3d;
+        color: #bfdbfe;
+        border: 1px solid #3b6ea5;
       }
       .bot-message.initial-message {
         white-space: normal;
@@ -493,7 +546,7 @@
         background-color: #3b82f6;
         color: #fff;
         width: fit-content;
-        max-width: 80%;
+        max-width: 88%;
         margin-left: auto;
         margin-right: 10px;
         border: 1px solid #2563eb;
@@ -686,7 +739,7 @@
       }
       .chart-sidebar {
         flex-shrink: 0;
-        width: 750px;
+        width: 850px;
         display: flex;
         flex-direction: column;
         gap: 16px;
@@ -694,6 +747,38 @@
         top: 20px;
         max-height: calc(100vh - 40px);
         overflow-y: auto;
+      }
+      .chart-system-toggle {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+      .chart-system-btn {
+        flex: 1;
+        min-width: 0;
+        padding: 7px 10px;
+        border-radius: 8px;
+        border: 1px solid #35365a;
+        background: #18192b;
+        color: #c5c6d8;
+        cursor: pointer;
+        font-size: 0.85em;
+      }
+      .chart-system-btn:hover {
+        background: #35365a;
+        color: #f5f6fa;
+      }
+      .chart-system-btn.is-active {
+        background: #3b82f6;
+        border-color: #3b82f6;
+        color: #fff;
+      }
+      .chart-system-hint {
+        width: 100%;
+        color: #7a7a96;
+        font-size: 0.75em;
+        margin: 0;
       }
       .chart-wheel-container {
         padding: 20px;
@@ -809,9 +894,12 @@
         .main-container {
           flex-direction: column;
         }
+        .chat-container {
+          max-width: none;
+        }
         .chart-sidebar {
           width: 100%;
-          max-width: 750px;
+          max-width: 850px;
           margin: 20px auto 0;
           position: static;
           max-height: none;
@@ -860,6 +948,7 @@
           padding: 6px 8px 8px;
           flex: 1;
           min-height: 0;
+          max-width: none;
           display: flex;
           flex-direction: column;
         }
@@ -1212,6 +1301,10 @@
       .chart-wheel-container svg .aspect-group {
         transition: transform 0.2s ease;
       }
+      .chart-wheel-container svg .asteroid-group,
+      .chart-wheel-container svg .aspect-group[data-asteroid-fade] {
+        transition: none;
+      }
       .chart-wheel-container svg .planet-group:hover,
       .chart-wheel-container svg .house-group:hover,
       .chart-wheel-container svg .sign-group text {
@@ -1259,6 +1352,7 @@
         background: transparent;
         border-radius: 0;
         flex-shrink: 0;
+        overflow: visible;
       }
       .chat-header .app-title {
         margin: 0;
@@ -1307,11 +1401,15 @@
       .profile-dropdown-btn:hover {
         background: #35365a;
       }
-      .profile-dropdown {
+      .profile-menu {
+        position: relative;
+        flex-shrink: 1;
+        min-width: 0;
+      }
+      .profile-dropdown,
+      .settings-dropdown {
         position: absolute;
-        top: 100%;
-        left: 0;
-        margin-top: 4px;
+        top: calc(100% + 4px);
         min-width: 200px;
         background: #23243a;
         border: 1px solid #35365a;
@@ -1319,9 +1417,26 @@
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         z-index: 100;
         padding: 8px 0;
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transform: translateY(-10px);
+        transition:
+          transform 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+          opacity 0.26s ease,
+          visibility 0.34s;
       }
-      .profile-dropdown.hidden {
-        display: none;
+      .profile-dropdown {
+        right: 0;
+        left: auto;
+        transform-origin: top right;
+      }
+      .profile-dropdown.is-open,
+      .settings-dropdown.is-open {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+        transform: translateY(0);
       }
       .profile-item-row {
         display: flex;
@@ -1430,20 +1545,9 @@
         color: #f5f6fa;
       }
       .settings-dropdown {
-        position: absolute;
-        top: 100%;
         right: 0;
-        margin-top: 4px;
-        min-width: 200px;
-        background: #23243a;
-        border: 1px solid #35365a;
-        border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-        z-index: 100;
-        padding: 8px 0;
-      }
-      .settings-dropdown.hidden {
-        display: none;
+        left: auto;
+        transform-origin: top right;
       }
       .settings-dropdown .dropdown-action-btn {
         border-top: 1px solid #35365a;
@@ -1476,6 +1580,34 @@
       }
       .birth-time-unknown-row {
         margin-top: 8px;
+      }
+      .asteroid-label-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 4px;
+      }
+      .asteroid-label-row label {
+        margin-bottom: 0;
+      }
+      .asteroid-select-all {
+        padding: 2px 8px;
+        background: transparent;
+        color: #93c5fd;
+        border: 1px solid #35365a;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.78em;
+      }
+      .asteroid-select-all:hover {
+        background: #35365a;
+        color: #f5f6fa;
+      }
+      .asteroid-select-all:disabled,
+      .asteroid-options input:disabled + label {
+        opacity: 0.45;
+        cursor: not-allowed;
       }
       .asteroid-hint {
         color: #7a7a96;
@@ -1878,6 +2010,7 @@
           birthDate: userData.birthDate || "",
           birthTime: userData.birthTime || "",
           birthPlace: userData.birthPlace || "",
+          chartSystem: "modern",
           birthChartData: birthChartData || null,
           conversationHistory: legacyHistory, // Only for legacy migration - new profiles get []
           memory: {
@@ -1960,6 +2093,7 @@
         document.getElementById("profile-birth-place").value =
           profile.birthPlace || "";
         setAsteroidCheckboxes(selectedAsteroidsFromProfile(profile));
+        setFormChartSystem(profileChartSystem(profile));
         document.getElementById("add-profile-modal").classList.remove("hidden");
       }
 
@@ -1972,7 +2106,39 @@
         document.getElementById("add-profile-form").reset();
         setBirthTimeUnknownUI(false);
         setAsteroidCheckboxes([]);
+        setFormChartSystem("modern");
         document.getElementById("add-profile-modal").classList.remove("hidden");
+      }
+
+      function headerDropdownButton(dd) {
+        if (!dd) return null;
+        if (dd.id === "profile-dropdown") {
+          return document.getElementById("profile-dropdown-btn");
+        }
+        if (dd.id === "settings-dropdown") {
+          return document.getElementById("settings-dropdown-btn");
+        }
+        return null;
+      }
+      function closeHeaderDropdown(dd) {
+        if (!dd) return;
+        dd.classList.remove("is-open");
+        const btn = headerDropdownButton(dd);
+        if (btn) btn.setAttribute("aria-expanded", "false");
+      }
+      function openHeaderDropdown(dd) {
+        if (!dd) return;
+        dd.classList.add("is-open");
+        const btn = headerDropdownButton(dd);
+        if (btn) btn.setAttribute("aria-expanded", "true");
+      }
+      function toggleHeaderDropdown(dd) {
+        if (dd && dd.classList.contains("is-open")) closeHeaderDropdown(dd);
+        else openHeaderDropdown(dd);
+      }
+      function closeAllHeaderDropdowns() {
+        closeHeaderDropdown(document.getElementById("profile-dropdown"));
+        closeHeaderDropdown(document.getElementById("settings-dropdown"));
       }
 
       function deleteProfile(profileId) {
@@ -1992,7 +2158,7 @@
           if (container) container.innerHTML = "";
           clearChartTable();
           renderConversation(null);
-          document.getElementById("profile-dropdown").classList.add("hidden");
+          closeHeaderDropdown(document.getElementById("profile-dropdown"));
           return;
         }
         if (wasActive) {
@@ -2000,24 +2166,54 @@
           switchToProfile(profiles[0].id);
         }
         renderProfileDropdown();
-        document.getElementById("profile-dropdown").classList.add("hidden");
+        closeHeaderDropdown(document.getElementById("profile-dropdown"));
       }
 
       function syncUnknownTimeDisclaimer(profile) {
-        const el = document.getElementById("unknown-time-disclaimer");
-        if (!el) return;
-        el.hidden = !profileHasUnknownBirthTime(profile);
+        syncChatDisclaimers(profile);
+      }
+      function traditionalDisclaimerCopy(profile) {
+        const mem = (profile && profile.memory) || {};
+        const advanced = mem.preferredMode === "advanced";
+        if (advanced) {
+          return (
+            "This is the traditional chart: only the Sun, Moon, Mercury, Venus, Mars, Jupiter, and Saturn, with classical rulerships (Mars for Scorpio, Saturn for Aquarius, Jupiter for Pisces). Uranus, Neptune, and Pluto were discovered in the last few centuries—and the modern asteroids later still—so the modern chart includes those. Traditional keeps the older inner-solar-system picture."
+          );
+        }
+        return (
+          "This reading uses the older, simpler chart: the Sun, the Moon, and the five planets you can see in the sky. Uranus, Neptune, and Pluto were found in the last few centuries, and the modern asteroids later still—those belong to the modern chart. This version leaves them off so the picture stays closer to how astrology was practiced before those discoveries."
+        );
+      }
+      function syncChatDisclaimers(profile) {
+        const timeEl = document.getElementById("unknown-time-disclaimer");
+        if (timeEl) timeEl.hidden = !profileHasUnknownBirthTime(profile);
+        const tradEl = document.getElementById("traditional-chart-disclaimer");
+        if (tradEl) {
+          tradEl.hidden = profileChartSystem(profile) !== "traditional";
+          const textEl = document.getElementById(
+            "traditional-chart-disclaimer-text",
+          );
+          if (textEl && !tradEl.hidden) {
+            textEl.textContent = traditionalDisclaimerCopy(profile);
+          }
+        }
       }
 
       function renderConversation(profile) {
         const container = document.getElementById("chat-messages");
         if (!container) return;
-        const disclaimer = container.querySelector(".unknown-time-disclaimer");
+        const timeDisclaimer = container.querySelector(
+          ".unknown-time-disclaimer",
+        );
+        const tradDisclaimer = container.querySelector(
+          ".traditional-chart-disclaimer",
+        );
         const initial = container.querySelector(".initial-message");
         container.innerHTML = "";
-        if (disclaimer) container.appendChild(disclaimer);
+        if (timeDisclaimer) container.appendChild(timeDisclaimer);
+        if (tradDisclaimer) container.appendChild(tradDisclaimer);
         if (initial) container.appendChild(initial);
-        syncUnknownTimeDisclaimer(profile);
+        syncChatDisclaimers(profile);
         const history =
           profile && profile.conversationHistory
             ? profile.conversationHistory
@@ -2052,7 +2248,7 @@
         }
       }
 
-      function switchToProfile(profileId) {
+      function switchToProfile(profileId, wheelAnim) {
         const profiles = getChartProfiles();
         const current = getActiveProfile();
 
@@ -2085,11 +2281,11 @@
 
         renderProfileDropdown();
         renderConversation(next);
-        document.getElementById("profile-dropdown").classList.add("hidden");
+        closeHeaderDropdown(document.getElementById("profile-dropdown"));
         ensureChartLoadedForActiveProfile();
         // Render chart wheel for the switched profile if chart data exists
         if (next && next.birthChartData) {
-          renderChartWheel(next.birthChartData);
+          renderChartWheel(next.birthChartData, wheelAnim);
         } else {
           // Clear wheel if no chart data
           const container = document.getElementById("chart-wheel-container");
@@ -2098,6 +2294,7 @@
           }
           clearChartTable();
         }
+        syncChartSystemUI();
       }
 
       // Top-level geocoding for use in chat and add-profile flow
@@ -2353,12 +2550,36 @@
       const CHART_TABLE_PLANET_CHARS = {};
       [
         0x2609, 0x263d, 0x263f, 0x2640, 0x2642, 0x2643, 0x2644, 0x2645, 0x2646,
-        0x2647, 0x26b7, 0x26b3, 0x26b4, 0x26b5, 0x26b6,
+        0x2bd3, 0x26b7, 0x26b3, 0x26b4, 0x26b5, 0x26b6,
       ].forEach((code, i) => {
         CHART_TABLE_PLANET_CHARS[CHART_TABLE_PLANET_ORDER[i]] =
           String.fromCodePoint(code, 0xfe0e);
       });
       const ASTEROID_KEYS = ["chiron", "ceres", "pallas", "juno", "vesta"];
+      const OUTER_PLANET_KEYS = ["uranus", "neptune", "pluto"];
+      const TRADITIONAL_PLANET_KEYS = [
+        "sun",
+        "moon",
+        "mercury",
+        "venus",
+        "mars",
+        "jupiter",
+        "saturn",
+      ];
+      const ASTEROID_FADE_ORDER = [
+        "uranus",
+        "neptune",
+        "pluto",
+        "chiron",
+        "ceres",
+        "pallas",
+        "juno",
+        "vesta",
+      ];
+      const ASTEROID_FADE_MS = 2000;
+      const ASTEROID_FADE_OUT_GLYPH_MS = 3200;
+      const ASTEROID_FADE_STAGGER_MS = 420;
+      const ASTEROID_FADE_IN_SCALE = 2.4;
       const WHEEL_BODY_DEFINITIONS = {
         sun: "The Sun describes your core vitality, identity, and the way you naturally shine in the world.",
         moon: "The Moon reflects your emotional needs, instincts, and how you self-soothe when life feels intense.",
@@ -2510,6 +2731,15 @@
           const el = document.getElementById("asteroid-" + key);
           if (el) el.checked = chosen.has(key);
         });
+        syncAsteroidSelectAllButton();
+      }
+      function syncAsteroidSelectAllButton() {
+        const btn = document.getElementById("asteroid-select-all");
+        if (!btn) return;
+        btn.textContent =
+          selectedAsteroidsFromForm().length === ASTEROID_KEYS.length
+            ? "Deselect all"
+            : "Select all";
       }
       function selectedAsteroidsFromProfile(profile) {
         if (profile && Array.isArray(profile.selectedAsteroids)) {
@@ -2527,10 +2757,296 @@
         }
         return [];
       }
+      function asteroidKeysFromChart(chart) {
+        const bodies = (chart && chart.asteroids) || {};
+        return ASTEROID_KEYS.filter(function (key) {
+          return !!(bodies[key] && (bodies[key].degree != null || bodies[key].sign));
+        });
+      }
+      function profileChartSystem(profile) {
+        const p = profile || getActiveProfile();
+        return p && String(p.chartSystem || "").toLowerCase() === "traditional"
+          ? "traditional"
+          : "modern";
+      }
+      function isTraditionalDisplay(profile) {
+        return profileChartSystem(profile) === "traditional";
+      }
+      function isFadeableWheelBody(name) {
+        const key = String(name || "").toLowerCase();
+        return (
+          ASTEROID_KEYS.indexOf(key) !== -1 ||
+          OUTER_PLANET_KEYS.indexOf(key) !== -1
+        );
+      }
+      function outerPlanetKeysFromChart(chart) {
+        const planets = (chart && chart.planets) || {};
+        return OUTER_PLANET_KEYS.filter(function (key) {
+          return !!(
+            planets[key] &&
+            (planets[key].degree != null || planets[key].sign)
+          );
+        });
+      }
+      function modernOnlyKeysFromChart(chart) {
+        return outerPlanetKeysFromChart(chart).concat(
+          asteroidKeysFromChart(chart),
+        );
+      }
+      function formChartSystem() {
+        const tradBtn = document.getElementById("chart-system-traditional");
+        return tradBtn && tradBtn.classList.contains("is-active")
+          ? "traditional"
+          : "modern";
+      }
+      function setFormChartSystem(system) {
+        const next = system === "traditional" ? "traditional" : "modern";
+        const modernBtn = document.getElementById("chart-system-modern");
+        const tradBtn = document.getElementById("chart-system-traditional");
+        if (modernBtn) modernBtn.classList.toggle("is-active", next === "modern");
+        if (tradBtn) {
+          tradBtn.classList.toggle("is-active", next === "traditional");
+        }
+        const hint = document.getElementById("chart-system-hint");
+        if (hint) {
+          hint.textContent =
+            next === "traditional"
+              ? "Sun, Moon, and the five visible planets, with classical rulerships only."
+              : "Sun through Pluto, plus any asteroids you enabled.";
+        }
+        const traditional = next === "traditional";
+        ASTEROID_KEYS.forEach(function (key) {
+          const el = document.getElementById("asteroid-" + key);
+          if (el) el.disabled = traditional;
+        });
+        const selAll = document.getElementById("asteroid-select-all");
+        if (selAll) selAll.disabled = traditional;
+      }
+      function syncChartSystemUI() {
+        const modal = document.getElementById("add-profile-modal");
+        if (modal && !modal.classList.contains("hidden")) return;
+        setFormChartSystem(profileChartSystem());
+      }
+      function applyActiveChartDisplayChange(
+        prevChart,
+        nextChart,
+        prevSystem,
+        nextSystem,
+      ) {
+        const prev = prevSystem === "traditional" ? "traditional" : "modern";
+        const next = nextSystem === "traditional" ? "traditional" : "modern";
+        if (prev === "modern" && next === "traditional") {
+          fadeWheelAsteroids(modernOnlyKeysFromChart(prevChart), 0).then(
+            function () {
+              renderChartWheel(nextChart);
+            },
+          );
+          return;
+        }
+        if (prev === "traditional" && next === "modern") {
+          renderChartWheel(nextChart, {
+            fadeInAsteroids: modernOnlyKeysFromChart(nextChart),
+          });
+          return;
+        }
+        applyActiveChartAsteroidChange(prevChart, nextChart);
+      }
+      function orderedAsteroidKeys(keys, reverse) {
+        const wanted = new Set(
+          (keys || []).map(function (k) {
+            return String(k || "").toLowerCase();
+          }),
+        );
+        const ordered = ASTEROID_FADE_ORDER.filter(function (k) {
+          return wanted.has(k);
+        });
+        wanted.forEach(function (k) {
+          if (ordered.indexOf(k) === -1) ordered.push(k);
+        });
+        return reverse ? ordered.slice().reverse() : ordered;
+      }
+      function prefersReducedWheelMotion() {
+        return !!(
+          window.matchMedia &&
+          window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        );
+      }
+      function wheelAsteroidRoot() {
+        return document.getElementById("chart-wheel-container");
+      }
+      function collectAsteroidGlyphNodes(ordered) {
+        const root = wheelAsteroidRoot();
+        const nodes = [];
+        if (!root) return nodes;
+        ordered.forEach(function (key) {
+          root.querySelectorAll('[data-asteroid="' + key + '"]').forEach(function (el) {
+            nodes.push(el);
+          });
+        });
+        return nodes;
+      }
+      function collectAsteroidAspectNodes(ordered, fadeIn) {
+        const root = wheelAsteroidRoot();
+        const nodes = [];
+        const seen = new Set();
+        if (!root) return nodes;
+        ordered.forEach(function (key) {
+          const selector = fadeIn
+            ? '[data-asteroid-fade="' + key + '"]'
+            : '[data-asteroid-aspect~="' + key + '"]';
+          root.querySelectorAll(selector).forEach(function (el) {
+            if (seen.has(el)) return;
+            seen.add(el);
+            nodes.push(el);
+          });
+        });
+        return nodes;
+      }
+      function fadeOriginOf(el) {
+        const cx = Number(el.getAttribute("data-cx"));
+        const cy = Number(el.getAttribute("data-cy"));
+        if (Number.isFinite(cx) && Number.isFinite(cy)) {
+          return { x: cx, y: cy };
+        }
+        const text = el.querySelector("text");
+        if (text) {
+          return {
+            x: Number(text.getAttribute("x")) || 0,
+            y: Number(text.getAttribute("y")) || 0,
+          };
+        }
+        const line = el.querySelector("line");
+        if (line) {
+          return {
+            x:
+              (Number(line.getAttribute("x1")) + Number(line.getAttribute("x2"))) /
+              2,
+            y:
+              (Number(line.getAttribute("y1")) + Number(line.getAttribute("y2"))) /
+              2,
+          };
+        }
+        return { x: 0, y: 0 };
+      }
+      function scaleAroundTransform(origin, scale) {
+        return (
+          "translate(" +
+          origin.x +
+          "," +
+          origin.y +
+          ") scale(" +
+          scale +
+          ") translate(" +
+          -origin.x +
+          "," +
+          -origin.y +
+          ")"
+        );
+      }
+      function fadeDomNodes(nodes, toOpacity, duration, stagger, ease, startScale) {
+        return new Promise(function (resolve) {
+          if (!nodes.length || typeof d3 === "undefined") {
+            resolve();
+            return;
+          }
+          let remaining = 0;
+          let settled = false;
+          function finish() {
+            if (settled) return;
+            settled = true;
+            resolve();
+          }
+          const easeFn = ease || d3.easeCubicOut;
+          nodes.forEach(function (el, i) {
+            remaining += 1;
+            const sel = d3.select(el);
+            const origin = fadeOriginOf(el);
+            if (toOpacity === 1) {
+              sel.style("opacity", 0);
+              if (startScale) {
+                sel.attr("transform", scaleAroundTransform(origin, startScale));
+              }
+            }
+            const trans = sel
+              .transition()
+              .delay(i * stagger)
+              .duration(duration)
+              .ease(easeFn)
+              .style("opacity", toOpacity);
+            if (toOpacity === 1 && startScale) {
+              trans.attr("transform", scaleAroundTransform(origin, 1));
+            }
+            trans.on("end", function () {
+              remaining -= 1;
+              if (remaining <= 0) finish();
+            });
+          });
+          setTimeout(
+            finish,
+            duration + stagger * Math.max(0, nodes.length - 1) + 140,
+          );
+        });
+      }
+      function fadeWheelAsteroids(keys, toOpacity) {
+        const fadeIn = toOpacity === 1;
+        const ordered = orderedAsteroidKeys(keys, !fadeIn);
+        if (!ordered.length) return Promise.resolve();
+        const reduce = prefersReducedWheelMotion();
+        const duration = reduce ? 0 : ASTEROID_FADE_MS;
+        const stagger = reduce ? 0 : ASTEROID_FADE_STAGGER_MS;
+        const glyphs = collectAsteroidGlyphNodes(ordered);
+        const aspects = collectAsteroidAspectNodes(ordered, fadeIn);
+        if (fadeIn) {
+          return fadeDomNodes(
+            glyphs,
+            1,
+            duration,
+            stagger,
+            d3.easeCubicOut,
+            ASTEROID_FADE_IN_SCALE,
+          ).then(function () {
+            return fadeDomNodes(aspects, 1, duration, 0);
+          });
+        }
+        const glyphOut = reduce ? 0 : ASTEROID_FADE_OUT_GLYPH_MS;
+        return Promise.all([
+          fadeDomNodes(glyphs, 0, glyphOut, 0, d3.easeCubicOut),
+          fadeDomNodes(aspects, 0, duration, 0),
+        ]);
+      }
+      function applyActiveChartAsteroidChange(prevChart, nextChart) {
+        if (isTraditionalDisplay()) {
+          renderChartWheel(nextChart);
+          return;
+        }
+        const prevKeys = asteroidKeysFromChart(prevChart);
+        const nextKeys = asteroidKeysFromChart(nextChart);
+        const removed = prevKeys.filter(function (k) {
+          return nextKeys.indexOf(k) === -1;
+        });
+        const added = nextKeys.filter(function (k) {
+          return prevKeys.indexOf(k) === -1;
+        });
+        function paint() {
+          renderChartWheel(nextChart, { fadeInAsteroids: added });
+        }
+        if (removed.length) {
+          fadeWheelAsteroids(removed, 0).then(paint);
+        } else {
+          paint();
+        }
+      }
       function chartBodies(birthChart) {
         const bodies = {};
         if (birthChart && birthChart.planets) {
           Object.assign(bodies, birthChart.planets);
+        }
+        if (isTraditionalDisplay()) {
+          const kept = {};
+          TRADITIONAL_PLANET_KEYS.forEach(function (key) {
+            if (bodies[key]) kept[key] = bodies[key];
+          });
+          return kept;
         }
         if (birthChart && birthChart.asteroids) {
           Object.assign(bodies, birthChart.asteroids);
@@ -2565,6 +3081,10 @@
         const houses = birthChart.houses || [];
         const timeUnknown = !!birthChart.unknownBirthTime;
         let html = "";
+        if (isTraditionalDisplay()) {
+          html +=
+            '<p class="asteroid-hint">Traditional chart — Sun, Moon, Mercury, Venus, Mars, Jupiter, Saturn, with classical rulerships.</p>';
+        }
         if (timeUnknown) {
           html +=
             '<p class="asteroid-hint">Birth time unknown — houses and rising sign are placeholders (Ascendant shown at 0° Aries).</p>';
@@ -2647,6 +3167,7 @@
           return Math.min(700, Math.max(260, Math.floor(rawW) - 24));
         },
         radiusInset: 20,
+        svgPad: 24,
         innerFrac: 0.125,
         zodiacBand: 40,
         notchBand: 12,
@@ -2781,6 +3302,7 @@
             '<div class="chart-placeholder">Chart will appear when a profile with a birth chart is selected or loaded.</div>';
           clearChartTable();
         }
+        syncChartSystemUI();
       }
       // Preload chart for active profile so View raw data works without sending a message
       ensureChartLoadedForActiveProfile();
@@ -3443,7 +3965,10 @@
                 },
                 body: JSON.stringify({
                   message: message,
-                  birthChart: birthChartData,
+                  birthChart: Object.assign({}, birthChartData, {
+                    chartSystem: profileChartSystem(),
+                  }),
+                  chartSystem: profileChartSystem(),
                   conversationHistory: conversationHistory,
                   profileMemory: getActiveProfileMemory(),
                   chartSummary:
@@ -4521,9 +5046,8 @@
         .getElementById("profile-dropdown-btn")
         .addEventListener("click", (e) => {
           e.stopPropagation();
-          const dd = document.getElementById("profile-dropdown");
-          dd.classList.toggle("hidden");
-          document.getElementById("settings-dropdown").classList.add("hidden");
+          closeHeaderDropdown(document.getElementById("settings-dropdown"));
+          toggleHeaderDropdown(document.getElementById("profile-dropdown"));
         });
 
       // Settings dropdown toggle
@@ -4531,20 +5055,19 @@
         .getElementById("settings-dropdown-btn")
         .addEventListener("click", (e) => {
           e.stopPropagation();
-          const dd = document.getElementById("settings-dropdown");
-          dd.classList.toggle("hidden");
-          document.getElementById("profile-dropdown").classList.add("hidden");
+          closeHeaderDropdown(document.getElementById("profile-dropdown"));
+          toggleHeaderDropdown(document.getElementById("settings-dropdown"));
         });
 
       // Close dropdowns when clicking outside
       document.addEventListener("click", (e) => {
-        const profileSwitcher = document.querySelector(".profile-switcher");
+        const profileMenu = document.querySelector(".profile-menu");
         const settingsSwitcher = document.querySelector(".settings-switcher");
-        if (profileSwitcher && !profileSwitcher.contains(e.target)) {
-          document.getElementById("profile-dropdown").classList.add("hidden");
+        if (profileMenu && !profileMenu.contains(e.target)) {
+          closeHeaderDropdown(document.getElementById("profile-dropdown"));
         }
         if (settingsSwitcher && !settingsSwitcher.contains(e.target)) {
-          document.getElementById("settings-dropdown").classList.add("hidden");
+          closeHeaderDropdown(document.getElementById("settings-dropdown"));
         }
       });
 
@@ -4554,6 +5077,26 @@
         .addEventListener("click", () => {
           openAddProfileModalForAdd();
         });
+
+      document
+        .getElementById("asteroid-select-all")
+        .addEventListener("click", () => {
+          const allOn =
+            selectedAsteroidsFromForm().length === ASTEROID_KEYS.length;
+          setAsteroidCheckboxes(allOn ? [] : ASTEROID_KEYS.slice());
+        });
+      ASTEROID_KEYS.forEach((key) => {
+        const el = document.getElementById("asteroid-" + key);
+        if (el) el.addEventListener("change", syncAsteroidSelectAllButton);
+      });
+      const chartSystemToggle = document.getElementById("chart-system-toggle");
+      if (chartSystemToggle) {
+        chartSystemToggle.addEventListener("click", function (e) {
+          const btn = e.target.closest("[data-system]");
+          if (!btn) return;
+          setFormChartSystem(btn.getAttribute("data-system"));
+        });
+      }
 
       // Add profile cancel and overlay → hide modal, reset edit mode
       document
@@ -4583,7 +5126,7 @@
       document
         .getElementById("settings-profile-preferences-btn")
         .addEventListener("click", () => {
-          document.getElementById("settings-dropdown").classList.add("hidden");
+          closeHeaderDropdown(document.getElementById("settings-dropdown"));
           const mem = getActiveProfileMemory();
           document.getElementById("profile-memory-mode").value =
             mem.preferredMode || "beginner";
@@ -4593,9 +5136,6 @@
           );
           document.getElementById("pref-strengths").checked = flags.some((f) =>
             /strength/i.test(f),
-          );
-          document.getElementById("pref-no-prediction").checked = flags.some(
-            (f) => /prediction/i.test(f),
           );
           document
             .getElementById("profile-preferences-modal")
@@ -4623,8 +5163,6 @@
             sensitivityFlags.push("softer language");
           if (document.getElementById("pref-strengths").checked)
             sensitivityFlags.push("focus on strengths");
-          if (document.getElementById("pref-no-prediction").checked)
-            sensitivityFlags.push("avoid prediction");
           const profiles = getChartProfiles();
           const id = getActiveProfileId();
           const idx = profiles.findIndex((p) => p.id === id);
@@ -4638,6 +5176,7 @@
           document
             .getElementById("profile-preferences-modal")
             .classList.add("hidden");
+          syncChatDisclaimers(getActiveProfile());
         });
 
       document
@@ -4682,6 +5221,7 @@
             coordinates.countryCode,
           );
           const selectedAsteroids = selectedAsteroidsFromForm();
+          const selectedChartSystem = formChartSystem();
           const requestData = {
             year: y,
             month: m,
@@ -4713,13 +5253,18 @@
               const idBeingEdited = editingProfileId;
               const profiles = getChartProfiles();
               const idx = profiles.findIndex((p) => p.id === idBeingEdited);
+              let prevChart = null;
+              let prevSystem = "modern";
               if (idx !== -1) {
                 const profile = profiles[idx];
+                prevChart = profile.birthChartData;
+                prevSystem = profileChartSystem(profile);
                 profile.name = name;
                 profile.birthDate = birthDate;
                 profile.birthTime = birthTime;
                 profile.birthTimeUnknown = timeUnknown;
                 profile.birthPlace = birthPlace;
+                profile.chartSystem = selectedChartSystem;
                 profile.selectedAsteroids = selectedAsteroids;
                 profile.birthChartData = birthChartData;
                 setChartProfiles(profiles);
@@ -4729,6 +5274,7 @@
                 .classList.add("hidden");
               document.getElementById("add-profile-form").reset();
               setBirthTimeUnknownUI(false);
+              setFormChartSystem("modern");
               editingProfileId = null;
               document.getElementById("add-profile-modal-title").textContent =
                 "Add chart profile";
@@ -4737,8 +5283,12 @@
               renderProfileDropdown();
               const active = getActiveProfile();
               if (active && active.id === idBeingEdited) {
-                renderChartWheel(birthChartData);
-                renderChartTable(birthChartData);
+                applyActiveChartDisplayChange(
+                  prevChart,
+                  birthChartData,
+                  prevSystem,
+                  selectedChartSystem,
+                );
                 syncUnknownTimeDisclaimer(active);
               }
               return;
@@ -4751,6 +5301,7 @@
               birthTime,
               birthTimeUnknown: timeUnknown,
               birthPlace,
+              chartSystem: selectedChartSystem,
               selectedAsteroids,
               birthChartData,
               conversationHistory: [],
@@ -4771,8 +5322,12 @@
               .classList.add("hidden");
             document.getElementById("add-profile-form").reset();
             setBirthTimeUnknownUI(false);
+            setFormChartSystem("modern");
             renderProfileDropdown();
-            switchToProfile(newProfile.id);
+            switchToProfile(newProfile.id, {
+              fadeInAsteroids:
+                selectedChartSystem === "traditional" ? [] : selectedAsteroids,
+            });
           } catch (err) {
             alert("Error: " + (err.message || "Could not add profile."));
           }
@@ -4785,7 +5340,7 @@
         e.stopPropagation();
         e.preventDefault();
         if (!getActiveProfile()) return;
-        document.getElementById("profile-dropdown").classList.add("hidden");
+        closeHeaderDropdown(document.getElementById("profile-dropdown"));
         const confirmed = window.confirm(
           "Are you sure you want to clear this chat? This only clears the conversation for the current profile.",
         );
@@ -4796,7 +5351,7 @@
 
       // Logout handler (in Settings dropdown)
       logoutSettingsBtn.addEventListener("click", () => {
-        document.getElementById("settings-dropdown").classList.add("hidden");
+        closeHeaderDropdown(document.getElementById("settings-dropdown"));
         localStorage.clear();
         window.location.href = "landing.html";
       });
@@ -4833,7 +5388,7 @@
           );
           return;
         }
-        document.getElementById("settings-dropdown").classList.add("hidden");
+        closeHeaderDropdown(document.getElementById("settings-dropdown"));
 
         // Check if raw data display already exists
         let rawDataDiv = document.getElementById("raw-data-display");
@@ -5129,7 +5684,7 @@
        *
        * @param {Object} birthChart - Birth chart data with houses, planets, aspects, angles
        */
-      function renderChartWheel(birthChart) {
+      function renderChartWheel(birthChart, wheelAnim) {
         try {
           console.log(
             "[CHART WHEEL] Rendering chart wheel with data:",
@@ -5140,6 +5695,14 @@
           if (!birthChart || typeof birthChart !== "object") {
             throw new Error("Invalid birth chart data");
           }
+          const fadeInAsteroids = (
+            wheelAnim && Array.isArray(wheelAnim.fadeInAsteroids)
+              ? wheelAnim.fadeInAsteroids
+              : []
+          ).map(function (k) {
+            return String(k || "").toLowerCase();
+          });
+          const fadeInAsteroidSet = new Set(fadeInAsteroids);
           const timeUnknown = !!birthChart.unknownBirthTime;
           const unknownHouseNote =
             "Birth time is unknown, so this house cannot be applied to the chart. This is the general meaning only.";
@@ -5244,11 +5807,15 @@
             if (e.relatedTarget && container.contains(e.relatedTarget)) return;
             hideWheelTooltip();
           };
-          const width = wheelProfile.width(rawW);
+          const svgPad = isMobileChart ? 0 : wheelProfile.svgPad || 0;
+          const drawSize = wheelProfile.width(
+            Math.max(260, rawW - svgPad * 2),
+          );
+          const width = drawSize + svgPad * 2;
           const height = width;
           // Zodiac surrounds houses: total radius, then house wheel, notch band, zodiac ring
           const totalRadius =
-            (Math.min(width, height) / 2 - wheelProfile.radiusInset) * 0.93;
+            (drawSize / 2 - wheelProfile.radiusInset) * 0.93;
           const innerRadius = totalRadius * wheelProfile.innerFrac;
           const zodiacBandHeight = wheelProfile.zodiacBand;
           const notchBandHeight = wheelProfile.notchBand;
@@ -5932,6 +6499,28 @@
                 .append("g")
                 .attr("class", "aspect-group")
                 .style("cursor", "pointer");
+              const aspectEnds = [
+                String(aspect.planet1 || "").toLowerCase(),
+                String(aspect.planet2 || "").toLowerCase(),
+              ];
+              const aspectAsteroidEnds = aspectEnds.filter(function (n) {
+                return isFadeableWheelBody(n);
+              });
+              if (aspectAsteroidEnds.length) {
+                aspectGroup
+                  .attr("data-asteroid-aspect", aspectAsteroidEnds.join(" "))
+                  .attr("data-cx", midX)
+                  .attr("data-cy", midY);
+                const fadingEnds = aspectAsteroidEnds.filter(function (n) {
+                  return fadeInAsteroidSet.has(n);
+                });
+                if (fadingEnds.length) {
+                  const fadeKey = orderedAsteroidKeys(fadingEnds, false).pop();
+                  aspectGroup
+                    .attr("data-asteroid-fade", fadeKey)
+                    .style("opacity", 0);
+                }
+              }
 
               // Draw aspect line (behind planets) - append directly since aspects are drawn before planets
               const aspectLine = aspectGroup
@@ -6415,10 +7004,10 @@
 
           // Planet symbols: Unicode + U+FE0E (text presentation), same symbol-font technique as zodiac
           // U+2609 Sun, U+263D Moon, U+263F Mercury, U+2640 Venus, U+2642 Mars, U+2643 Jupiter,
-          // U+2644 Saturn, U+2645 Uranus, U+2646 Neptune, U+2647 Pluto
+          // U+2644 Saturn, U+2645 Uranus, U+2646 Neptune, U+2BD3 Pluto (circle over crescent over cross)
           const planetSymbolCodes = [
             0x2609, 0x263d, 0x263f, 0x2640, 0x2642, 0x2643, 0x2644, 0x2645,
-            0x2646, 0x2647,
+            0x2646, 0x2bd3,
           ];
           const planetOrder = [
             "sun",
@@ -6521,6 +7110,17 @@
                   .append("g")
                   .attr("class", "planet-group")
                   .style("cursor", "pointer");
+                const bodyKey = String(planetName || "").toLowerCase();
+                if (isFadeableWheelBody(bodyKey)) {
+                  planetGroup
+                    .classed("asteroid-group", true)
+                    .attr("data-asteroid", bodyKey)
+                    .attr("data-cx", pos.x)
+                    .attr("data-cy", pos.y);
+                  if (fadeInAsteroidSet.has(bodyKey)) {
+                    planetGroup.style("opacity", 0);
+                  }
+                }
 
                 planetGroup
                   .append("circle")
@@ -6640,6 +7240,10 @@
           // Center remains empty - no label
 
           renderChartTable(birthChart);
+          syncChartSystemUI();
+          if (fadeInAsteroidSet.size) {
+            fadeWheelAsteroids(Array.from(fadeInAsteroidSet), 1);
+          }
           console.log("[CHART WHEEL] Chart wheel rendered successfully");
         } catch (error) {
           console.error("[CHART WHEEL] Error rendering chart wheel:", error);

@@ -5,6 +5,10 @@
  */
 
 const { ASTEROID_KEYS } = require("./chart_format");
+const {
+  isTraditionalChart,
+  applyTraditionalChartView,
+} = require("./traditional_chart");
 
 const SIGN_RULERS = {
   Aries: "mars",
@@ -898,6 +902,9 @@ function buildChartArchitecture(birthChart) {
   if (!birthChart || typeof birthChart !== "object") {
     return { ok: false, reason: "no chart" };
   }
+  if (isTraditionalChart(birthChart)) {
+    birthChart = applyTraditionalChartView(birthChart);
+  }
   const entries = planetEntries(birthChart);
   const astEntries = asteroidEntries(birthChart);
   const combinedEntries = entries.concat(astEntries);
@@ -983,6 +990,7 @@ function buildChartArchitecture(birthChart) {
   const architecture = {
     ok: true,
     unknownBirthTime,
+    chartSystem: isTraditionalChart(birthChart) ? "traditional" : "modern",
     chartRuler,
     planetConditions: conditions,
     dominantPlanets: dominantPlanets.slice(0, 5),
@@ -1258,21 +1266,36 @@ function buildChartThesis(architecture) {
   return buildThesisClaims(architecture).join(" ");
 }
 
-function ensureArchitecture(birthChart) {
-  if (!birthChart || typeof birthChart !== "object") return null;
-  const arch = birthChart.architecture;
+function architectureCacheValid(arch, birthChart, traditional) {
+  if (!arch || !arch.ok) return false;
+  if (!!arch.unknownBirthTime !== !!birthChart.unknownBirthTime) return false;
+  if ((arch.chartSystem === "traditional") !== traditional) return false;
+  if (traditional) return true;
   const hasAsteroids =
     birthChart.asteroids && Object.keys(birthChart.asteroids).length > 0;
-  const archKnowsAsteroids = arch && arch.asteroidConditions;
-  const timeFlagMatch =
-    !!arch && !!arch.unknownBirthTime === !!birthChart.unknownBirthTime;
-  if (
-    arch &&
-    arch.ok &&
-    timeFlagMatch &&
-    (!hasAsteroids || archKnowsAsteroids)
-  ) {
-    return arch;
+  return !hasAsteroids || !!arch.asteroidConditions;
+}
+
+function ensureArchitecture(birthChart) {
+  if (!birthChart || typeof birthChart !== "object") return null;
+  const traditional = isTraditionalChart(birthChart);
+  if (traditional) {
+    if (
+      architectureCacheValid(
+        birthChart.architectureTraditional,
+        birthChart,
+        true,
+      )
+    ) {
+      return birthChart.architectureTraditional;
+    }
+    birthChart.architectureTraditional = buildChartArchitecture(
+      Object.assign({}, birthChart, { chartSystem: "traditional" }),
+    );
+    return birthChart.architectureTraditional;
+  }
+  if (architectureCacheValid(birthChart.architecture, birthChart, false)) {
+    return birthChart.architecture;
   }
   birthChart.architecture = buildChartArchitecture(birthChart);
   return birthChart.architecture;
@@ -1285,6 +1308,12 @@ function formatArchitectureForAI(architecture) {
   lines.push("Use this computed architecture as the skeleton of the reading.");
   lines.push("Individual placements refine it; they do not replace it.");
   lines.push("");
+  if (architecture.chartSystem === "traditional") {
+    lines.push(
+      "TRADITIONAL SYSTEM ONLY: Use Sun, Moon, Mercury, Venus, Mars, Jupiter, and Saturn. Classical rulerships only (Scorpio→Mars, Aquarius→Saturn, Pisces→Jupiter). Do not mention Uranus, Neptune, Pluto, Chiron, or asteroids.",
+    );
+    lines.push("");
+  }
   if (unknownTime) {
     lines.push(
       "BIRTH TIME UNKNOWN: Houses, house occupants, house rulers, chart ruler, sect, hemispheres, quadrants, and ASC/MC aspects are not valid. The wheel may show 0° Aries rising as a display placeholder only. Interpret from planetary signs, dignity, aspects, elements, modalities, sign stelliums, and configurations. The Moon's exact degree is approximate. Mention the missing birth time only when the question actually needs houses or rising sign; then say so briefly and continue with what is known.",

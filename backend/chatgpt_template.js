@@ -110,7 +110,7 @@ Date: ${bd.date ?? "?"}
 Time: ${timeUnknown ? "unknown" : bd.time ?? "?"}
 Location: ${loc.latitude != null ? loc.latitude + "°N" : "?"}, ${loc.longitude != null ? loc.longitude + "°E" : "?"}
 Timezone: UTC${loc.timezone != null ? loc.timezone : "?"}
-${timeUnknown ? "Birth time is unknown. Interpret from signs and aspects only. Mention the missing time only when houses or rising sign are needed.\n" : ""}
+${timeUnknown ? "Birth time is unknown. Interpret from signs and aspects only. Mention the missing time only when houses or rising sign are needed.\n" : ""}${birthChart.chartSystem === "traditional" ? "Chart system: traditional. Only Sun, Moon, Mercury, Venus, Mars, Jupiter, and Saturn. Classical rulerships only. Do not mention Uranus, Neptune, Pluto, Chiron, or asteroids.\n" : ""}
 Angular Points:
 ${
   timeUnknown
