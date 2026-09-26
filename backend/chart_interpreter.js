@@ -34,6 +34,7 @@ const {
  * @returns {object} Structured interpretation template
  */
 function generateChartInterpretation(birthChart) {
+  const timeUnknown = !!birthChart.unknownBirthTime;
   const interpretation = {
     // Basic chart information
     chartInfo: {
@@ -42,19 +43,26 @@ function generateChartInterpretation(birthChart) {
       location: birthChart.birthData.location,
     },
 
-    // Angular points interpretations
+    unknownBirthTime: timeUnknown,
+
+    // Angular points interpretations (placeholder only when birth time is unknown)
     angles: {
       ascendant: {
         sign: birthChart.angles.ascendant.sign,
         element: birthChart.angles.ascendant.element,
         degree: birthChart.angles.ascendant.degree,
-        ruler: getChartRuler(birthChart.angles.ascendant.sign),
-        positive:
-          getSignMeaning(birthChart.angles.ascendant.sign, "positive")?.core ||
-          "",
-        negative:
-          getSignMeaning(birthChart.angles.ascendant.sign, "negative")?.core ||
-          "",
+        ruler: timeUnknown
+          ? null
+          : getChartRuler(birthChart.angles.ascendant.sign),
+        unused: timeUnknown,
+        positive: timeUnknown
+          ? ""
+          : getSignMeaning(birthChart.angles.ascendant.sign, "positive")?.core ||
+            "",
+        negative: timeUnknown
+          ? ""
+          : getSignMeaning(birthChart.angles.ascendant.sign, "negative")?.core ||
+            "",
       },
       midheaven: {
         sign: birthChart.angles.midheaven.sign,
@@ -139,8 +147,12 @@ function generateChartInterpretation(birthChart) {
     const planetNegative = getPlanetMeaning(planetName, "negative");
     const signPositive = getSignMeaning(planetData.sign, "positive");
     const signNegative = getSignMeaning(planetData.sign, "negative");
-    const housePositive = getHouseMeaning(planetData.house, "positive");
-    const houseNegative = getHouseMeaning(planetData.house, "negative");
+    const housePositive = timeUnknown
+      ? null
+      : getHouseMeaning(planetData.house, "positive");
+    const houseNegative = timeUnknown
+      ? null
+      : getHouseMeaning(planetData.house, "negative");
 
     // Determine overall polarity based on aspects involving this planet
     let aspectPolarity = "positive"; // default
@@ -374,6 +386,10 @@ function formatInterpretationForAI(interpretation, birthChart) {
   });
   template += `\n`;
 
+  if (interpretation.unknownBirthTime) {
+    template += `BIRTH TIME UNKNOWN: Do not use houses, Ascendant, Midheaven, house rulers, or chart ruler. The displayed 0° Aries ASC is a placeholder.\n\n`;
+  }
+
   if (interpretation.architecture && interpretation.architecture.ok) {
     template += `CHART ARCHITECTURE (computed skeleton — start the reading from this):\n`;
     template += `${formatArchitectureForAI(interpretation.architecture)}\n\n`;
@@ -392,15 +408,21 @@ function formatInterpretationForAI(interpretation, birthChart) {
     template += `═══════════════════════════════════════════════════════════\n\n`;
 
     template += `${coreSynthesisConfig.foundationLabel}\n`;
-    template += `- Sun in ${synth.sun.sign} (House ${synth.sun.house}): Core identity expression\n`;
-    template += `- Moon in ${synth.moon.sign} (House ${synth.moon.house}): Emotional nature\n`;
-    template += `- Ascendant in ${synth.ascendant.sign}: Outer personality and first impressions\n`;
-    if (synth.chartRuler) {
-      template += `- Chart Ruler: ${synth.chartRuler.planet.toUpperCase()} in ${
-        synth.chartRuler.sign
-      } (House ${synth.chartRuler.house}): How identity is expressed\n\n`;
+    if (interpretation.unknownBirthTime) {
+      template += `- Sun in ${synth.sun.sign}: Core identity expression\n`;
+      template += `- Moon in ${synth.moon.sign}: Emotional nature\n`;
+      template += `- Ascendant / chart ruler: unknown (birth time not given)\n\n`;
     } else {
-      template += `- Chart Ruler: Not available\n\n`;
+      template += `- Sun in ${synth.sun.sign} (House ${synth.sun.house}): Core identity expression\n`;
+      template += `- Moon in ${synth.moon.sign} (House ${synth.moon.house}): Emotional nature\n`;
+      template += `- Ascendant in ${synth.ascendant.sign}: Outer personality and first impressions\n`;
+      if (synth.chartRuler) {
+        template += `- Chart Ruler: ${synth.chartRuler.planet.toUpperCase()} in ${
+          synth.chartRuler.sign
+        } (House ${synth.chartRuler.house}): How identity is expressed\n\n`;
+      } else {
+        template += `- Chart Ruler: Not available\n\n`;
+      }
     }
 
     // Sun-Moon relationship

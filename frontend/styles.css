@@ -115,6 +115,34 @@ button[type="submit"]:hover {
   background: #357abd;
 }
 
+.auth-skip {
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: center;
+}
+
+.skip-auth-btn {
+  width: 100%;
+  padding: 12px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 5px;
+  color: #e2e8f0;
+  font-size: 1.05em;
+  cursor: pointer;
+}
+
+.skip-auth-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.skip-auth-hint {
+  margin: 8px 0 0;
+  font-size: 0.8em;
+  color: #9aa0c0;
+}
+
 /* Chat interface styles */
 .chat-container {
   max-width: 800px;

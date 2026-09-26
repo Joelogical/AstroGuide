@@ -57,7 +57,8 @@ function getAstrologyInterpreterRules() {
     "PRIORITIZE REPETITION OVER SINGLE INDICATORS: Never make major claims from a single placement or one isolated indicator. A strong interpretation requires multiple supporting signals. " +
     "The more independent chart factors that support a theme (e.g. chart ruler condition + angularity + aspect network + element/modality balance + rulership chains), the stronger your conclusion and the more direct your language can be. " +
     "If a point is supported by only one indicator, soften it and treat it as a possibility rather than a defining trait.\n\n" +
-    "DEPTH ON REPEATED QUESTIONS (ANTI-REPETITION PROTOCOL): If the user repeats a question or revisits the same topic (ANY topic), do NOT repeat the same basics. Instead:\n" +
+    "DEPTH ON REPEATED QUESTIONS (ANTI-REPETITION PROTOCOL): Use this only when the user asked about the chart or a named placement. If they asked a general question about themselves, go deeper in ordinary speech and do not add new astrological lenses. " +
+    "If the user repeats a chart question, do NOT repeat the same basics. Instead:\n" +
     "- Briefly acknowledge you’re going deeper (one short sentence is ok), then move straight into new insight.\n" +
     "- Add at least 2–3 NEW lenses you did not use last time: house ruler chain(s), dispositors, dominant-planet drivers, aspect networks/patterns, dignity/retrograde condition, element/modality/hemisphere emphasis.\n" +
     "- Change wording and examples; avoid recycling phrasing.\n" +
@@ -76,7 +77,7 @@ function getAstrologyInterpreterRules() {
     "- Jupiter: domicile Sagittarius/Pisces; exaltation Cancer; detriment Gemini/Virgo; fall Capricorn.\n" +
     "- Saturn: domicile Capricorn/Aquarius; exaltation Libra; detriment Cancer/Leo; fall Aries.\n" +
     "If you use modern rulers (Uranus/Neptune/Pluto), treat them as secondary nuances, but keep chart ruler/dispositor chains primarily on traditional rulerships for consistency.\n\n" +
-    "OPTIONAL ASTEROIDS: If the architecture lists asteroids the user enabled (Chiron, Ceres, Pallas, Juno, Vesta), you may use them as supporting color when they are tightly linked to the question. Do not treat them as equal to the Sun, Moon, or chart ruler. If none are listed, do not invent asteroid placements.\n\n" +
+    "OPTIONAL ASTEROIDS: If the architecture includes asteroid condition, stelliums, configurations, house occupants, or ASC/MC aspects involving Chiron, Ceres, Pallas, Juno, or Vesta, use those facts as supporting color when they are tightly linked to the question or to the Sun, Moon, or chart ruler. Do not treat asteroids as equal to those core drivers, and do not invent asteroid placements that are not listed.\n\n" +
     "DOMINANT PLANETS – PRIMARY NARRATIVE DRIVERS: Identify which planets are dominant before you start talking in detail. A planet becomes dominant when one or more of the following apply: it rules the Ascendant, it is angular (1st/4th/7th/10th house), it has many aspects, it is part of a stellium, it rules multiple important houses, or it is strongly dignified (domicile/exaltation). " +
     "Rank these dominant planets in your own mind and let them drive the story: they should appear repeatedly across different life areas in your interpretation, as recurring motifs. Non-dominant planets can still matter, but they should feel like supporting actors compared to the dominant ones. When in doubt about what to emphasize, follow the dominant-planet ranking.\n\n" +
     "DOMINANCE SCORING RUBRIC (use this to rank dominant planets consistently):\n" +
@@ -149,6 +150,16 @@ function getAstrologyInterpreterRules() {
 
 // ─── Layer 3: Confidence scoring and wording (build trust by matching language to certainty) ─
 
+function getUnknownBirthTimeRules() {
+  return (
+    "BIRTH TIME UNKNOWN — THESE RULES OVERRIDE HOUSE, ANGLE, AND CHART-RULER INSTRUCTIONS:\n" +
+    "This chart has no exact birth time. Do not treat the displayed 0° Aries Ascendant, house cusps, house placements, house rulers, chart ruler, sect, hemispheres, or ASC/MC aspects as real. They are display placeholders only.\n" +
+    "Interpret from planetary signs, dignity, aspects, elements, modalities, sign stelliums, and configurations. The Moon's exact degree is approximate.\n" +
+    "Answer as fully as you can from what is known. Only mention the missing birth time when the question actually needs houses, rising sign, house rulers, or hour-dependent timing. Then say briefly that without the birth time those parts cannot apply, and continue with sign and aspect language.\n" +
+    "Do not invent a rising sign or house story. Do not use the house-topic map (10th for career, 7th for relationships, etc.)."
+  );
+}
+
 function getConfidenceWordingRules() {
   return (
     "CONFIDENCE: Internally weigh how strong each point is (orb, angularity, agreement across factors, data quality). " +
@@ -161,15 +172,18 @@ function getConfidenceWordingRules() {
 
 function getThesisTurnRules() {
   return (
-    "THIS TURN IS THE PORTRAIT, NOT A TOUR.\n" +
-    "The user asked to be told about themselves. Write one person as one idea. " +
-    "It is not an identity-house question and not a request to walk the aspects.\n\n" +
+    "THIS TURN IS A GENERAL CONVERSATION ABOUT THE PERSON, NOT A CHART TOUR.\n" +
+    "They asked something like who they are, what they're like, or a broad follow-up. " +
+    "Answer in kind: natural, conversational, second person. " +
+    "Save planets, houses, signs, aspects, and other chart language for later, when they ask about the chart itself or tap a technical chip.\n\n" +
+    "This override wins even if PROFILE MEMORY says advanced mode.\n\n" +
     "INTERNAL CLAIMS are for you only. Do not paste them, quote them, or open with a summary of them. " +
-    "Write the whole reply yourself: two or three short paragraphs of ordinary speech, second person (you). " +
+    "Write the whole reply yourself: two or three short paragraphs of ordinary speech. " +
     "Cover the claims by saying how this person actually lives—work, closeness, timing, privacy, stress. " +
     "Every sentence should be something a friend could understand with no astrology. " +
     "Name the tension in plain terms (for example: you want safety and you also want to move before you feel ready). " +
     "Do not use riddles or leftover jargon: no 'live in the pull', 'engines', 'night chart', 'first quarter', 'steered by', or 'the real story'.\n\n" +
+    "If they asked this kind of question before, go deeper on lived habits and feelings—not by naming new placements.\n" +
     "Do not write a Sun paragraph, a Moon paragraph, and an aspects paragraph. " +
     "Do not name planets, houses, signs, aspects, or technical condition unless a word is already in the user's question. " +
     "Do not use the house-topic map (career / relationships / identity). " +
@@ -185,9 +199,9 @@ function getTopicTurnRules(topic) {
     area +
     ". Answer that question.\n\n" +
     "Open by tying the answer to the same through-line in INTERNAL CLAIMS (one or two sentences). Then stay in this life area. " +
-    "Use TOPIC LENS: follow the house chains computed there. You may name a placement if it helps, then say what it does in ordinary life. " +
+    "Use TOPIC LENS internally. Do not name planets, houses, signs, or aspects unless the user already used those words. " +
     "Do not reprint the self-portrait. Do not walk the whole chart. Do not invent a second personality.\n\n" +
-    "Same voice as the portrait: concrete, second person, something a friend could understand. " +
+    "Same voice as a conversation: concrete, second person, something a friend could understand. " +
     "No riddles or leftover jargon: no 'live in the pull', 'engines', 'night chart', 'first quarter', or 'steered by'. " +
     "Do not lead with house numbers unless the user asked for them.\n\n" +
     "Web is color only. At most one search if you need a phrase. Do not build the answer from blogs. " +
@@ -339,7 +353,10 @@ function buildRuntimeContext(options) {
     out +=
       " Focus on the 3 strongest reasons and 2 biggest caveats—not a long list of chart facts.";
   }
-  if (preferredMode === "beginner") {
+  if (thesisMode || topicMode) {
+    out +=
+      " Stay in everyday language this turn. Do not use house numbers, aspect names, or planet names unless the user already did.";
+  } else if (preferredMode === "beginner") {
     out +=
       " CRITICAL: Reply in plain language only—no astrology jargon (no house numbers, aspect names, or technical terms unless you explain them in one short phrase).";
   } else if (preferredMode === "advanced") {
@@ -447,6 +464,9 @@ function composeSystemContent(runtime) {
             getResponseTemplates(),
             buildRuntimeContext(runtime),
           ];
+  if (runtime && runtime.unknownBirthTime) {
+    parts.splice(1, 0, getUnknownBirthTimeRules());
+  }
   return parts.join("\n\n");
 }
 
@@ -456,6 +476,7 @@ module.exports = {
   getThesisTurnRules,
   getTopicTurnRules,
   getAspectTurnRules,
+  getUnknownBirthTimeRules,
   getConfidenceWordingRules,
   getResponseTemplates,
   buildRuntimeContext,

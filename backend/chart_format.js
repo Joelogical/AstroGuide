@@ -126,6 +126,37 @@ function calculateAspects(planets, options) {
   return aspects;
 }
 
+function applyUnknownBirthTimeOverlay(chart) {
+  if (!chart || typeof chart !== "object") return chart;
+  chart.unknownBirthTime = true;
+  if (!chart.birthData) chart.birthData = {};
+  chart.birthData.time = "unknown";
+  chart.angles = {
+    ascendant: { degree: 0, sign: "Aries", element: "Fire" },
+    midheaven: { degree: 270, sign: "Capricorn", element: "Earth" },
+  };
+  chart.houses = [];
+  for (let i = 0; i < 12; i++) {
+    const degree = i * 30;
+    const sign = getSignFromDegree(degree);
+    chart.houses.push({
+      number: i + 1,
+      degree,
+      sign,
+      element: getElementFromSign(sign),
+      displayOnly: true,
+    });
+  }
+  function stripHouse(body) {
+    if (!body || typeof body !== "object") return;
+    body.house = null;
+  }
+  if (chart.planets) Object.values(chart.planets).forEach(stripHouse);
+  if (chart.asteroids) Object.values(chart.asteroids).forEach(stripHouse);
+  if (chart.points) Object.values(chart.points).forEach(stripHouse);
+  return chart;
+}
+
 function decorateAspects(aspects, planetByName) {
   return aspects.map((aspect) => {
     const p1 = planetByName[aspect.planet1];
@@ -150,4 +181,5 @@ module.exports = {
   normalizeDegree,
   calculateAspects,
   decorateAspects,
+  applyUnknownBirthTimeOverlay,
 };

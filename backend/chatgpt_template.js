@@ -50,20 +50,26 @@ function formatBirthChartForChatGPT(birthChart) {
     neptune: "Neptune",
     pluto: "Pluto",
   };
+  const timeUnknown = !!birthChart.unknownBirthTime;
   const planetList = Object.entries(planets)
     .map(([planet, info]) => {
       const deg =
         info && typeof info.degree === "number" ? info.degree.toFixed(2) : "?";
       const retrograde = info && info.isRetrograde ? " (R)" : "";
-      return `${planetNames[planet] || planet}: ${deg}° ${info?.sign || "?"} (${info?.element || "?"}) - House ${info?.house ?? "?"}${retrograde}`;
+      const houseBit = timeUnknown
+        ? ""
+        : ` - House ${info?.house ?? "?"}`;
+      return `${planetNames[planet] || planet}: ${deg}° ${info?.sign || "?"} (${info?.element || "?"})${houseBit}${retrograde}`;
     })
     .join("\n");
-  const houseList = houses
-    .map(
-      (house) =>
-        `House ${house?.number ?? "?"}: ${house?.degree != null ? Number(house.degree).toFixed(2) : "?"}° ${house?.sign || "?"} (${house?.element || "?"})`,
-    )
-    .join("\n");
+  const houseList = timeUnknown
+    ? "Houses and rising sign are unknown. The wheel may show 0° Aries rising as a display placeholder only. Do not interpret houses, house rulers, or ASC/MC aspects."
+    : houses
+        .map(
+          (house) =>
+            `House ${house?.number ?? "?"}: ${house?.degree != null ? Number(house.degree).toFixed(2) : "?"}° ${house?.sign || "?"} (${house?.element || "?"})`,
+        )
+        .join("\n");
   const aspectList = aspects
     .map(
       (aspect) =>
@@ -101,13 +107,17 @@ Birth Chart Analysis Request
 
 Birth Data:
 Date: ${bd.date ?? "?"}
-Time: ${bd.time ?? "?"}
+Time: ${timeUnknown ? "unknown" : bd.time ?? "?"}
 Location: ${loc.latitude != null ? loc.latitude + "°N" : "?"}, ${loc.longitude != null ? loc.longitude + "°E" : "?"}
 Timezone: UTC${loc.timezone != null ? loc.timezone : "?"}
-
+${timeUnknown ? "Birth time is unknown. Interpret from signs and aspects only. Mention the missing time only when houses or rising sign are needed.\n" : ""}
 Angular Points:
-Ascendant: ${asc.degree != null ? Number(asc.degree).toFixed(2) : "?"}° ${asc.sign || "?"} (${asc.element || "?"})
-Midheaven: ${mc.degree != null ? Number(mc.degree).toFixed(2) : "?"}° ${mc.sign || "?"} (${mc.element || "?"})
+${
+  timeUnknown
+    ? "Ascendant / Midheaven: unknown (0° Aries rising is a display placeholder only)"
+    : `Ascendant: ${asc.degree != null ? Number(asc.degree).toFixed(2) : "?"}° ${asc.sign || "?"} (${asc.element || "?"})
+Midheaven: ${mc.degree != null ? Number(mc.degree).toFixed(2) : "?"}° ${mc.sign || "?"} (${mc.element || "?"})`
+}
 
 Planetary Positions:
 ${planetList || "(none)"}
@@ -147,10 +157,11 @@ function calculateElementalBalance(birthChart) {
     elements[planet.element]++;
   });
 
-  // Count houses in each element
-  birthChart.houses.forEach((house) => {
-    elements[house.element]++;
-  });
+  if (!birthChart.unknownBirthTime) {
+    birthChart.houses.forEach((house) => {
+      elements[house.element]++;
+    });
+  }
 
   return Object.entries(elements)
     .map(([element, count]) => `${element}: ${count} placements`)
@@ -185,10 +196,11 @@ function calculateModalBalance(birthChart) {
     modalities[modalSigns[planet.sign]]++;
   });
 
-  // Count houses in each modality
-  birthChart.houses.forEach((house) => {
-    modalities[modalSigns[house.sign]]++;
-  });
+  if (!birthChart.unknownBirthTime) {
+    birthChart.houses.forEach((house) => {
+      modalities[modalSigns[house.sign]]++;
+    });
+  }
 
   return Object.entries(modalities)
     .map(([modality, count]) => `${modality}: ${count} placements`)
@@ -207,10 +219,13 @@ function findStelliums(birthChart) {
     stelliums.signs[planet.sign] = (stelliums.signs[planet.sign] || 0) + 1;
   });
 
-  // Count planets in each house
-  Object.values(birthChart.planets).forEach((planet) => {
-    stelliums.houses[planet.house] = (stelliums.houses[planet.house] || 0) + 1;
-  });
+  if (!birthChart.unknownBirthTime) {
+    Object.values(birthChart.planets).forEach((planet) => {
+      if (planet && planet.house)
+        stelliums.houses[planet.house] =
+          (stelliums.houses[planet.house] || 0) + 1;
+    });
+  }
 
   const stelliumSigns = Object.entries(stelliums.signs)
     .filter(([_, count]) => count >= 3)

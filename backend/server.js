@@ -245,14 +245,24 @@ app.post("/api/birth-chart", async (req, res) => {
       longitude,
       timezone,
       asteroids,
+      unknownBirthTime,
     } = req.body;
+    const timeUnknown = !!unknownBirthTime;
 
     // Log parsed values with validation
     const parsedYear = typeof year === "string" ? parseInt(year) : year;
     const parsedMonth = typeof month === "string" ? parseInt(month) : month;
     const parsedDay = typeof day === "string" ? parseInt(day) : day;
-    const parsedHour = typeof hour === "string" ? parseInt(hour) : hour;
-    const parsedMinute = typeof minute === "string" ? parseInt(minute) : minute;
+    const parsedHour = timeUnknown
+      ? 12
+      : typeof hour === "string"
+        ? parseInt(hour)
+        : hour;
+    const parsedMinute = timeUnknown
+      ? 0
+      : typeof minute === "string"
+        ? parseInt(minute)
+        : minute;
     const parsedLat =
       typeof latitude === "string" ? parseFloat(latitude) : latitude;
     const parsedLon =
@@ -301,8 +311,8 @@ app.post("/api/birth-chart", async (req, res) => {
       !year ||
       !month ||
       !day ||
-      hour === undefined ||
-      minute === undefined ||
+      (timeUnknown ? false : hour === undefined) ||
+      (timeUnknown ? false : minute === undefined) ||
       !latitude ||
       !longitude
     ) {
@@ -327,12 +337,13 @@ app.post("/api/birth-chart", async (req, res) => {
         year,
         month,
         day,
-        hour,
-        minute,
+        hour: timeUnknown ? 12 : hour,
+        minute: timeUnknown ? 0 : minute,
         latitude,
         longitude,
         timezone,
         asteroids,
+        unknownBirthTime: timeUnknown,
       });
 
       console.log(
@@ -452,8 +463,8 @@ function isCasualMessage(message) {
  * @param {Array} conversationHistory - Previous conversation messages
  * @returns {boolean} True if user wants chart interpretation
  */
-function wantsChartInterpretation(message, conversationHistory = []) {
-  const lowerMessage = message.toLowerCase().trim();
+function wantsChartInterpretation(message) {
+  const lowerMessage = String(message || "").toLowerCase().trim();
   const interpretationKeywords = [
     "tell me about",
     "tell me about myself",
@@ -485,6 +496,11 @@ function wantsChartInterpretation(message, conversationHistory = []) {
     "uranus",
     "neptune",
     "pluto",
+    "chiron",
+    "ceres",
+    "pallas",
+    "juno",
+    "vesta",
     "ascendant",
     "midheaven",
     "rising",
@@ -493,26 +509,9 @@ function wantsChartInterpretation(message, conversationHistory = []) {
     "transit",
   ];
 
-  // Check current message
-  if (
-    interpretationKeywords.some((keyword) => lowerMessage.includes(keyword))
-  ) {
-    return true;
-  }
-
-  // Check conversation history for context
-  const allMessages = [
-    ...conversationHistory,
-    { role: "user", content: message },
-  ]
-    .map((m) => m.content?.toLowerCase() || "")
-    .join(" ");
-
-  if (interpretationKeywords.some((keyword) => allMessages.includes(keyword))) {
-    return true;
-  }
-
-  return false;
+  return interpretationKeywords.some((keyword) =>
+    lowerMessage.includes(keyword),
+  );
 }
 
 function isWholeSelfQuestion(message) {
@@ -525,21 +524,70 @@ function isWholeSelfQuestion(message) {
     /what am i like/,
     /describe me\b/,
     /describe myself/,
+    /more about me\b/,
+    /more about myself/,
+    /what else about me/,
+    /my personality/,
+    /my traits/,
     /what does my (birth )?chart say about me/,
   ];
   return pats.some((p) => p.test(t));
 }
 
-function isFirstWholeSelfTurn(message, conversationHistory) {
-  if (!isWholeSelfQuestion(message)) return false;
-  const prior = (conversationHistory || []).filter(function (m) {
-    return (
-      m &&
-      m.role === "assistant" &&
-      String(m.content || "").trim().length > 120
-    );
+function isVagueFollowUp(message) {
+  const t = String(message || "").toLowerCase().trim();
+  return /^(why(\?$| is that| do i)|how come|say more|tell me more|go (on|deeper)|and\?$|what do you mean|can you (say|explain|go) more|keep going)\b/.test(
+    t,
+  );
+}
+
+function previousUserText(conversationHistory) {
+  const users = (conversationHistory || []).filter(function (m) {
+    return m && m.role === "user" && String(m.content || "").trim();
   });
-  return prior.length === 0;
+  if (!users.length) return "";
+  return String(users[users.length - 1].content || "");
+}
+
+function effectiveQuestion(message, conversationHistory) {
+  if (isVagueFollowUp(message)) {
+    return previousUserText(conversationHistory) || message;
+  }
+  return message;
+}
+
+function isChartSpecificQuestion(message) {
+  const t = String(message || "").toLowerCase().trim();
+  if (!t) return false;
+  if (parseClickedAspect(t)) return true;
+  if (
+    /\b(sun|moon|mercury|venus|mars|jupiter|saturn|uranus|neptune|pluto|chiron|ceres|pallas|juno|vesta)\b/.test(
+      t,
+    )
+  ) {
+    return true;
+  }
+  if (
+    /\b(ascendant|midheaven|descendant|imum|rising|transit|stellium|t-square|grand trine|yod)\b/.test(
+      t,
+    )
+  ) {
+    return true;
+  }
+  if (/\b(\d+(st|nd|rd|th)\s+house|house\s+\d+)\b/.test(t)) return true;
+  if (/\binterpret(ing)? (my |the |this )?(birth )?chart\b/.test(t)) return true;
+  if (/\b(tell me about|what('s| is) in|walk (me )?through) (my |the |this )?(birth )?chart\b/.test(t)) {
+    return true;
+  }
+  if (/\bwhat stands out\b/.test(t) && /\bchart\b/.test(t)) return true;
+  if (
+    /\b(conjunction|conjunct|square|trine|opposition|opposite|sextile|quincunx)\b/.test(
+      t,
+    )
+  ) {
+    return true;
+  }
+  return false;
 }
 
 function isOpenAIQuotaOrBillingError(err) {
@@ -609,7 +657,7 @@ function buildLocalChatReply(message, birthChart, conversationHistory) {
   }
   if (
     isCasualMessage(message) &&
-    !wantsChartInterpretation(message, conversationHistory || [])
+    !wantsChartInterpretation(message)
   ) {
     return "Hi — I'm here. Ask about a planet, house, or how the chart fits together.";
   }
@@ -913,10 +961,7 @@ app.post("/api/chat", (req, res) => {
 
       // Check if this is a casual message or if user wants chart interpretation
       const isCasual = isCasualMessage(message);
-      const wantsInterpretation = wantsChartInterpretation(
-        message,
-        conversationHistory,
-      );
+      const wantsInterpretation = wantsChartInterpretation(message);
 
       // For casual messages, use a simpler system prompt that doesn't push chart information
       if (isCasual && !wantsInterpretation) {
@@ -977,12 +1022,15 @@ app.post("/api/chat", (req, res) => {
         });
       }
 
-      const thesisMode = isFirstWholeSelfTurn(message, conversationHistory);
-      const topic = !thesisMode ? detectLifeTopic(message) : null;
-      const topicMode = !!topic;
-      const clickedAspect =
-        !thesisMode && !topicMode ? parseClickedAspect(message) : null;
+      const questionForMode = effectiveQuestion(message, conversationHistory);
+      const clickedAspect = parseClickedAspect(message);
       const aspectMode = !!clickedAspect;
+      const chartMode =
+        !aspectMode && isChartSpecificQuestion(questionForMode);
+      const topic =
+        !aspectMode && !chartMode ? detectLifeTopic(questionForMode) : null;
+      const topicMode = !!topic;
+      const thesisMode = !aspectMode && !chartMode && !topicMode;
       let architectureBlock = "";
       let thesisText = "";
       let topicLens = "";
@@ -1001,7 +1049,7 @@ app.post("/api/chat", (req, res) => {
               clickedAspect,
               birthChart,
             );
-          } else if (!thesisMode) {
+          } else if (chartMode) {
             architectureBlock = formatArchitectureForAI(arch);
           }
         }
@@ -1009,12 +1057,9 @@ app.post("/api/chat", (req, res) => {
         console.warn("[CHAT] architecture build failed:", archErr.message);
       }
 
-      // PRIMARY SOURCE FOR INTERPRETATION: gather from the web (broad breadth of resources)
-      // First "tell me about myself" turn stays with the thesis — no web/checklist.
-      // Topic questions stay with the locked claims + topic lens.
-      // Clicked aspects stay with the locked claims + aspect lens.
+      // Web and architecture dumps only when the user asked about the chart itself.
       let webInterpretations = "";
-      if (wantsInterpretation && !thesisMode && !topicMode && !aspectMode) {
+      if (chartMode) {
         // Check if web interpretations are already cached in the birth chart
         if (
           birthChart.webInterpretations &&
@@ -1093,7 +1138,7 @@ app.post("/api/chat", (req, res) => {
 
       // Ranking and weighting: pass only highest-value chart points so the model gives 3 reasons, 2 caveats—not 25 scattered facts
       let prioritizedBlock = "";
-      if (wantsInterpretation && !thesisMode && !topicMode && !aspectMode) {
+      if (chartMode) {
         try {
           const { prioritizedBlock: block } = getPrioritizedChartPoints(
             birthChart,
@@ -1136,6 +1181,7 @@ app.post("/api/chat", (req, res) => {
           chartSummary && typeof chartSummary === "object"
             ? chartSummary
             : null,
+        unknownBirthTime: !!(birthChart && birthChart.unknownBirthTime),
       });
 
       const messages = [
@@ -1277,18 +1323,18 @@ app.post("/api/chat", (req, res) => {
 
       const userContent = thesisMode
         ? message +
-          "\n\n[This is the first portrait. Do not search the web. Do not list aspects or walk the chart by topic. Internal claims are constraints only—write the whole reply in everyday language. Do not paste or echo those claims.]"
+          "\n\n[This is a general question about the person, not about the chart. Do not search the web. Do not name planets, houses, signs, or aspects. Internal claims are constraints only—write the whole reply in everyday conversational language. Do not paste or echo those claims.]"
         : topicMode
           ? message +
-            "\n\n[This is a life-area question. Answer that area. Re-anchor to the internal claims, then stay on this topic. Do not reprint the portrait. Do not tour the whole chart.]"
+            "\n\n[This is a life-area question. Answer that area in everyday language. Re-anchor to the internal claims, then stay on this topic. Do not name planets, houses, or aspects unless the user already did. Do not reprint the portrait. Do not tour the whole chart.]"
           : aspectMode
             ? message +
               "\n\n[This is a clicked aspect. Answer that connection. Re-anchor to the internal claims, then stay with these two needs. Do not reprint the portrait. Do not tour the whole chart.]"
         : message +
           (isRepeatedPrompt
-            ? "\n\n[NOTE: The user is repeating or re-asking a similar question. Do NOT repeat prior basic explanations. Go deeper: add new angles (rulership chains, dispositors, aspect networks/patterns, dignity/retrograde, dominant planets/houses, repeating themes). Use MORE targeted web searches (search_astrology_info/search_web_astrology) based on the exact wording of this question so the answer adds new insight instead of rephrasing the same content.]"
+            ? "\n\n[NOTE: The user is repeating a chart question. Do NOT repeat prior basic explanations. Go deeper on that chart question: add new angles (rulership chains, dispositors, aspect networks/patterns, dignity/retrograde, dominant planets/houses, repeating themes). Use MORE targeted web searches (search_astrology_info/search_web_astrology) based on the exact wording of this question so the answer adds new insight instead of rephrasing the same content.]"
             : "") +
-          "\n\n[Reply in plain paragraphs only—no numbers (1. 2. 3.), no ### or **headers**, no one topic per paragraph. Weave themes together. When interpreting the chart, use web search (search_astrology_info) for placements you discuss so the reply stays varied and non-generic.]";
+          "\n\n[The user asked about the chart. You may name placements and aspects. Reply in plain paragraphs only—no numbers (1. 2. 3.), no ### or **headers**. Weave themes together. Use web search (search_astrology_info) for placements you discuss so the reply stays varied and non-generic.]";
       messages.push({
         role: "user",
         content: userContent,
@@ -1411,7 +1457,9 @@ app.post("/api/chat", (req, res) => {
               ? "topic"
               : aspectMode
                 ? "aspect"
-                : "chart",
+                : chartMode
+                  ? "chart"
+                  : "portrait",
         });
       } catch (fuErr) {
         console.warn(

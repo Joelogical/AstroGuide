@@ -79,22 +79,26 @@ function getPlanetImportance(planetName, chartRuler) {
  */
 function getPrioritizedChartPoints(birthChart, userMessage = "", transits = null) {
   const signals = [];
-  const chartRuler = birthChart.angles?.ascendant?.sign
-    ? getChartRuler(birthChart.angles.ascendant.sign)
-    : null;
+  const timeUnknown = !!birthChart.unknownBirthTime;
+  const chartRuler =
+    timeUnknown || !birthChart.angles?.ascendant?.sign
+      ? null
+      : getChartRuler(birthChart.angles.ascendant.sign);
 
   // ---- Planets in sign/house ----
   const planets = birthChart.planets || {};
   for (const [name, data] of Object.entries(planets)) {
     if (!data || data.sign == null) continue;
     const essential = getEssentialStrength(name, data.sign);
-    const houseRel = getHouseRelevance(data.house);
+    const houseRel = timeUnknown ? 1.0 : getHouseRelevance(data.house);
     const importance = getPlanetImportance(name, chartRuler);
     const score = essential * houseRel * importance;
     const isChallenging = essential < 1;
     signals.push({
       type: "placement",
-      text: `${name.charAt(0).toUpperCase() + name.slice(1)} in ${data.sign} (House ${data.house || "?"})`,
+      text: timeUnknown
+        ? `${name.charAt(0).toUpperCase() + name.slice(1)} in ${data.sign}`
+        : `${name.charAt(0).toUpperCase() + name.slice(1)} in ${data.sign} (House ${data.house || "?"})`,
       score,
       category: isChallenging ? "caveat" : "strength",
       planet: name,
@@ -124,7 +128,7 @@ function getPrioritizedChartPoints(birthChart, userMessage = "", transits = null
 
   // ---- Angles ----
   const angles = birthChart.angles || {};
-  if (angles.ascendant?.sign) {
+  if (!timeUnknown && angles.ascendant?.sign) {
     signals.push({
       type: "angle",
       text: `Ascendant in ${angles.ascendant.sign}`,

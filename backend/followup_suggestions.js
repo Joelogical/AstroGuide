@@ -223,7 +223,8 @@ Each line:
 - Fluid and improvised. Change the opener every time. Do not reuse a banned opener or a banned line.
 - Possible shapes (invent others; do not cycle these in order): "Want to talk about…?", "Should we stay with…?", "Would you like to look at…?", "Curious to go into…?", "If you want, we could…?", "Up for the part about…?"
 - Pick a concrete detail from the last reply. Short. Max ~160 characters.
-- Ordinary speech. No planets, houses, signs, aspects.
+- At least one question stays in ordinary life language.
+- You MAY offer one technical invitation (a planet, house, or aspect) if it fits, in helper voice: e.g. "Want to look at your Saturn?" Do not make both chips technical.
 - Not therapy-speak: avoid "impacts", "your tendency", "emotional safety", "cycles of effort", "unpack".
 - No "you should". No fortune-telling.
 

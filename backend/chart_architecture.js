@@ -4,6 +4,8 @@
  * interpretations can start from one specific skeleton.
  */
 
+const { ASTEROID_KEYS } = require("./chart_format");
+
 const SIGN_RULERS = {
   Aries: "mars",
   Taurus: "venus",
@@ -141,10 +143,15 @@ function circularSep(a, b) {
 
 function houseClass(house) {
   const n = Number(house);
+  if (!Number.isFinite(n) || n < 1 || n > 12) return null;
   if ([1, 4, 7, 10].includes(n)) return "angular";
   if ([2, 5, 8, 11].includes(n)) return "succedent";
   if ([3, 6, 9, 12].includes(n)) return "cadent";
-  return "unknown";
+  return null;
+}
+
+function isUnknownBirthTime(chartOrArch) {
+  return !!(chartOrArch && chartOrArch.unknownBirthTime);
 }
 
 function getDignity(planet, sign) {
@@ -162,12 +169,39 @@ function getChartRuler(ascendantSign) {
   return SIGN_RULERS[normSign(ascendantSign)] || "sun";
 }
 
+function isPlanetKey(name) {
+  return PLANET_KEYS.includes(String(name || "").toLowerCase());
+}
+
+function isAsteroidKey(name) {
+  return ASTEROID_KEYS.includes(String(name || "").toLowerCase());
+}
+
 function planetEntries(birthChart) {
   const planets = (birthChart && birthChart.planets) || {};
   return PLANET_KEYS.filter((k) => planets[k] && planets[k].sign).map((k) => [
     k,
     planets[k],
   ]);
+}
+
+function asteroidEntries(birthChart) {
+  const bodies = (birthChart && birthChart.asteroids) || {};
+  return ASTEROID_KEYS.filter(
+    (k) => bodies[k] && (bodies[k].sign || bodies[k].degree != null),
+  ).map((k) => [k, bodies[k]]);
+}
+
+function chartBodyMap(birthChart) {
+  return Object.assign(
+    {},
+    (birthChart && birthChart.planets) || {},
+    (birthChart && birthChart.asteroids) || {},
+  );
+}
+
+function membersIncludeAsteroid(names) {
+  return (names || []).some((n) => isAsteroidKey(n));
 }
 
 function isMajorAspectName(name) {
@@ -282,7 +316,7 @@ function findStelliums(entries) {
   return { signs, houses };
 }
 
-function findAngleAspects(birthChart) {
+function findAngleAspects(birthChart, extraEntries) {
   const angles = (birthChart && birthChart.angles) || {};
   const points = [];
   if (angles.ascendant && angles.ascendant.degree != null) {
@@ -292,15 +326,17 @@ function findAngleAspects(birthChart) {
     points.push({ name: "midheaven", degree: angles.midheaven.degree });
   }
   const found = [];
-  planetEntries(birthChart).forEach(([name, p]) => {
+  const bodies = planetEntries(birthChart).concat(extraEntries || []);
+  bodies.forEach(([name, p]) => {
     const pd = normDeg(p.degree);
     if (pd == null) return;
+    const orbCap = isAsteroidKey(name) ? 3 : null;
     points.forEach((pt) => {
       const ad = normDeg(pt.degree);
       if (ad == null) return;
       const sep = circularSep(pd, ad);
       for (const [aspectName, target] of Object.entries(MAJOR_ASPECTS)) {
-        const orb = ASPECT_ORBS[aspectName];
+        const orb = orbCap != null ? Math.min(ASPECT_ORBS[aspectName], orbCap) : ASPECT_ORBS[aspectName];
         const delta = Math.abs(sep - target);
         if (delta <= orb) {
           found.push({
@@ -356,6 +392,7 @@ function findConfigurations(aspects) {
         type: "t-square",
         opposition: [a, b],
         focal,
+        includesAsteroid: membersIncludeAsteroid([a, b, focal]),
       });
     });
   });
@@ -372,14 +409,23 @@ function findConfigurations(aspects) {
       const key = [a, b, c].map((x) => String(x).toLowerCase()).sort().join("|");
       if (seenTrine.has(key)) return;
       seenTrine.add(key);
-      grandTrines.push({ type: "grand trine", planets: [a, b, c] });
+      grandTrines.push({
+        type: "grand trine",
+        planets: [a, b, c],
+        includesAsteroid: membersIncludeAsteroid([a, b, c]),
+      });
     });
   });
 
+  const bodyNames = new Set();
+  majors.forEach((a) => {
+    if (a.planet1) bodyNames.add(String(a.planet1).toLowerCase());
+    if (a.planet2) bodyNames.add(String(a.planet2).toLowerCase());
+  });
   const kites = [];
   grandTrines.forEach((gt) => {
-    PLANET_KEYS.forEach((extra) => {
-      if (gt.planets.some((p) => p === extra)) return;
+    bodyNames.forEach((extra) => {
+      if (gt.planets.some((p) => String(p).toLowerCase() === extra)) return;
       const opposed = gt.planets.find((p) => linked(extra, p, "opposition"));
       if (!opposed) return;
       const others = gt.planets.filter((p) => p !== opposed);
@@ -389,6 +435,7 @@ function findConfigurations(aspects) {
           grandTrine: gt.planets,
           focus: extra,
           opposed,
+          includesAsteroid: membersIncludeAsteroid(gt.planets.concat([extra])),
         });
       }
     });
@@ -411,14 +458,19 @@ function findConfigurations(aspects) {
       }
     });
     apexes.forEach((apex) => {
-      yods.push({ type: "yod", sextile: [a, b], apex });
+      yods.push({
+        type: "yod",
+        sextile: [a, b],
+        apex,
+        includesAsteroid: membersIncludeAsteroid([a, b, apex]),
+      });
     });
   });
 
   return { tSquares, grandTrines, kites, yods };
 }
 
-function dispositorData(entries) {
+function dispositorData(entries, extraEntries) {
   const planets = {};
   entries.forEach(([k, p]) => {
     planets[k] = p;
@@ -427,6 +479,11 @@ function dispositorData(entries) {
   const immediateCount = {};
   PLANET_KEYS.forEach((k) => {
     immediateCount[k] = 0;
+  });
+
+  (extraEntries || []).forEach(([, p]) => {
+    const ruler = SIGN_RULERS[normSign(p.sign)];
+    if (ruler) immediateCount[ruler] = (immediateCount[ruler] || 0) + 1;
   });
 
   entries.forEach(([name, p]) => {
@@ -497,14 +554,19 @@ function dispositorData(entries) {
 }
 
 function scoreDominants(entries, birthChart, stelliums, hubs, annotatedAspects) {
-  const ruler = getChartRuler(
-    birthChart.angles && birthChart.angles.ascendant
-      ? birthChart.angles.ascendant.sign
-      : "",
-  );
+  const unknownTime = isUnknownBirthTime(birthChart);
+  const ruler = unknownTime
+    ? null
+    : getChartRuler(
+        birthChart.angles && birthChart.angles.ascendant
+          ? birthChart.angles.ascendant.sign
+          : "",
+      );
   const stelliumMembers = new Set();
   (stelliums.signs || []).forEach((s) => s.planets.forEach((p) => stelliumMembers.add(p)));
-  (stelliums.houses || []).forEach((s) => s.planets.forEach((p) => stelliumMembers.add(p)));
+  if (!unknownTime) {
+    (stelliums.houses || []).forEach((s) => s.planets.forEach((p) => stelliumMembers.add(p)));
+  }
   const hubSet = new Set((hubs || []).map((h) => h.planet));
   const housePlanetCount = {};
   entries.forEach(([, p]) => {
@@ -515,7 +577,11 @@ function scoreDominants(entries, birthChart, stelliums, hubs, annotatedAspects) 
   PLANET_KEYS.forEach((k) => {
     housesRuledWithWeight[k] = 0;
   });
-  const houses = Array.isArray(birthChart.houses) ? birthChart.houses : [];
+  const houses = unknownTime
+    ? []
+    : Array.isArray(birthChart.houses)
+      ? birthChart.houses
+      : [];
   houses.forEach((house) => {
     const r = SIGN_RULERS[normSign(house.sign)];
     if (!r) return;
@@ -528,11 +594,11 @@ function scoreDominants(entries, birthChart, stelliums, hubs, annotatedAspects) 
   const scores = entries.map(([name, p]) => {
     let score = 0;
     const reasons = [];
-    if (name === ruler) {
+    if (!unknownTime && name === ruler) {
       score += 5;
       reasons.push("chart ruler +5");
     }
-    if (houseClass(p.house) === "angular") {
+    if (!unknownTime && houseClass(p.house) === "angular") {
       score += 4;
       reasons.push("angular +4");
     }
@@ -548,7 +614,7 @@ function scoreDominants(entries, birthChart, stelliums, hubs, annotatedAspects) 
       score += 2;
       reasons.push("luminary +2");
     }
-    if ((housesRuledWithWeight[name] || 0) >= 2) {
+    if (!unknownTime && (housesRuledWithWeight[name] || 0) >= 2) {
       score += 2;
       reasons.push("rules multiple weighted houses +2");
     }
@@ -556,8 +622,8 @@ function scoreDominants(entries, birthChart, stelliums, hubs, annotatedAspects) 
       (a) =>
         isMajorAspectName(a.aspect) &&
         (a.planet1 === name || a.planet2 === name) &&
-        PLANET_KEYS.includes(String(a.planet1).toLowerCase()) &&
-        PLANET_KEYS.includes(String(a.planet2).toLowerCase()),
+        isPlanetKey(a.planet1) &&
+        isPlanetKey(a.planet2),
     );
     const close = majors.filter((a) => Number(a.orb) <= 4).length;
     const closePts = Math.min(4, close);
@@ -609,12 +675,14 @@ function collectRepeatingThemes(arch) {
   (arch.stelliums.signs || []).forEach((s) => {
     add(`concentrated ${s.sign}`, [`${s.count} planets in ${s.sign}: ${s.planets.join(", ")}`]);
   });
-  (arch.stelliums.houses || []).forEach((s) => {
-    add(`concentrated house ${s.house}`, [
-      `${s.count} planets in house ${s.house}: ${s.planets.join(", ")}`,
-    ]);
-  });
-  if (arch.chartRuler) {
+  if (!isUnknownBirthTime(arch)) {
+    (arch.stelliums.houses || []).forEach((s) => {
+      add(`concentrated house ${s.house}`, [
+        `${s.count} planets in house ${s.house}: ${s.planets.join(", ")}`,
+      ]);
+    });
+  }
+  if (!isUnknownBirthTime(arch) && arch.chartRuler) {
     const ev = [
       `ruler ${arch.chartRuler.planet} in ${arch.chartRuler.sign} house ${arch.chartRuler.house} (${arch.chartRuler.dignity}, ${arch.chartRuler.houseClass})`,
     ];
@@ -632,7 +700,7 @@ function collectRepeatingThemes(arch) {
     if (rulerDom && rulerDom.score >= 8) ev.push("ruler also ranks as a dominant planet");
     add("life direction via chart ruler", ev);
   }
-  if (arch.shape && arch.shape.hemispheres) {
+  if (!isUnknownBirthTime(arch) && arch.shape && arch.shape.hemispheres) {
     const h = arch.shape.hemispheres;
     if (h.eastern >= 7) add("self-directed emphasis", [`${h.eastern} planets in the eastern hemisphere`]);
     if (h.western >= 7) add("other-directed emphasis", [`${h.western} planets in the western hemisphere`]);
@@ -652,7 +720,7 @@ function collectRepeatingThemes(arch) {
       `Sun–Moon elongation ${arch.lunarPhase.elongation}°`,
     ]);
   }
-  if (arch.sect) {
+  if (!isUnknownBirthTime(arch) && arch.sect) {
     add(`${arch.sect} chart`, [
       arch.sect === "day" ? "Sun above the horizon" : "Sun below the horizon",
     ]);
@@ -666,14 +734,40 @@ function collectRepeatingThemes(arch) {
     ]);
   }
 
+  const astCond = arch.asteroidConditions || {};
+  const rulerPlanet = arch.chartRuler && arch.chartRuler.planet;
+  Object.entries(astCond).forEach(([name, c]) => {
+    const coreHits = (c.majorAspects || []).filter((a) => {
+      const other = String(a.other || "").toLowerCase();
+      return other === "sun" || other === "moon" || other === rulerPlanet;
+    });
+    if (coreHits.length) {
+      add(`asteroid ${name} tied to core`, [
+        coreHits
+          .map((a) => `${name} ${a.aspect} ${a.other}${a.orb != null ? ` (${a.orb}°)` : ""}`)
+          .join(", "),
+      ]);
+    }
+    if (!isUnknownBirthTime(arch) && c.houseClass === "angular") {
+      add("asteroid on an angle", [`${name} in house ${c.house}`]);
+    }
+  });
+  (isUnknownBirthTime(arch) ? [] : arch.angleAspects || []).forEach((a) => {
+    if (isAsteroidKey(a.planet)) {
+      add("asteroid to ASC/MC", [
+        `${a.planet} ${a.aspect} ${a.angle} (${a.orb}°)`,
+      ]);
+    }
+  });
+
   return themes.filter((t) => t.count >= 1).sort((a, b) => b.count - a.count);
 }
 
 function annotateAspects(birthChart) {
-  const planets = (birthChart && birthChart.planets) || {};
+  const bodies = chartBodyMap(birthChart);
   return (Array.isArray(birthChart.aspects) ? birthChart.aspects : []).map((a) => {
-    const p1 = planets[a.planet1] || {};
-    const p2 = planets[a.planet2] || {};
+    const p1 = bodies[a.planet1] || {};
+    const p2 = bodies[a.planet2] || {};
     const target = aspectTargetAngle(a.aspect);
     return {
       planet1: a.planet1,
@@ -700,7 +794,8 @@ function buildPlanetConditions(entries, annotatedAspects) {
       houseClass: houseClass(p.house),
       element: p.element || ELEMENT_SIGNS[normSign(p.sign)] || null,
       modality: MODAL_SIGNS[normSign(p.sign)] || null,
-      dignity: getDignity(name, p.sign),
+      dignity: isAsteroidKey(name) ? null : getDignity(name, p.sign),
+      kind: isAsteroidKey(name) ? "asteroid" : "planet",
       retrograde: !!p.isRetrograde,
       degree: p.degree != null ? Math.round(Number(p.degree) * 100) / 100 : null,
       majorAspects: majors.map((a) => ({
@@ -714,15 +809,18 @@ function buildPlanetConditions(entries, annotatedAspects) {
   return conditions;
 }
 
-function buildHouseChains(birthChart, conditions) {
+function buildHouseChains(birthChart, conditions, occupantEntries) {
+  if (isUnknownBirthTime(birthChart)) return [];
   const houses = Array.isArray(birthChart.houses) ? birthChart.houses : [];
+  const occupants = occupantEntries || [];
   return houses
     .filter((h) => h && h.sign)
     .map((h) => {
       const ruler = SIGN_RULERS[normSign(h.sign)] || null;
       const rc = ruler && conditions[ruler] ? conditions[ruler] : null;
+      const houseNum = Number(h.number);
       return {
-        house: Number(h.number),
+        house: houseNum,
         sign: normSign(h.sign),
         ruler,
         rulerSign: rc ? rc.sign : null,
@@ -731,6 +829,9 @@ function buildHouseChains(birthChart, conditions) {
         rulerHouseClass: rc ? rc.houseClass : null,
         rulerRetrograde: rc ? rc.retrograde : null,
         rulerAspects: rc ? rc.majorAspects.slice(0, 5) : [],
+        occupants: occupants
+          .filter(([, p]) => Number(p.house) === houseNum)
+          .map(([name]) => name),
       };
     });
 }
@@ -798,10 +899,13 @@ function buildChartArchitecture(birthChart) {
     return { ok: false, reason: "no chart" };
   }
   const entries = planetEntries(birthChart);
+  const astEntries = asteroidEntries(birthChart);
+  const combinedEntries = entries.concat(astEntries);
   const annotatedAspects = annotateAspects(birthChart);
   const conditions = buildPlanetConditions(entries, annotatedAspects);
-  const stelliums = findStelliums(entries);
-  const dispositors = dispositorData(entries);
+  const asteroidConditions = buildPlanetConditions(astEntries, annotatedAspects);
+  const stelliums = findStelliums(combinedEntries);
+  const dispositors = dispositorData(entries, astEntries);
   const dominantPlanets = scoreDominants(
     entries,
     birthChart,
@@ -828,7 +932,7 @@ function buildChartArchitecture(birthChart) {
     if (!a.major) return;
     const a1 = String(a.planet1 || "").toLowerCase();
     const a2 = String(a.planet2 || "").toLowerCase();
-    if (!PLANET_KEYS.includes(a1) || !PLANET_KEYS.includes(a2)) return;
+    if (!isPlanetKey(a1) || !isPlanetKey(a2)) return;
     if (majorNet[a.planet1] != null) majorNet[a.planet1] += 1;
     if (majorNet[a.planet2] != null) majorNet[a.planet2] += 1;
   });
@@ -841,29 +945,36 @@ function buildChartArchitecture(birthChart) {
     .slice(0, 3)
     .map((k) => ({ planet: k, count: majorNet[k] }));
 
-  const rulerName = getChartRuler(
-    birthChart.angles && birthChart.angles.ascendant
-      ? birthChart.angles.ascendant.sign
-      : "",
-  );
-  const rulerCond = conditions[rulerName] || null;
-  const chartRuler = rulerCond
-    ? {
-        planet: rulerName,
-        sign: rulerCond.sign,
-        house: rulerCond.house,
-        houseClass: rulerCond.houseClass,
-        dignity: rulerCond.dignity,
-        retrograde: rulerCond.retrograde,
-        aspects: rulerCond.majorAspects,
-      }
-    : { planet: rulerName };
+  const unknownBirthTime = isUnknownBirthTime(birthChart);
+  const rulerName = unknownBirthTime
+    ? null
+    : getChartRuler(
+        birthChart.angles && birthChart.angles.ascendant
+          ? birthChart.angles.ascendant.sign
+          : "",
+      );
+  const rulerCond = rulerName ? conditions[rulerName] || null : null;
+  const chartRuler =
+    unknownBirthTime || !rulerName
+      ? null
+      : rulerCond
+        ? {
+            planet: rulerName,
+            sign: rulerCond.sign,
+            house: rulerCond.house,
+            houseClass: rulerCond.houseClass,
+            dignity: rulerCond.dignity,
+            retrograde: rulerCond.retrograde,
+            aspects: rulerCond.majorAspects,
+          }
+        : { planet: rulerName };
 
   const sun = birthChart.planets && birthChart.planets.sun;
   const moon = birthChart.planets && birthChart.planets.moon;
   const sunHouse = sun ? Number(sun.house) : null;
-  const sect =
-    sunHouse >= 7 && sunHouse <= 12
+  const sect = unknownBirthTime
+    ? null
+    : sunHouse >= 7 && sunHouse <= 12
       ? "day"
       : sunHouse >= 1 && sunHouse <= 6
         ? "night"
@@ -871,10 +982,11 @@ function buildChartArchitecture(birthChart) {
 
   const architecture = {
     ok: true,
+    unknownBirthTime,
     chartRuler,
     planetConditions: conditions,
     dominantPlanets: dominantPlanets.slice(0, 5),
-    houseChains: buildHouseChains(birthChart, conditions),
+    houseChains: buildHouseChains(birthChart, conditions, combinedEntries),
     dispositors: {
       hubs: dispositors.hubs,
       finalDispositor: dispositors.finalDispositor,
@@ -887,22 +999,38 @@ function buildChartArchitecture(birthChart) {
     modalities: counts.modalities,
     singletons,
     stelliums,
-    shape: buildShape(entries),
-    configurations: findConfigurations(
-      (birthChart.aspects || []).filter((a) => {
-        const a1 = String((a && a.planet1) || "").toLowerCase();
-        const a2 = String((a && a.planet2) || "").toLowerCase();
-        return PLANET_KEYS.includes(a1) && PLANET_KEYS.includes(a2);
-      }),
-    ),
-    angleAspects: findAngleAspects(birthChart),
+    shape: unknownBirthTime
+      ? { hemispheres: null, quadrants: null, jones: buildShape(entries).jones }
+      : buildShape(entries),
+    configurations: findConfigurations(birthChart.aspects),
+    angleAspects: unknownBirthTime
+      ? []
+      : findAngleAspects(birthChart, astEntries),
     network: { unaspected, mostNetworked },
     aspectsAnnotated: annotatedAspects,
     points: birthChart.points || null,
     asteroids: birthChart.asteroids || {},
+    asteroidConditions,
+    asteroidNetwork: astEntries.map(([name]) => {
+      const majors = annotatedAspects.filter(
+        (a) =>
+          a.major &&
+          (a.planet1 === name || a.planet2 === name),
+      );
+      return {
+        asteroid: name,
+        count: majors.length,
+        links: majors.map((a) => ({
+          aspect: a.aspect,
+          other: otherEnd(a, name),
+          orb: a.orb,
+          applying: a.applying,
+        })),
+      };
+    }),
     selectedAsteroids: Array.isArray(birthChart.selectedAsteroids)
       ? birthChart.selectedAsteroids
-      : Object.keys(birthChart.asteroids || {}),
+      : astEntries.map(([k]) => k),
   };
   architecture.repeatingThemes = collectRepeatingThemes(architecture);
   architecture.thesisClaims = buildThesisClaims(architecture);
@@ -978,11 +1106,23 @@ const HOUSE_CLAIM = {
 function buildThesisClaims(architecture) {
   if (!architecture || !architecture.ok) return [];
   const claims = [];
-  const r = architecture.chartRuler;
+  const unknownTime = isUnknownBirthTime(architecture);
+  const r = unknownTime ? null : architecture.chartRuler;
   const drive = r && r.planet ? PLANET_CLAIM[r.planet] || r.planet : null;
   const arena = r ? HOUSE_CLAIM[r.house] || "a major area of life" : null;
 
-  if (drive && arena) {
+  if (unknownTime) {
+    const top = (architecture.dominantPlanets || [])[0];
+    if (top && PLANET_CLAIM[top.planet]) {
+      let c = "The through-line is " + PLANET_CLAIM[top.planet] + ".";
+      if (top.dignity === "domicile" || top.dignity === "exaltation") {
+        c += " Other people can usually see this in you without you having to explain it.";
+      } else if (top.dignity === "detriment" || top.dignity === "fall") {
+        c += " This is real, but it often feels awkward or takes extra work.";
+      }
+      claims.push(c);
+    }
+  } else if (drive && arena) {
     let c = "The through-line is " + drive + ", and it shows up most in " + arena + ".";
     if (r.dignity === "domicile" || r.dignity === "exaltation") {
       c += " Other people can usually see this in you without you having to explain it.";
@@ -995,16 +1135,21 @@ function buildThesisClaims(architecture) {
     claims.push(c);
   }
 
-  const tsq =
-    architecture.configurations &&
-    architecture.configurations.tSquares &&
-    architecture.configurations.tSquares[0];
+  const tsqs =
+    (architecture.configurations && architecture.configurations.tSquares) || [];
+  const tsq = tsqs.find((t) => !t.includesAsteroid) || tsqs[0];
   const focal = tsq && tsq.focal ? PLANET_CLAIM[tsq.focal] || tsq.focal : null;
   if (focal && drive) {
     claims.push(
       "In " +
         (arena || "daily life") +
         ", that through-line keeps colliding with " +
+        focal +
+        ": you want both, and neither side fully wins.",
+    );
+  } else if (unknownTime && focal) {
+    claims.push(
+      "That through-line keeps colliding with " +
         focal +
         ": you want both, and neither side fully wins.",
     );
@@ -1027,7 +1172,16 @@ function buildThesisClaims(architecture) {
     claims.push(PHASE_PLAIN[architecture.lunarPhase.name] + ".");
   }
 
-  if (architecture.sect === "night") {
+  if (unknownTime) {
+    const stSign =
+      architecture.stelliums &&
+      architecture.stelliums.signs &&
+      architecture.stelliums.signs[0];
+    const tone = stSign && SIGN_TONE[String(stSign.sign || "").toLowerCase()];
+    if (tone) {
+      claims.push("A lot of different parts of your life share the same tone: " + tone + ".");
+    }
+  } else if (architecture.sect === "night") {
     claims.push(
       "Even when your days look busy, a lot of what actually matters to you happens in private: feelings, doubts, and the story you tell yourself.",
     );
@@ -1045,6 +1199,26 @@ function buildThesisClaims(architecture) {
       claims.push("A lot of different parts of your life share the same tone: " + tone + ".");
     }
   }
+
+  const astCond = architecture.asteroidConditions || {};
+  Object.entries(astCond).forEach(([name, c]) => {
+    if (claims.length >= 4) return;
+    (c.majorAspects || []).some((a) => {
+      if (String(a.aspect || "").toLowerCase() !== "conjunction") return false;
+      if (a.orb != null && Number(a.orb) > 3) return false;
+      const other = String(a.other || "").toLowerCase();
+      if (other !== "sun" && other !== "moon" && !(r && r.planet === other)) {
+        return false;
+      }
+      claims.push(
+        (PLANET_CLAIM[name] || name) +
+          " sits right on " +
+          (PLANET_CLAIM[other] || other) +
+          ", so that theme is not optional in this life.",
+      );
+      return true;
+    });
+  });
 
   return claims.slice(0, 4);
 }
@@ -1086,8 +1260,19 @@ function buildChartThesis(architecture) {
 
 function ensureArchitecture(birthChart) {
   if (!birthChart || typeof birthChart !== "object") return null;
-  if (birthChart.architecture && birthChart.architecture.ok) {
-    return birthChart.architecture;
+  const arch = birthChart.architecture;
+  const hasAsteroids =
+    birthChart.asteroids && Object.keys(birthChart.asteroids).length > 0;
+  const archKnowsAsteroids = arch && arch.asteroidConditions;
+  const timeFlagMatch =
+    !!arch && !!arch.unknownBirthTime === !!birthChart.unknownBirthTime;
+  if (
+    arch &&
+    arch.ok &&
+    timeFlagMatch &&
+    (!hasAsteroids || archKnowsAsteroids)
+  ) {
+    return arch;
   }
   birthChart.architecture = buildChartArchitecture(birthChart);
   return birthChart.architecture;
@@ -1095,12 +1280,19 @@ function ensureArchitecture(birthChart) {
 
 function formatArchitectureForAI(architecture) {
   if (!architecture || !architecture.ok) return "";
+  const unknownTime = isUnknownBirthTime(architecture);
   const lines = [];
   lines.push("Use this computed architecture as the skeleton of the reading.");
   lines.push("Individual placements refine it; they do not replace it.");
   lines.push("");
+  if (unknownTime) {
+    lines.push(
+      "BIRTH TIME UNKNOWN: Houses, house occupants, house rulers, chart ruler, sect, hemispheres, quadrants, and ASC/MC aspects are not valid. The wheel may show 0° Aries rising as a display placeholder only. Interpret from planetary signs, dignity, aspects, elements, modalities, sign stelliums, and configurations. The Moon's exact degree is approximate. Mention the missing birth time only when the question actually needs houses or rising sign; then say so briefly and continue with what is known.",
+    );
+    lines.push("");
+  }
 
-  if (architecture.chartRuler && architecture.chartRuler.sign) {
+  if (!unknownTime && architecture.chartRuler && architecture.chartRuler.sign) {
     const r = architecture.chartRuler;
     lines.push(
       `Chart ruler: ${titleCase(r.planet)} in ${r.sign}, house ${r.house} (${r.houseClass}, ${r.dignity}${r.retrograde ? ", retrograde" : ""}).`,
@@ -1133,7 +1325,7 @@ function formatArchitectureForAI(architecture) {
       `Lunar phase: ${architecture.lunarPhase.name} (Sun–Moon ${architecture.lunarPhase.elongation}°).`,
     );
   }
-  if (architecture.sect) {
+  if (!unknownTime && architecture.sect) {
     lines.push(`Sect: ${architecture.sect} chart.`);
   }
 
@@ -1155,8 +1347,8 @@ function formatArchitectureForAI(architecture) {
   }
 
   if (architecture.shape) {
-    const h = architecture.shape.hemispheres;
-    const q = architecture.shape.quadrants;
+    const h = unknownTime ? null : architecture.shape.hemispheres;
+    const q = unknownTime ? null : architecture.shape.quadrants;
     const j = architecture.shape.jones;
     if (h) {
       lines.push(
@@ -1176,14 +1368,20 @@ function formatArchitectureForAI(architecture) {
   }
 
   const st = architecture.stelliums;
-  if (st && ((st.signs && st.signs.length) || (st.houses && st.houses.length))) {
+  if (
+    st &&
+    ((st.signs && st.signs.length) ||
+      (!unknownTime && st.houses && st.houses.length))
+  ) {
     const bits = [];
     (st.signs || []).forEach((s) =>
       bits.push(`${s.sign} (${s.planets.join(", ")})`),
     );
-    (st.houses || []).forEach((s) =>
-      bits.push(`house ${s.house} (${s.planets.join(", ")})`),
-    );
+    if (!unknownTime) {
+      (st.houses || []).forEach((s) =>
+        bits.push(`house ${s.house} (${s.planets.join(", ")})`),
+      );
+    }
     lines.push("Stelliums: " + bits.join("; ") + ".");
   } else {
     lines.push("Stelliums: none.");
@@ -1202,17 +1400,20 @@ function formatArchitectureForAI(architecture) {
 
   const cfg = architecture.configurations || {};
   const cfgBits = [];
+  const cfgNote = (item) => (item && item.includesAsteroid ? " (includes asteroid)" : "");
   (cfg.tSquares || []).forEach((t) =>
-    cfgBits.push(`T-square focal ${titleCase(t.focal)} vs ${t.opposition.map(titleCase).join("–")}`),
+    cfgBits.push(
+      `T-square focal ${titleCase(t.focal)} vs ${t.opposition.map(titleCase).join("–")}${cfgNote(t)}`,
+    ),
   );
   (cfg.grandTrines || []).forEach((g) =>
-    cfgBits.push(`grand trine ${g.planets.map(titleCase).join(", ")}`),
+    cfgBits.push(`grand trine ${g.planets.map(titleCase).join(", ")}${cfgNote(g)}`),
   );
   (cfg.kites || []).forEach((k) =>
-    cfgBits.push(`kite focus ${titleCase(k.focus)}`),
+    cfgBits.push(`kite focus ${titleCase(k.focus)}${cfgNote(k)}`),
   );
   (cfg.yods || []).forEach((y) =>
-    cfgBits.push(`yod apex ${titleCase(y.apex)}`),
+    cfgBits.push(`yod apex ${titleCase(y.apex)}${cfgNote(y)}`),
   );
   lines.push(
     "Aspect configurations: " + (cfgBits.length ? cfgBits.join("; ") : "none detected") + ".",
@@ -1237,7 +1438,7 @@ function formatArchitectureForAI(architecture) {
     }
   }
 
-  if (architecture.angleAspects && architecture.angleAspects.length) {
+  if (!unknownTime && architecture.angleAspects && architecture.angleAspects.length) {
     lines.push(
       "Aspects to ASC/MC: " +
         architecture.angleAspects
@@ -1248,7 +1449,7 @@ function formatArchitectureForAI(architecture) {
           .join("; ") +
           ".",
     );
-  } else {
+  } else if (!unknownTime) {
     lines.push("Aspects to ASC/MC: none within major orbs.");
   }
 
@@ -1275,12 +1476,16 @@ function formatArchitectureForAI(architecture) {
     }
   }
 
-  if (architecture.houseChains && architecture.houseChains.length) {
+  if (!unknownTime && architecture.houseChains && architecture.houseChains.length) {
     lines.push("House rulership chains (house → ruler → ruler placement):");
     architecture.houseChains.forEach((c) => {
       if (!c.ruler) return;
+      const sitting =
+        c.occupants && c.occupants.length
+          ? `; occupants: ${c.occupants.map(titleCase).join(", ")}`
+          : "";
       lines.push(
-        `  ${c.house} ${c.sign} → ${titleCase(c.ruler)} in ${c.rulerSign || "?"} house ${c.rulerHouse || "?"} (${c.rulerDignity || "?"}${c.rulerRetrograde ? ", R" : ""}).`,
+        `  ${c.house} ${c.sign} → ${titleCase(c.ruler)} in ${c.rulerSign || "?"} house ${c.rulerHouse || "?"} (${c.rulerDignity || "?"}${c.rulerRetrograde ? ", R" : ""})${sitting}.`,
       );
     });
   }
@@ -1288,8 +1493,11 @@ function formatArchitectureForAI(architecture) {
   if (architecture.planetConditions) {
     lines.push("Planet condition:");
     Object.entries(architecture.planetConditions).forEach(([name, c]) => {
+      const houseBit = unknownTime
+        ? ""
+        : ` house ${c.house} ${c.houseClass || ""}`;
       lines.push(
-        `  ${titleCase(name)}: ${c.sign} house ${c.house} ${c.houseClass} ${c.dignity}${c.retrograde ? " retrograde" : ""}; majors: ${
+        `  ${titleCase(name)}: ${c.sign}${houseBit}${c.dignity ? " " + c.dignity : ""}${c.retrograde ? " retrograde" : ""}; majors: ${
           c.majorAspects.length
             ? c.majorAspects
                 .map(
@@ -1313,24 +1521,52 @@ function formatArchitectureForAI(architecture) {
   if (architecture.points && architecture.points.northNode) {
     const nn = architecture.points.northNode;
     lines.push(
-      `North Node (if using): ${nn.sign || "?"} house ${nn.house || "?"}.`,
+      unknownTime
+        ? `North Node (if using): ${nn.sign || "?"}.`
+        : `North Node (if using): ${nn.sign || "?"} house ${nn.house || "?"}.`,
     );
   }
 
-  const extraAsteroids = architecture.asteroids;
-  if (extraAsteroids && typeof extraAsteroids === "object") {
-    const names = Object.keys(extraAsteroids);
-    if (names.length) {
+  const astCond = architecture.asteroidConditions || {};
+  const astNames = Object.keys(astCond);
+  if (astNames.length) {
+    lines.push(
+      "Asteroid condition (user enabled; supporting color only, not equal to Sun/Moon/ruler):",
+    );
+    astNames.forEach((name) => {
+      const c = astCond[name];
+      if (!c) return;
+      const houseBit = unknownTime
+        ? ""
+        : ` house ${c.house || "?"} ${c.houseClass || ""}`;
       lines.push(
-        "Optional asteroids (user enabled; supporting color only, not equal to Sun/Moon/ruler):",
+        `  ${titleCase(name)}: ${c.sign || "?"}${houseBit}${c.retrograde ? " retrograde" : ""}; majors: ${
+          c.majorAspects && c.majorAspects.length
+            ? c.majorAspects
+                .map(
+                  (a) =>
+                    `${a.aspect} ${titleCase(a.other)}${a.orb != null ? ` ${a.orb}°` : ""}${a.applying === true ? " applying" : a.applying === false ? " separating" : ""}`,
+                )
+                .join(", ")
+            : "none"
+        }.`,
       );
-      names.forEach((key) => {
-        const a = extraAsteroids[key];
-        if (!a) return;
-        lines.push(
-          `  ${titleCase(key)}: ${a.sign || "?"} house ${a.house || "?"}${a.isRetrograde ? " retrograde" : ""}.`,
-        );
+    });
+    const coreLinks = [];
+    const rulerPlanet = architecture.chartRuler && architecture.chartRuler.planet;
+    astNames.forEach((name) => {
+      const c = astCond[name];
+      (c.majorAspects || []).forEach((a) => {
+        const other = String(a.other || "").toLowerCase();
+        if (other === "sun" || other === "moon" || other === rulerPlanet) {
+          coreLinks.push(
+            `${titleCase(name)} ${a.aspect} ${titleCase(a.other)}${a.orb != null ? ` (${a.orb}°)` : ""}`,
+          );
+        }
       });
+    });
+    if (coreLinks.length) {
+      lines.push("Asteroids tied to Sun/Moon/ruler: " + coreLinks.join("; ") + ".");
     }
   }
 
@@ -1378,7 +1614,7 @@ const LIFE_TOPICS = {
 function isPlacementQuestion(message) {
   const t = String(message || "").toLowerCase();
   return (
-    /\b(sun|moon|mercury|venus|mars|jupiter|saturn|uranus|neptune|pluto|ascendant|rising|midheaven|north node)\b/.test(
+    /\b(sun|moon|mercury|venus|mars|jupiter|saturn|uranus|neptune|pluto|chiron|ceres|pallas|juno|vesta|ascendant|rising|midheaven|north node)\b/.test(
       t,
     ) &&
     /\b(in|square|trine|opposite|opposition|conjunct|conjunction|sextile|quincunx|house|sign)\b/.test(
@@ -1482,7 +1718,9 @@ function samePlanetPair(a, b, x, y) {
 }
 
 function lensPlacement(architecture, name) {
-  const cond = (architecture.planetConditions || {})[name];
+  const cond =
+    (architecture.planetConditions && architecture.planetConditions[name]) ||
+    (architecture.asteroidConditions && architecture.asteroidConditions[name]);
   if (cond && cond.house) return cond;
   const ast = architecture.asteroids && architecture.asteroids[name];
   if (ast) {
@@ -1490,6 +1728,7 @@ function lensPlacement(architecture, name) {
       house: Number(ast.house) || null,
       retrograde: !!ast.isRetrograde,
       dignity: "",
+      majorAspects: [],
     };
   }
   return cond || {};
@@ -1518,19 +1757,38 @@ function formatAspectLensForModel(architecture, clicked, birthChart) {
       " — " +
       (ASPECT_PLAIN[aspect] || "these two needs are linked") +
       ".",
-    titleCase(p1) +
-      " shows up most in " +
-      (HOUSE_CLAIM[c1.house] || "daily life") +
-      (c1.dignity ? " (" + c1.dignity + ")" : "") +
-      (c1.retrograde ? ", in cycles" : "") +
-      ".",
-    titleCase(p2) +
-      " shows up most in " +
-      (HOUSE_CLAIM[c2.house] || "daily life") +
-      (c2.dignity ? " (" + c2.dignity + ")" : "") +
-      (c2.retrograde ? ", in cycles" : "") +
-      ".",
+    architecture.unknownBirthTime
+      ? titleCase(p1) +
+        " is in " +
+        (c1.sign || "its sign") +
+        (c1.dignity ? " (" + c1.dignity + ")" : "") +
+        (c1.retrograde ? ", in cycles" : "") +
+        "."
+      : titleCase(p1) +
+        " shows up most in " +
+        (HOUSE_CLAIM[c1.house] || "daily life") +
+        (c1.dignity ? " (" + c1.dignity + ")" : "") +
+        (c1.retrograde ? ", in cycles" : "") +
+        ".",
+    architecture.unknownBirthTime
+      ? titleCase(p2) +
+        " is in " +
+        (c2.sign || "its sign") +
+        (c2.dignity ? " (" + c2.dignity + ")" : "") +
+        (c2.retrograde ? ", in cycles" : "") +
+        "."
+      : titleCase(p2) +
+        " shows up most in " +
+        (HOUSE_CLAIM[c2.house] || "daily life") +
+        (c2.dignity ? " (" + c2.dignity + ")" : "") +
+        (c2.retrograde ? ", in cycles" : "") +
+        ".",
   ];
+  if (architecture.unknownBirthTime) {
+    lines.push(
+      "Birth time is unknown: do not apply houses, house rulers, or ASC/MC aspects to this pair.",
+    );
+  }
   const links = [];
   const r = architecture.chartRuler;
   if (r && r.planet && (r.planet === p1 || r.planet === p2)) {
@@ -1576,6 +1834,29 @@ function formatAspectLensForModel(architecture, clicked, birthChart) {
 
 function formatTopicLensForModel(architecture, topic, birthChart) {
   if (!topic || !architecture || !architecture.ok) return "";
+  if (architecture.unknownBirthTime) {
+    const lines = [
+      "--- TOPIC LENS (computed; answer the question through this) ---",
+      "Life area: " + topic.label + ".",
+      "Birth time is unknown. Do not use houses, house rulers, house occupants, or the displayed 0° Aries Ascendant.",
+      "Answer from planetary signs, dignity, aspects, and dominant planets only.",
+    ];
+    (architecture.dominantPlanets || []).slice(0, 3).forEach(function (d, i) {
+      const cond =
+        (architecture.planetConditions && architecture.planetConditions[d.planet]) ||
+        {};
+      lines.push(
+        (i === 0 ? "Main thread: " : "Also: ") +
+          titleCase(d.planet) +
+          " in " +
+          (cond.sign || "?") +
+          (cond.dignity ? " (" + cond.dignity + ")" : "") +
+          ".",
+      );
+    });
+    lines.push("--- END TOPIC LENS ---");
+    return lines.join("\n");
+  }
   const wanted = topic.houses || [];
   const chains = (architecture.houseChains || [])
     .filter((c) => wanted.indexOf(c.house) !== -1)
@@ -1606,8 +1887,13 @@ function formatTopicLensForModel(architecture, topic, birthChart) {
         ").",
     );
   });
-  if (birthChart && birthChart.planets) {
-    const sitting = [];
+  const sitting = [];
+  chains.forEach(function (c) {
+    (c.occupants || []).forEach(function (name) {
+      sitting.push(titleCase(name) + " in house " + c.house);
+    });
+  });
+  if (!sitting.length && birthChart && birthChart.planets) {
     Object.entries(birthChart.planets).forEach(function ([name, p]) {
       if (p && wanted.indexOf(Number(p.house)) !== -1) {
         sitting.push(titleCase(name) + " in house " + p.house);
@@ -1619,9 +1905,31 @@ function formatTopicLensForModel(architecture, topic, birthChart) {
         sitting.push(titleCase(name) + " in house " + p.house);
       }
     });
-    if (sitting.length) {
-      lines.push("Planets sitting in this area: " + sitting.join("; ") + ".");
+  }
+  if (sitting.length) {
+    lines.push("Bodies sitting in this area: " + sitting.join("; ") + ".");
+  }
+  const astCond = architecture.asteroidConditions || {};
+  const topicAst = [];
+  Object.entries(astCond).forEach(function ([name, c]) {
+    if (wanted.indexOf(Number(c.house)) !== -1) {
+      const links = (c.majorAspects || [])
+        .slice(0, 3)
+        .map(function (a) {
+          return a.aspect + " " + titleCase(a.other);
+        });
+      topicAst.push(
+        titleCase(name) +
+          " in house " +
+          c.house +
+          (links.length ? " (" + links.join(", ") + ")" : ""),
+      );
     }
+  });
+  if (topicAst.length) {
+    lines.push(
+      "Enabled asteroids in this area (supporting): " + topicAst.join("; ") + ".",
+    );
   }
   lines.push("--- END TOPIC LENS ---");
   return lines.join("\n");

@@ -162,6 +162,15 @@
               <div class="form-group">
                 <label for="profile-birth-time">Birth time</label>
                 <input type="time" id="profile-birth-time" required />
+                <div class="preference-checkbox birth-time-unknown-row">
+                  <input type="checkbox" id="profile-birth-time-unknown" />
+                  <label for="profile-birth-time-unknown">Birth time unknown</label>
+                </div>
+                <p class="asteroid-hint" id="birth-time-unknown-hint" hidden>
+                  Houses and rising sign will not be used. If you have an
+                  approximate time, leave it filled so planet degrees stay
+                  accurate.
+                </p>
               </div>
               <div class="form-group">
                 <label for="profile-birth-place">Birth place</label>
@@ -283,6 +292,17 @@
           </div>
         </div>
         <div class="chat-messages" id="chat-messages">
+          <div
+            class="message unknown-time-disclaimer"
+            id="unknown-time-disclaimer"
+            hidden
+          >
+            <p>
+              Birth time is unknown for this chart. Planet positions are an
+              approximation and will naturally nudge—especially the Moon—without
+              an exact time. Houses and rising sign are not used.
+            </p>
+          </div>
           <div class="message bot-message initial-message">
             <p class="word-reveal">
               Hello! I'm AstroGuide, your astrological guide. I'm here to help you understand yourself through your birth chart. What would you like to explore?
@@ -443,6 +463,21 @@
         }
       }
       /* Welcome bubble: avoid pre-wrap (awkward breaks from source); comfortable reading measure */
+      .unknown-time-disclaimer {
+        background: #3b2f14;
+        color: #fde68a;
+        border: 1px solid #a16207;
+        border-radius: 10px;
+        padding: 10px 14px;
+        margin: 0 10px 10px;
+        max-width: 100%;
+        white-space: normal;
+      }
+      .unknown-time-disclaimer p {
+        margin: 0;
+        line-height: 1.55;
+        font-size: 0.92em;
+      }
       .bot-message.initial-message {
         white-space: normal;
         padding: 12px 14px;
@@ -929,7 +964,7 @@
       }
       .chart-tooltip {
         position: absolute;
-        max-width: 220px;
+        max-width: 280px;
         background: rgba(15, 23, 42, 0.95);
         border-radius: 6px;
         padding: 8px 10px;
@@ -937,10 +972,19 @@
         color: #e2e8f0;
         border: 1px solid #475569;
         pointer-events: none;
-        z-index: 10;
+        z-index: 20;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
         opacity: 0;
         transition: opacity 0.15s ease;
+      }
+      .chart-tooltip-query {
+        font-weight: 600;
+        color: #f8fafc;
+        margin-bottom: 4px;
+      }
+      .chart-tooltip-def {
+        color: #cbd5e1;
+        line-height: 1.35;
       }
       /* Mobile chart tab: long-press loupe (JS creates #chart-wheel-loupe) */
       .chart-wheel-loupe {
@@ -1050,7 +1094,7 @@
         display: none;
         position: fixed;
         z-index: 210;
-        max-width: 240px;
+        max-width: 300px;
         padding: 8px 10px;
         border-radius: 8px;
         background: rgba(15, 23, 42, 0.96);
@@ -1091,6 +1135,22 @@
         color: #f8fafc;
         margin-bottom: 2px;
       }
+      .chart-wheel-loupe-caption-def {
+        display: block;
+        margin: 4px 0;
+        color: #cbd5e1;
+      }
+      .chart-wheel-pick-label {
+        display: block;
+        font-weight: 600;
+      }
+      .chart-wheel-pick-def {
+        display: block;
+        font-size: 0.75rem;
+        color: #a0a0c0;
+        margin-top: 4px;
+        line-height: 1.35;
+      }
       body.chart-wheel-loupe-mode .chart-wheel-container.chart-wheel-loupe-active {
         touch-action: none;
       }
@@ -1098,8 +1158,8 @@
         position: fixed;
         z-index: 240;
         min-width: 200px;
-        max-width: min(320px, calc(100vw - 16px));
-        max-height: min(360px, calc(100vh - 24px));
+        max-width: min(360px, calc(100vw - 16px));
+        max-height: min(420px, calc(100vh - 24px));
         overflow: auto;
         padding: 8px;
         border-radius: 12px;
@@ -1413,6 +1473,9 @@
       .preference-checkbox label {
         margin: 0;
         cursor: pointer;
+      }
+      .birth-time-unknown-row {
+        margin-top: 8px;
       }
       .asteroid-hint {
         color: #7a7a96;
@@ -1795,6 +1858,8 @@
         const profiles = getChartProfiles();
         if (profiles.length > 0) return;
         const userData = JSON.parse(localStorage.getItem("userData") || "{}");
+        // TEMPORARY skip-auth guest has no birth data — don't seed an empty profile.
+        if (userData.skippedAuth && !userData.birthDate) return;
         const birthChartData = JSON.parse(
           localStorage.getItem("birthChartData") || "null",
         );
@@ -1885,8 +1950,13 @@
         document.getElementById("profile-name").value = profile.name || "";
         document.getElementById("profile-birth-date").value =
           profile.birthDate || "";
-        document.getElementById("profile-birth-time").value =
-          profile.birthTime || "";
+        const timeUnknown = profileHasUnknownBirthTime(profile);
+        setBirthTimeUnknownUI(timeUnknown);
+        document.getElementById("profile-birth-time").value = isClockTime(
+          profile.birthTime,
+        )
+          ? profile.birthTime
+          : "";
         document.getElementById("profile-birth-place").value =
           profile.birthPlace || "";
         setAsteroidCheckboxes(selectedAsteroidsFromProfile(profile));
@@ -1900,6 +1970,7 @@
         document.getElementById("add-profile-submit").textContent =
           "Add & switch";
         document.getElementById("add-profile-form").reset();
+        setBirthTimeUnknownUI(false);
         setAsteroidCheckboxes([]);
         document.getElementById("add-profile-modal").classList.remove("hidden");
       }
@@ -1932,12 +2003,21 @@
         document.getElementById("profile-dropdown").classList.add("hidden");
       }
 
+      function syncUnknownTimeDisclaimer(profile) {
+        const el = document.getElementById("unknown-time-disclaimer");
+        if (!el) return;
+        el.hidden = !profileHasUnknownBirthTime(profile);
+      }
+
       function renderConversation(profile) {
         const container = document.getElementById("chat-messages");
         if (!container) return;
+        const disclaimer = container.querySelector(".unknown-time-disclaimer");
         const initial = container.querySelector(".initial-message");
         container.innerHTML = "";
+        if (disclaimer) container.appendChild(disclaimer);
         if (initial) container.appendChild(initial);
+        syncUnknownTimeDisclaimer(profile);
         const history =
           profile && profile.conversationHistory
             ? profile.conversationHistory
@@ -2172,16 +2252,17 @@
 
       /** Fetches birth chart for a profile (birthDate, birthTime, birthPlace). Returns { chartData, resolvedLocation } or throws. */
       async function fetchBirthChartForProfile(profile) {
+        const timeUnknown = profileHasUnknownBirthTime(profile);
         if (
           !profile ||
           !profile.birthDate ||
-          !profile.birthTime ||
-          !profile.birthPlace
+          !profile.birthPlace ||
+          (!timeUnknown && !profile.birthTime)
         ) {
           throw new Error("Profile is missing birth date, time, or place.");
         }
         const [year, month, day] = profile.birthDate.split("-").map(Number);
-        const [hours, minutes] = profile.birthTime.split(":").map(Number);
+        const [hours, minutes] = clockTimeOrNoon(profile.birthTime);
         const coordinates = await getCoordinates(profile.birthPlace);
         const timezone = await calculateTimezone(
           coordinates.latitude,
@@ -2201,6 +2282,7 @@
           longitude: coordinates.longitude,
           timezone,
           asteroids: selectedAsteroidsFromProfile(profile),
+          unknownBirthTime: timeUnknown,
         };
         const response = await fetch(apiUrl("/api/birth-chart"), {
           method: "POST",
@@ -2225,8 +2307,8 @@
           !profile ||
           profile.birthChartData ||
           !profile.birthDate ||
-          !profile.birthTime ||
-          !profile.birthPlace
+          !profile.birthPlace ||
+          (!profileHasUnknownBirthTime(profile) && !profile.birthTime)
         )
           return;
         fetchBirthChartForProfile(profile)
@@ -2277,6 +2359,141 @@
           String.fromCodePoint(code, 0xfe0e);
       });
       const ASTEROID_KEYS = ["chiron", "ceres", "pallas", "juno", "vesta"];
+      const WHEEL_BODY_DEFINITIONS = {
+        sun: "The Sun describes your core vitality, identity, and the way you naturally shine in the world.",
+        moon: "The Moon reflects your emotional needs, instincts, and how you self-soothe when life feels intense.",
+        mercury:
+          "Mercury shows how you think, learn, and communicate—how your mind naturally processes the world.",
+        venus:
+          "Venus speaks to love, pleasure, and values—what you’re drawn to and what feels worth investing in.",
+        mars: "Mars describes how you act on desire—your drive, anger style, and how you go after what you want.",
+        jupiter:
+          "Jupiter points to growth, faith, and opportunity—where life tends to expand when you take risks.",
+        saturn:
+          "Saturn highlights work, limits, and responsibility—the places you build strength through effort and time.",
+        uranus:
+          "Uranus shows where you resist rules and crave freedom—your instinct for disruption and authenticity.",
+        neptune:
+          "Neptune dissolves boundaries and heightens sensitivity—linked to dreams, intuition, and idealism.",
+        pluto:
+          "Pluto speaks to deep transformation, power, and shadow work—the places where you can’t stay on the surface.",
+        chiron:
+          "Chiron marks a tender skill—where an old wound becomes the way you help or teach.",
+        ceres:
+          "Ceres speaks to care, nourishment, and how you tend what (and who) you grow.",
+        pallas:
+          "Pallas shows pattern-seeing, strategy, and the way you solve problems creatively.",
+        juno: "Juno describes commitment, partnership terms, and what you need to stay loyal.",
+        vesta:
+          "Vesta is focus and devotion—what you protect as sacred and keep the fire for.",
+      };
+      const WHEEL_HOUSE_DEFINITIONS = {
+        1: "The 1st house is how you come across and start things—the face you meet the world with.",
+        2: "The 2nd house is money, skills, and what makes you feel secure.",
+        3: "The 3rd house is everyday talk, siblings, and short-range life.",
+        4: "The 4th house is home, family, and private life.",
+        5: "The 5th house is creativity, dating, and taking a risk for joy.",
+        6: "The 6th house is routines, health, and the work you actually do.",
+        7: "The 7th house is close one-to-one relationships.",
+        8: "The 8th house is shared money, trust, and intense closeness.",
+        9: "The 9th house is beliefs, study, and the bigger picture.",
+        10: "The 10th house is career, reputation, and how the public sees you.",
+        11: "The 11th house is friends, groups, future plans, and where you belong.",
+        12: "The 12th house is private time, rest, and what stays behind the scenes.",
+      };
+      const WHEEL_ASPECT_DEFINITIONS = {
+        conjunction: "A conjunction blends two needs so they act as one.",
+        opposition:
+          "An opposition pulls two needs to opposite sides and asks for balance.",
+        square: "A square creates friction and heat between two needs.",
+        trine: "A trine lets two needs support each other with little effort.",
+        sextile: "A sextile offers cooperation if you put the two needs to use.",
+      };
+      const WHEEL_ANGLE_DEFINITIONS = {
+        ac: "The Ascendant is how you meet the world and start things.",
+        dc: "The Descendant is how you meet others one-to-one.",
+        mc: "The Midheaven is career, reputation, and how the public sees you.",
+        ic: "The Imum Coeli is home, roots, and private life.",
+      };
+      function wheelBodyDefinition(name) {
+        return WHEEL_BODY_DEFINITIONS[String(name || "").toLowerCase()] || "";
+      }
+      function wheelHouseDefinition(num) {
+        return WHEEL_HOUSE_DEFINITIONS[Number(num)] || "";
+      }
+      function wheelAspectDefinition(name) {
+        return WHEEL_ASPECT_DEFINITIONS[String(name || "").toLowerCase()] || "";
+      }
+      function wheelAngleDefinition(query) {
+        const t = String(query || "").toLowerCase();
+        if (t.indexOf("ascendant") === 0 || t.indexOf("ac ") === 0) {
+          return WHEEL_ANGLE_DEFINITIONS.ac;
+        }
+        if (t.indexOf("descendant") === 0 || t.indexOf("dc ") === 0) {
+          return WHEEL_ANGLE_DEFINITIONS.dc;
+        }
+        if (t.indexOf("midheaven") === 0 || t.indexOf("mc ") === 0) {
+          return WHEEL_ANGLE_DEFINITIONS.mc;
+        }
+        if (t.indexOf("imum") === 0 || t.indexOf("ic ") === 0) {
+          return WHEEL_ANGLE_DEFINITIONS.ic;
+        }
+        return "";
+      }
+      function fillWheelInfoBox(el, target) {
+        if (!el || !target) return;
+        el.innerHTML = "";
+        const query = target.query || target.label || "";
+        const definition = target.definition || "";
+        const askable = target.askable !== false;
+        if (query) {
+          const q = document.createElement("div");
+          q.className = "chart-tooltip-query";
+          q.textContent = askable ? "You'll ask about: " + query : query;
+          el.appendChild(q);
+        }
+        if (definition) {
+          const d = document.createElement("div");
+          d.className = "chart-tooltip-def";
+          d.textContent = definition;
+          el.appendChild(d);
+        }
+        if (target.unknownTimeNote) {
+          const n = document.createElement("div");
+          n.className = "chart-tooltip-def";
+          n.textContent = target.unknownTimeNote;
+          el.appendChild(n);
+        }
+      }
+      function profileHasUnknownBirthTime(profile) {
+        return !!(
+          profile &&
+          (profile.birthTimeUnknown ||
+            profile.birthTime === "unknown" ||
+            (profile.birthChartData &&
+              profile.birthChartData.unknownBirthTime))
+        );
+      }
+      function isClockTime(value) {
+        return /^\d{1,2}:\d{2}/.test(String(value || ""));
+      }
+      function clockTimeOrNoon(value) {
+        if (isClockTime(value)) {
+          const parts = String(value).split(":").map(Number);
+          return [parts[0], parts[1] || 0];
+        }
+        return [12, 0];
+      }
+      function setBirthTimeUnknownUI(unknown) {
+        const timeInput = document.getElementById("profile-birth-time");
+        const cb = document.getElementById("profile-birth-time-unknown");
+        const hint = document.getElementById("birth-time-unknown-hint");
+        if (cb) cb.checked = !!unknown;
+        if (timeInput) {
+          timeInput.required = !unknown;
+        }
+        if (hint) hint.hidden = !unknown;
+      }
       function selectedAsteroidsFromForm() {
         return ASTEROID_KEYS.filter(function (key) {
           const el = document.getElementById("asteroid-" + key);
@@ -2346,7 +2563,13 @@
         const planets = chartBodies(birthChart);
         const angles = birthChart.angles || {};
         const houses = birthChart.houses || [];
-        let html =
+        const timeUnknown = !!birthChart.unknownBirthTime;
+        let html = "";
+        if (timeUnknown) {
+          html +=
+            '<p class="asteroid-hint">Birth time unknown — houses and rising sign are placeholders (Ascendant shown at 0° Aries).</p>';
+        }
+        html +=
           '<table class="chart-table"><thead><tr><th class="col-planet">Planet</th><th class="col-longitude">Longitude</th><th class="col-house">H</th></tr></thead><tbody>';
         CHART_TABLE_PLANET_ORDER.forEach(function (key) {
           const p = planets[key];
@@ -2355,7 +2578,9 @@
           const glyph = CHART_TABLE_PLANET_CHARS[key] || "";
           const lon = formatLongitude(p.degree, p.sign, p.isRetrograde);
           const house =
-            p.house != null && p.house !== undefined ? p.house : "—";
+            timeUnknown || p.house == null || p.house === undefined
+              ? "—"
+              : p.house;
           html +=
             '<tr><td class="col-planet">' +
             glyph +
@@ -2368,6 +2593,12 @@
             "</td></tr>";
         });
         html += "</tbody></table>";
+        if (timeUnknown) {
+          html +=
+            '<table class="chart-table"><tbody><tr class="house-cusps-row"><td class="col-planet">AC: 0 Ari 0\'00"</td><td class="col-planet">Houses unused</td><td class="col-planet">MC: display only</td></tr></tbody></table>';
+          container.innerHTML = html;
+          return;
+        }
         const houseByNumber = {};
         houses.forEach(function (h) {
           if (h && h.number != null) houseByNumber[h.number] = h;
@@ -2537,6 +2768,8 @@
         activeProfile.conversationHistory.length > 0
       ) {
         renderConversation(activeProfile);
+      } else {
+        syncUnknownTimeDisclaimer(activeProfile);
       }
       // Show chart wheel for active profile on load if we have cached chart data
       if (activeProfile && activeProfile.birthChartData) {
@@ -3034,6 +3267,7 @@
           const profileBirthPlace = activeProfile
             ? activeProfile.birthPlace
             : userData.birthPlace;
+          const timeUnknown = profileHasUnknownBirthTime(activeProfile);
 
           if (!birthChartData) {
             // Automatically fetch birth chart on first message for this profile
@@ -3042,7 +3276,11 @@
             console.log("[SPINNER] Showing spinner after loading message");
             showSpinner();
 
-            if (!profileBirthDate || !profileBirthTime || !profileBirthPlace) {
+            if (
+              !profileBirthDate ||
+              !profileBirthPlace ||
+              (!timeUnknown && !profileBirthTime)
+            ) {
               await queueBotMessage(
                 "This profile is missing birth date, time, or place. Add a profile with full birth data or use the default profile.",
               );
@@ -3662,18 +3900,17 @@
             hideLoupeCaption();
             return;
           }
-          const hint =
-            target.kind === "Aspect"
-              ? "Click to ask about this aspect"
-              : "Click to ask about this";
           loupeCaptionEl.innerHTML = "";
           const nameEl = document.createElement("span");
           nameEl.className = "chart-wheel-loupe-caption-name";
-          nameEl.textContent = name;
-          const hintEl = document.createElement("span");
-          hintEl.textContent = hint;
+          nameEl.textContent = "You'll ask about: " + name;
           loupeCaptionEl.appendChild(nameEl);
-          loupeCaptionEl.appendChild(hintEl);
+          if (target.definition) {
+            const defEl = document.createElement("span");
+            defEl.className = "chart-wheel-loupe-caption-def";
+            defEl.textContent = target.definition;
+            loupeCaptionEl.appendChild(defEl);
+          }
           loupeCaptionEl.classList.add("chart-wheel-loupe-caption-visible");
           const loupeLeft = parseFloat(loupeEl.style.left);
           const loupeTop = parseFloat(loupeEl.style.top);
@@ -4074,6 +4311,10 @@
 
         function pickLoupeHoverTarget(svgEl, clientX, clientY) {
           const ranked = rankWheelPickHits(svgEl, clientX, clientY, 12);
+          const body = ranked.find(function (h) {
+            return h.target.kind === "Planet" && h.dist <= 14;
+          });
+          if (body) return body.target;
           let pool = ranked.filter(function (h) {
             return h.target.kind === "Aspect" || h.target.isLine;
           });
@@ -4399,6 +4640,12 @@
             .classList.add("hidden");
         });
 
+      document
+        .getElementById("profile-birth-time-unknown")
+        .addEventListener("change", (e) => {
+          setBirthTimeUnknownUI(e.target.checked);
+        });
+
       // Add/Edit profile form submit: geocode, birth-chart API, create or update profile
       document
         .getElementById("add-profile-form")
@@ -4406,16 +4653,19 @@
           e.preventDefault();
           const name = document.getElementById("profile-name").value.trim();
           const birthDate = document.getElementById("profile-birth-date").value;
+          const timeUnknown = document.getElementById(
+            "profile-birth-time-unknown",
+          ).checked;
           const birthTime = document.getElementById("profile-birth-time").value;
           const birthPlace = document
             .getElementById("profile-birth-place")
             .value.trim();
-          if (!name || !birthDate || !birthTime || !birthPlace) {
+          if (!name || !birthDate || !birthPlace || (!timeUnknown && !birthTime)) {
             alert("Please fill in all fields.");
             return;
           }
           const [y, m, d] = birthDate.split("-").map(Number);
-          const [hours, minutes] = birthTime.split(":").map(Number);
+          const [hours, minutes] = clockTimeOrNoon(birthTime);
           let coordinates;
           try {
             coordinates = await getCoordinates(birthPlace);
@@ -4442,6 +4692,7 @@
             longitude: coordinates.longitude,
             timezone: timezone,
             asteroids: selectedAsteroids,
+            unknownBirthTime: timeUnknown,
           };
           try {
             const response = await fetch(apiUrl("/api/birth-chart"), {
@@ -4467,6 +4718,7 @@
                 profile.name = name;
                 profile.birthDate = birthDate;
                 profile.birthTime = birthTime;
+                profile.birthTimeUnknown = timeUnknown;
                 profile.birthPlace = birthPlace;
                 profile.selectedAsteroids = selectedAsteroids;
                 profile.birthChartData = birthChartData;
@@ -4476,6 +4728,7 @@
                 .getElementById("add-profile-modal")
                 .classList.add("hidden");
               document.getElementById("add-profile-form").reset();
+              setBirthTimeUnknownUI(false);
               editingProfileId = null;
               document.getElementById("add-profile-modal-title").textContent =
                 "Add chart profile";
@@ -4486,6 +4739,7 @@
               if (active && active.id === idBeingEdited) {
                 renderChartWheel(birthChartData);
                 renderChartTable(birthChartData);
+                syncUnknownTimeDisclaimer(active);
               }
               return;
             }
@@ -4495,6 +4749,7 @@
               name,
               birthDate,
               birthTime,
+              birthTimeUnknown: timeUnknown,
               birthPlace,
               selectedAsteroids,
               birthChartData,
@@ -4515,6 +4770,7 @@
               .getElementById("add-profile-modal")
               .classList.add("hidden");
             document.getElementById("add-profile-form").reset();
+            setBirthTimeUnknownUI(false);
             renderProfileDropdown();
             switchToProfile(newProfile.id);
           } catch (err) {
@@ -4761,7 +5017,28 @@
       }
 
       function collectWheelPickHits(svgEl, clientX, clientY) {
-        return rankWheelPickHits(svgEl, clientX, clientY).map((h) => h.target);
+        return rankWheelPickHits(svgEl, clientX, clientY)
+          .map((h) => h.target)
+          .filter((t) => t.askable !== false);
+      }
+
+      function preferredHoverTarget(svgEl, clientX, clientY) {
+        const ranked = rankWheelPickHits(svgEl, clientX, clientY);
+        if (!ranked.length) return null;
+        const point = ranked.find(function (h) {
+          return (
+            !h.target.isLine &&
+            (h.target.kind === "Planet" ||
+              h.target.kind === "Sign" ||
+              h.target.kind === "House")
+          );
+        });
+        if (point) return point.target;
+        const angle = ranked.find(function (h) {
+          return h.target.kind === "Angle";
+        });
+        if (angle) return angle.target;
+        return ranked[0].target;
       }
 
       function pickKey(t) {
@@ -4796,7 +5073,16 @@
           kind.className = "chart-wheel-pick-kind";
           kind.textContent = t.kind;
           btn.appendChild(kind);
-          btn.appendChild(document.createTextNode(t.label));
+          const label = document.createElement("span");
+          label.className = "chart-wheel-pick-label";
+          label.textContent = "You'll ask about: " + (t.query || t.label);
+          btn.appendChild(label);
+          if (t.definition) {
+            const def = document.createElement("span");
+            def.className = "chart-wheel-pick-def";
+            def.textContent = t.definition;
+            btn.appendChild(def);
+          }
           btn.addEventListener("click", function (ev) {
             ev.preventDefault();
             ev.stopPropagation();
@@ -4822,6 +5108,7 @@
       function resolveWheelPick(svgEl, clientX, clientY) {
         const ranked = rankWheelPickHits(svgEl, clientX, clientY);
         if (!ranked.length) return "none";
+        if (ranked[0].target.askable === false) return "none";
         ranked[0].target.activate();
         return "one";
       }
@@ -4853,6 +5140,11 @@
           if (!birthChart || typeof birthChart !== "object") {
             throw new Error("Invalid birth chart data");
           }
+          const timeUnknown = !!birthChart.unknownBirthTime;
+          const unknownHouseNote =
+            "Birth time is unknown, so this house cannot be applied to the chart. This is the general meaning only.";
+          const unknownAngleNote =
+            "Birth time is unknown, so the rising sign, angles, and their aspects cannot be applied. This is the general meaning only.";
 
           // Check if D3 is loaded
           if (typeof d3 === "undefined") {
@@ -4896,6 +5188,62 @@
           const wheelProfile = isMobileChart
             ? CHART_WHEEL_PROFILE_MOBILE
             : CHART_WHEEL_PROFILE_DESKTOP;
+          let wheelTipTimer = null;
+          let wheelTipKey = "";
+          function hideWheelTooltip() {
+            if (wheelTipTimer) {
+              clearTimeout(wheelTipTimer);
+              wheelTipTimer = null;
+            }
+            wheelTipKey = "";
+            tooltipEl.style.opacity = "0";
+          }
+          function showWheelTooltipFor(target, clientX, clientY) {
+            if (!target || (!target.query && !target.definition)) {
+              hideWheelTooltip();
+              return;
+            }
+            const key =
+              (target.kind || "") + "|" + (target.query || target.label || "");
+            const box = container.getBoundingClientRect();
+            const place = function () {
+              fillWheelInfoBox(tooltipEl, target);
+              tooltipEl.style.left = clientX - box.left + 12 + "px";
+              tooltipEl.style.top = clientY - box.top + 12 + "px";
+              tooltipEl.style.opacity = "1";
+            };
+            if (key === wheelTipKey && tooltipEl.style.opacity === "1") {
+              tooltipEl.style.left = clientX - box.left + 12 + "px";
+              tooltipEl.style.top = clientY - box.top + 12 + "px";
+              return;
+            }
+            if (wheelTipTimer) clearTimeout(wheelTipTimer);
+            wheelTipKey = key;
+            wheelTipTimer = setTimeout(place, wheelProfile.tooltipDelayMs);
+          }
+          container.onpointermove = function (e) {
+            if (e.pointerType === "touch") return;
+            if (wheelPickState.deskPark) {
+              hideWheelTooltip();
+              return;
+            }
+            if (wheelPickState.menuEl && !wheelPickState.menuEl.hidden) {
+              hideWheelTooltip();
+              return;
+            }
+            const svgEl = container.querySelector("svg");
+            if (!svgEl) return;
+            const target = preferredHoverTarget(svgEl, e.clientX, e.clientY);
+            if (!target) {
+              hideWheelTooltip();
+              return;
+            }
+            showWheelTooltipFor(target, e.clientX, e.clientY);
+          };
+          container.onpointerleave = function (e) {
+            if (e.relatedTarget && container.contains(e.relatedTarget)) return;
+            hideWheelTooltip();
+          };
           const width = wheelProfile.width(rawW);
           const height = width;
           // Zodiac surrounds houses: total radius, then house wheel, notch band, zodiac ring
@@ -5160,6 +5508,7 @@
                     .attr("stroke", "#cbd5e1");
                 })
                 .on("click", function () {
+                  if (timeUnknown) return;
                   const houseSign = house.sign || "";
                   queryChartElement(
                     `House ${house.number}${houseSign ? ` ${houseSign}` : ""}`,
@@ -5171,13 +5520,16 @@
                 kind: "House",
                 label: houseQuery,
                 query: houseQuery,
+                definition: wheelHouseDefinition(house.number),
+                askable: !timeUnknown,
+                unknownTimeNote: timeUnknown ? unknownHouseNote : "",
                 isLine: true,
                 x1: innerPos.x,
                 y1: innerPos.y,
                 x2: pos.x,
                 y2: pos.y,
                 activate: function () {
-                  queryChartElement(houseQuery);
+                  if (!timeUnknown) queryChartElement(houseQuery);
                 },
               });
 
@@ -5205,6 +5557,7 @@
                     .attr("stroke", "#cbd5e1");
                 })
                 .on("click", function () {
+                  if (timeUnknown) return;
                   const houseSign = house.sign || "";
                   queryChartElement(
                     `House ${house.number}${houseSign ? ` ${houseSign}` : ""}`,
@@ -5264,6 +5617,7 @@
                     .attr("stroke", "#cbd5e1");
                 })
                 .on("click", function () {
+                  if (timeUnknown) return;
                   const houseSign = house.sign || "";
                   queryChartElement(
                     `House ${house.number}${houseSign ? ` ${houseSign}` : ""}`,
@@ -5273,11 +5627,14 @@
                 kind: "House",
                 label: houseQuery,
                 query: houseQuery,
+                definition: wheelHouseDefinition(house.number),
+                askable: !timeUnknown,
+                unknownTimeNote: timeUnknown ? unknownHouseNote : "",
                 x: labelPos.x,
                 y: labelPos.y,
                 threshold: wheelProfile.houseLabelHitR + 8,
                 activate: function () {
-                  queryChartElement(houseQuery);
+                  if (!timeUnknown) queryChartElement(houseQuery);
                 },
               });
             }
@@ -5408,32 +5765,16 @@
               .attr("font-family", symbolFont)
               .attr("style", "font-variant-emoji: none;")
               .text(char);
-            let signTooltipTimeout;
             signGroup
-              .on("mouseenter", function (event) {
+              .on("mouseenter", function () {
                 textEl
                   .attr("fill", hoverColor)
                   .attr("font-size", `${wheelProfile.zodiacGlyphHover}px`);
-                const name = signFullNames[i];
-                const text = signTooltipText[name];
-                if (!text) return;
-                if (signTooltipTimeout) clearTimeout(signTooltipTimeout);
-                const { left, top } = container.getBoundingClientRect();
-                const pageX = event.clientX;
-                const pageY = event.clientY;
-                signTooltipTimeout = setTimeout(() => {
-                  tooltipEl.textContent = text;
-                  tooltipEl.style.left = `${pageX - left + 12}px`;
-                  tooltipEl.style.top = `${pageY - top + 12}px`;
-                  tooltipEl.style.opacity = "1";
-                }, wheelProfile.tooltipDelayMs);
               })
               .on("mouseleave", function () {
                 textEl
                   .attr("fill", "#e2e8f0")
                   .attr("font-size", `${wheelProfile.zodiacGlyph}px`);
-                if (signTooltipTimeout) clearTimeout(signTooltipTimeout);
-                tooltipEl.style.opacity = "0";
               })
               .on("click", function () {
                 queryChartElement(signFullNames[i]);
@@ -5442,6 +5783,7 @@
               kind: "Sign",
               label: signFullNames[i],
               query: signFullNames[i],
+              definition: signTooltipText[signFullNames[i]] || "",
               x: pos.x,
               y: pos.y,
               threshold: wheelProfile.zodiacHit + 8,
@@ -5509,6 +5851,28 @@
                 !aspect.planet2
               ) {
                 return;
+              }
+              if (timeUnknown) {
+                const ends = [
+                  String(aspect.planet1 || "").toLowerCase(),
+                  String(aspect.planet2 || "").toLowerCase(),
+                ];
+                if (
+                  ends.some(function (n) {
+                    return (
+                      n === "ascendant" ||
+                      n === "asc" ||
+                      n === "ac" ||
+                      n === "midheaven" ||
+                      n === "mc" ||
+                      n === "descendant" ||
+                      n === "dc" ||
+                      n === "ic"
+                    );
+                  })
+                ) {
+                  return;
+                }
               }
               const planet1 = wheelBodies[aspect.planet1?.toLowerCase()];
               const planet2 = wheelBodies[aspect.planet2?.toLowerCase()];
@@ -5696,6 +6060,7 @@
                 kind: "Aspect",
                 label: aspectQuery,
                 query: aspectQuery,
+                definition: wheelAspectDefinition(aspect.aspect),
                 isLine: true,
                 x1: pos1.x,
                 y1: pos1.y,
@@ -5876,12 +6241,15 @@
               g.on("mouseenter", handleAngleEnter)
                 .on("mouseleave", handleAngleLeave)
                 .on("click", function () {
-                  queryChartElement(queryText);
+                  if (!timeUnknown) queryChartElement(queryText);
                 });
               registerWheelPickTarget({
                 kind: "Angle",
                 label: queryText,
                 query: queryText,
+                definition: wheelAngleDefinition(queryText),
+                askable: !timeUnknown,
+                unknownTimeNote: timeUnknown ? unknownAngleNote : "",
                 isLine: true,
                 x1: innerPos.x,
                 y1: innerPos.y,
@@ -5890,18 +6258,21 @@
                 hover: handleAngleEnter,
                 unhover: handleAngleLeave,
                 activate: function () {
-                  queryChartElement(queryText);
+                  if (!timeUnknown) queryChartElement(queryText);
                 },
               });
               registerWheelPickTarget({
                 kind: "Angle",
                 label: queryText,
                 query: queryText,
+                definition: wheelAngleDefinition(queryText),
+                askable: !timeUnknown,
+                unknownTimeNote: timeUnknown ? unknownAngleNote : "",
                 x: labelPos.x,
                 y: labelPos.y,
                 threshold: 22,
                 activate: function () {
-                  queryChartElement(queryText);
+                  if (!timeUnknown) queryChartElement(queryText);
                 },
               });
             }
@@ -6093,9 +6464,7 @@
                   planetData &&
                   planetData.degree !== undefined &&
                   planetData.degree !== null &&
-                  !isNaN(planetData.degree) &&
-                  planetData.house !== undefined &&
-                  planetData.house !== null
+                  !isNaN(planetData.degree)
                 ) {
                   const displayDegree = chartToDisplayDegree(planetData.degree);
                   planetList.push({ planetName, planetData, displayDegree });
@@ -6203,56 +6572,13 @@
                   symbol: planetSymbol,
                 };
 
-                const planetTooltipText = {
-                  sun: "The Sun describes your core vitality, identity, and the way you naturally shine in the world.",
-                  moon: "The Moon reflects your emotional needs, instincts, and how you self-soothe when life feels intense.",
-                  mercury:
-                    "Mercury shows how you think, learn, and communicate—how your mind naturally processes the world.",
-                  venus:
-                    "Venus speaks to love, pleasure, and values—what you’re drawn to and what feels worth investing in.",
-                  mars: "Mars describes how you act on desire—your drive, anger style, and how you go after what you want.",
-                  jupiter:
-                    "Jupiter points to growth, faith, and opportunity—where life tends to expand when you take risks.",
-                  saturn:
-                    "Saturn highlights work, limits, and responsibility—the places you build strength through effort and time.",
-                  uranus:
-                    "Uranus shows where you resist rules and crave freedom—your instinct for disruption and authenticity.",
-                  neptune:
-                    "Neptune dissolves boundaries and heightens sensitivity—linked to dreams, intuition, and idealism.",
-                  pluto:
-                    "Pluto speaks to deep transformation, power, and shadow work—the places where you can’t stay on the surface.",
-                  chiron:
-                    "Chiron marks a tender skill—where an old wound becomes the way you help or teach.",
-                  ceres:
-                    "Ceres speaks to care, nourishment, and how you tend what (and who) you grow.",
-                  pallas:
-                    "Pallas shows pattern-seeing, strategy, and the way you solve problems creatively.",
-                  juno: "Juno describes commitment, partnership terms, and what you need to stay loyal.",
-                  vesta:
-                    "Vesta is focus and devotion—what you protect as sacred and keep the fire for.",
-                };
-                let planetTooltipTimeout;
                 planetGroup
-                  .on("mouseenter", function (event) {
+                  .on("mouseenter", function () {
                     planetSymbol
                       .attr("font-size", `${wheelProfile.planetGlyphHi}px`)
                       .attr("fill", "#10b981")
                       .transition()
                       .duration(200);
-                    const key = planetName.toLowerCase();
-                    const text = planetTooltipText[key];
-                    if (!text) return;
-                    if (planetTooltipTimeout)
-                      clearTimeout(planetTooltipTimeout);
-                    const { left, top } = container.getBoundingClientRect();
-                    const pageX = event.clientX;
-                    const pageY = event.clientY;
-                    planetTooltipTimeout = setTimeout(() => {
-                      tooltipEl.textContent = text;
-                      tooltipEl.style.left = `${pageX - left + 12}px`;
-                      tooltipEl.style.top = `${pageY - top + 12}px`;
-                      tooltipEl.style.opacity = "1";
-                    }, wheelProfile.tooltipDelayMs);
                   })
                   .on("mouseleave", function () {
                     planetSymbol
@@ -6260,9 +6586,6 @@
                       .attr("fill", planetGlyphColor)
                       .transition()
                       .duration(200);
-                    if (planetTooltipTimeout)
-                      clearTimeout(planetTooltipTimeout);
-                    tooltipEl.style.opacity = "0";
                   })
                   .on("click", function () {
                     const planetDisplayName =
@@ -6279,6 +6602,7 @@
                   kind: "Planet",
                   label: planetQuery,
                   query: planetQuery,
+                  definition: wheelBodyDefinition(planetName),
                   x: pos.x,
                   y: pos.y,
                   threshold: wheelProfile.planetHit + 10,

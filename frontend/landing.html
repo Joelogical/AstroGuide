@@ -124,6 +124,14 @@
             <button type="submit">Sign Up</button>
           </form>
         </div>
+
+        <!-- TEMPORARY: skip auth without removing Login / Sign Up. Re-enable later. -->
+        <div class="auth-skip">
+          <button type="button" id="skip-auth-btn" class="skip-auth-btn">
+            Skip for now
+          </button>
+          <p class="skip-auth-hint">Temporary — sign-in stays here for later.</p>
+        </div>
       </div>
     </div>
 
@@ -336,6 +344,23 @@
             submitButton.textContent = originalButtonText;
           }
         });
+
+      // TEMPORARY: skip sign-in without removing Login / Sign Up. Re-enable later.
+      document.getElementById("skip-auth-btn").addEventListener("click", () => {
+        localStorage.setItem(
+          "userData",
+          JSON.stringify({
+            email: "guest@local",
+            name: "Guest",
+            birthDate: "",
+            birthTime: "",
+            birthPlace: "",
+            skippedAuth: true,
+          }),
+        );
+        localStorage.setItem("token", "skipped-auth");
+        window.location.href = "index.html";
+      });
     </script>
   </body>
 </html>
