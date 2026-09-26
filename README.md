@@ -1,94 +1,101 @@
 # AstroGuide
 
-A modern web application for Western astrology calculations and interpretations using AstrologyAPI.com.
+Western natal charts and conversational interpretation. The wheel is calculated locally with Swiss Ephemeris; chat uses the computed architecture (ruler, dignities, aspects, configurations) rather than a generic sign-by-sign dump.
 
 ## Features
 
-- User authentication (signup/login)
-- Birth chart calculations
-- Planetary positions
-- House positions
-- Ascendant and Midheaven calculations
-- Modern, responsive UI
+- Natal charts from birth date, time, and place (Swiss Ephemeris; AstrologyAPI.com only if that engine fails or `CHART_ENGINE=astrologyapi`)
+- Interactive wheel: planets, houses, aspects, optional asteroids, hover and click-to-ask
+- **Modern** charts (outers + asteroids) or **Traditional** (Sun through Saturn, classical rulerships only)
+- Unknown birth time: planets and aspects still calculate; houses and rising are not treated as real (wheel shows 0° Aries rising as a placeholder)
+- Chat that stays with the natal chart:
+  - Personal questions describe the person
+  - “Analyze my chart” / “what stands out” inspect the chart as a technical system (`CHART_ANALYSIS`)
+  - Named placements and clicked aspects stay on that factor
+- Beginner or Advanced language, plus optional softer / strengths-focused tone
+- No event prediction; timing questions are redirected to potential already in the chart
+- Login and signup are still in the app; **Skip for now** is a temporary guest path
 
 ## Prerequisites
 
-- Node.js (v14 or higher)
-- npm (v6 or higher)
-- AstrologyAPI.com account and API credentials
+- Node.js 18+ and npm
+- An [OpenAI](https://platform.openai.com/) API key for chat
+- Optional: [AstrologyAPI.com](https://astrologyapi.com/) credentials (fallback natal engine)
 
 ## Setup
 
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/yourusername/AstroGuide.git
+git clone https://github.com/Joelogical/AstroGuide.git
 cd AstroGuide
 ```
 
-2. Install backend dependencies:
+2. Install dependencies:
 
 ```bash
+npm install
 cd backend
 npm install
+cd ..
 ```
 
-3. Create a `.env` file in the backend directory with your AstrologyAPI.com credentials:
+3. Create `backend/.env`:
 
 ```
-ASTROLOGY_API_USER_ID=your_user_id_here
-ASTROLOGY_API_KEY=your_api_key_here
+OPENAI_API_KEY=your_openai_api_key
 PORT=3000
+
+# Optional natal fallback (used automatically if Swiss Ephemeris fails)
+ASTROLOGY_API_USER_ID=your_user_id
+ASTROLOGY_API_KEY=your_api_key
+
+# Optional: force AstrologyAPI instead of Swiss Ephemeris
+# CHART_ENGINE=astrologyapi
 ```
 
-4. Start the backend server:
+4. Start the server from the repo root:
 
 ```bash
-node server.js
+npm start
 ```
 
-5. Open the frontend:
+Or `cd backend && node server.js`.
 
-- Navigate to `http://localhost:3000` in your web browser
-- The application will serve the frontend files automatically
+5. Open [http://localhost:3000](http://localhost:3000) (or [http://127.0.0.1:3000](http://127.0.0.1:3000) if `localhost` misbehaves). The Express app serves `frontend/` and the API.
 
-## Project Structure
+Do not open `frontend/*.html` as a file or via Live Server (port 5500); the page will send you to the Express origin.
+
+## Project structure
 
 ```
 AstroGuide/
-├── frontend/           # Frontend files
-│   ├── index.html     # Main application page
-│   ├── landing.html   # Login/signup page
-│   └── styles.css     # Global styles
-├── backend/           # Backend server
-│   ├── server.js      # Express server
-│   ├── package.json   # Backend dependencies
-│   └── .env          # Environment variables
-└── README.md         # This file
+├── frontend/
+│   ├── index.html      # Chart wheel, profiles, chat
+│   ├── landing.html    # Login, signup, temporary skip
+│   └── styles.css
+├── backend/
+│   ├── server.js                 # Express API
+│   ├── birth_chart_service.js    # Swiss Ephemeris, then AstrologyAPI fallback
+│   ├── chart_architecture.js     # Computed natal structure
+│   ├── chart_analysis.js         # CHART_ANALYSIS intent
+│   ├── traditional_chart.js      # Seven-planet / classical rulers
+│   ├── prediction_guard.js       # No forecasts
+│   ├── prompt_layers.js          # Chat system prompts
+│   └── .env                      # Local secrets (not committed)
+└── README.md
 ```
 
-## API Endpoints
+## API
 
-- `POST /api/login` - User login
-- `POST /api/signup` - User registration
-- `POST /api/birth-chart` - Calculate birth chart
-- `GET /api/test` - Test endpoint
+- `POST /api/login` — log in
+- `POST /api/signup` — register
+- `POST /api/birth-chart` — calculate a natal chart
+- `POST /api/chat` — interpret from the saved chart
+- `GET /api/test` — health check
 
-## Development
-
-- Frontend files are served statically from the `frontend` directory
-- Backend server runs on port 3000 by default
-- CORS is enabled for local development
-- Environment variables are loaded from `.env` file
-
-## Security Notes
-
-- In production, implement proper password hashing
-- Use HTTPS
-- Implement rate limiting
-- Add input validation
-- Use a proper database instead of in-memory storage
+Auth is in-memory for local use. Profiles and charts live in the browser.
 
 ## License
 
-MIT License
+MIT
