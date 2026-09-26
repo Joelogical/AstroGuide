@@ -555,7 +555,9 @@ function scoreDominants(entries, birthChart, stelliums, hubs, annotatedAspects) 
     const majors = annotatedAspects.filter(
       (a) =>
         isMajorAspectName(a.aspect) &&
-        (a.planet1 === name || a.planet2 === name),
+        (a.planet1 === name || a.planet2 === name) &&
+        PLANET_KEYS.includes(String(a.planet1).toLowerCase()) &&
+        PLANET_KEYS.includes(String(a.planet2).toLowerCase()),
     );
     const close = majors.filter((a) => Number(a.orb) <= 4).length;
     const closePts = Math.min(4, close);
@@ -824,6 +826,9 @@ function buildChartArchitecture(birthChart) {
   });
   annotatedAspects.forEach((a) => {
     if (!a.major) return;
+    const a1 = String(a.planet1 || "").toLowerCase();
+    const a2 = String(a.planet2 || "").toLowerCase();
+    if (!PLANET_KEYS.includes(a1) || !PLANET_KEYS.includes(a2)) return;
     if (majorNet[a.planet1] != null) majorNet[a.planet1] += 1;
     if (majorNet[a.planet2] != null) majorNet[a.planet2] += 1;
   });
@@ -883,11 +888,21 @@ function buildChartArchitecture(birthChart) {
     singletons,
     stelliums,
     shape: buildShape(entries),
-    configurations: findConfigurations(birthChart.aspects),
+    configurations: findConfigurations(
+      (birthChart.aspects || []).filter((a) => {
+        const a1 = String((a && a.planet1) || "").toLowerCase();
+        const a2 = String((a && a.planet2) || "").toLowerCase();
+        return PLANET_KEYS.includes(a1) && PLANET_KEYS.includes(a2);
+      }),
+    ),
     angleAspects: findAngleAspects(birthChart),
     network: { unaspected, mostNetworked },
     aspectsAnnotated: annotatedAspects,
     points: birthChart.points || null,
+    asteroids: birthChart.asteroids || {},
+    selectedAsteroids: Array.isArray(birthChart.selectedAsteroids)
+      ? birthChart.selectedAsteroids
+      : Object.keys(birthChart.asteroids || {}),
   };
   architecture.repeatingThemes = collectRepeatingThemes(architecture);
   architecture.thesisClaims = buildThesisClaims(architecture);
@@ -935,6 +950,11 @@ const PLANET_CLAIM = {
   uranus: "needing freedom and resisting a fixed script",
   neptune: "sensitivity, ideals, and wanting things to feel meaningful",
   pluto: "going deep and not staying on the surface",
+  chiron: "an old tender spot that became a way you help or teach",
+  ceres: "how you nourish, protect, and need to be cared for",
+  pallas: "pattern-seeing, strategy, and creative problem-solving",
+  juno: "what you need in order to stay committed to someone",
+  vesta: "the work or cause you keep the fire for",
 };
 
 const HOUSE_CLAIM = {
@@ -1297,6 +1317,23 @@ function formatArchitectureForAI(architecture) {
     );
   }
 
+  const extraAsteroids = architecture.asteroids;
+  if (extraAsteroids && typeof extraAsteroids === "object") {
+    const names = Object.keys(extraAsteroids);
+    if (names.length) {
+      lines.push(
+        "Optional asteroids (user enabled; supporting color only, not equal to Sun/Moon/ruler):",
+      );
+      names.forEach((key) => {
+        const a = extraAsteroids[key];
+        if (!a) return;
+        lines.push(
+          `  ${titleCase(key)}: ${a.sign || "?"} house ${a.house || "?"}${a.isRetrograde ? " retrograde" : ""}.`,
+        );
+      });
+    }
+  }
+
   return lines.join("\n");
 }
 
@@ -1409,7 +1446,8 @@ function normalizeAspectName(name) {
 
 function parseClickedAspect(message) {
   const t = String(message || "").toLowerCase();
-  const planets = "sun|moon|mercury|venus|mars|jupiter|saturn|uranus|neptune|pluto";
+  const planets =
+    "sun|moon|mercury|venus|mars|jupiter|saturn|uranus|neptune|pluto|chiron|ceres|pallas|juno|vesta";
   const aspects =
     "conjunction|conjunct|square|trine|opposition|opposite|sextile|quincunx|semisquare|sesquiquadrate";
   let m = t.match(
@@ -1443,14 +1481,27 @@ function samePlanetPair(a, b, x, y) {
   return (A === X && B === Y) || (A === Y && B === X);
 }
 
+function lensPlacement(architecture, name) {
+  const cond = (architecture.planetConditions || {})[name];
+  if (cond && cond.house) return cond;
+  const ast = architecture.asteroids && architecture.asteroids[name];
+  if (ast) {
+    return {
+      house: Number(ast.house) || null,
+      retrograde: !!ast.isRetrograde,
+      dignity: "",
+    };
+  }
+  return cond || {};
+}
+
 function formatAspectLensForModel(architecture, clicked, birthChart) {
   if (!clicked || !architecture || !architecture.ok) return "";
   const p1 = clicked.planet1;
   const p2 = clicked.planet2;
   const aspect = normalizeAspectName(clicked.aspect);
-  const cond = architecture.planetConditions || {};
-  const c1 = cond[p1] || {};
-  const c2 = cond[p2] || {};
+  const c1 = lensPlacement(architecture, p1);
+  const c2 = lensPlacement(architecture, p2);
   const lines = [
     "--- ASPECT LENS (computed; answer the click through this) ---",
     "Clicked: " +
@@ -1558,6 +1609,12 @@ function formatTopicLensForModel(architecture, topic, birthChart) {
   if (birthChart && birthChart.planets) {
     const sitting = [];
     Object.entries(birthChart.planets).forEach(function ([name, p]) {
+      if (p && wanted.indexOf(Number(p.house)) !== -1) {
+        sitting.push(titleCase(name) + " in house " + p.house);
+      }
+    });
+    const extraAsteroids = (architecture && architecture.asteroids) || {};
+    Object.entries(extraAsteroids).forEach(function ([name, p]) {
       if (p && wanted.indexOf(Number(p.house)) !== -1) {
         sitting.push(titleCase(name) + " in house " + p.house);
       }

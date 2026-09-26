@@ -1,7 +1,6 @@
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
-const axios = require("axios");
 require("dotenv").config();
 
 // Log full stack for unhandled rejections (e.g. "Assignment to constant variable")
@@ -50,6 +49,7 @@ const {
   parseClickedAspect,
   formatAspectLensForModel,
 } = require("./chart_architecture");
+const { calculateNatalChart } = require("./birth_chart_service");
 
 // Debug logging for environment variables
 console.log("Environment variables loaded:");
@@ -68,10 +68,6 @@ console.log(
 
 const app = express();
 const port = process.env.PORT || 3000;
-
-// AstrologyAPI.com credentials
-const USER_ID = process.env.ASTROLOGY_API_USER_ID;
-const API_KEY = process.env.ASTROLOGY_API_KEY;
 
 // Middleware
 app.use(cors());
@@ -231,78 +227,7 @@ app.post("/api/signup", (req, res) => {
   }
 });
 
-// Function to generate AstrologyAPI.com authentication
-function generateAuth() {
-  // Create base64 encoded credentials
-  const credentials = Buffer.from(`${USER_ID}:${API_KEY}`).toString("base64");
-
-  // Debug logging for authentication
-  console.log("Generated Auth Header:", {
-    userId: USER_ID,
-    credentialsLength: credentials.length,
-  });
-
-  return {
-    Authorization: `Basic ${credentials}`,
-    "Content-Type": "application/json",
-  };
-}
-
-// Function to calculate aspects between planets (major + minor for depth)
-function calculateAspects(planets) {
-  const aspects = [];
-  // Major aspects (wider orbs)
-  const major = {
-    conjunction: { angle: 0, orb: 8 },
-    sextile: { angle: 60, orb: 6 },
-    square: { angle: 90, orb: 8 },
-    trine: { angle: 120, orb: 8 },
-    opposition: { angle: 180, orb: 8 },
-  };
-  // Minor aspects (tighter orbs; add nuance, don't overwhelm)
-  const minor = {
-    semisextile: { angle: 30, orb: 2.5 },
-    semisquare: { angle: 45, orb: 2 },
-    sesquiquadrate: { angle: 135, orb: 2 },
-    quincunx: { angle: 150, orb: 2.5 },
-  };
-  const aspectOrbs = { ...major, ...minor };
-
-  const planetNames = Object.keys(planets);
-
-  for (let i = 0; i < planetNames.length; i++) {
-    for (let j = i + 1; j < planetNames.length; j++) {
-      const planet1 = planetNames[i];
-      const planet2 = planetNames[j];
-      const angle1 = planets[planet1];
-      const angle2 = planets[planet2];
-
-      let angle = Math.abs(angle1 - angle2);
-      if (angle > 180) {
-        angle = 360 - angle;
-      }
-
-      for (const [aspectName, { angle: targetAngle, orb }] of Object.entries(
-        aspectOrbs,
-      )) {
-        if (Math.abs(angle - targetAngle) <= orb) {
-          aspects.push({
-            planet1,
-            planet2,
-            aspect: aspectName,
-            angle: Math.abs(angle1 - angle2),
-            orb: Math.abs(angle - targetAngle),
-          });
-          break; // one aspect per pair (closest match if multiple)
-        }
-      }
-    }
-  }
-
-  return aspects;
-}
-
-// Calculate birth chart endpoint using AstrologyAPI.com
+// Calculate birth chart (Swiss Ephemeris first; AstrologyAPI.com is the backup)
 app.post("/api/birth-chart", async (req, res) => {
   console.log(
     "Received birth chart request body:",
@@ -310,8 +235,17 @@ app.post("/api/birth-chart", async (req, res) => {
   );
 
   try {
-    const { year, month, day, hour, minute, latitude, longitude, timezone } =
-      req.body;
+    const {
+      year,
+      month,
+      day,
+      hour,
+      minute,
+      latitude,
+      longitude,
+      timezone,
+      asteroids,
+    } = req.body;
 
     // Log parsed values with validation
     const parsedYear = typeof year === "string" ? parseInt(year) : year;
@@ -336,16 +270,6 @@ app.post("/api/birth-chart", async (req, res) => {
       latitude: parsedLat,
       longitude: parsedLon,
       timezone: parsedTz,
-    });
-    console.log("Sending to AstrologyAPI.com:", {
-      day: parseInt(day),
-      month: parseInt(month),
-      year: parseInt(year),
-      hour: parseInt(hour),
-      min: parseInt(minute),
-      lat: parseFloat(latitude),
-      lon: parseFloat(longitude),
-      tzone: parseFloat(timezone || 0),
     });
     console.log("===========================================");
 
@@ -398,273 +322,19 @@ app.post("/api/birth-chart", async (req, res) => {
       });
     }
 
-    // Make API request to AstrologyAPI.com
-    console.log("Making API request to AstrologyAPI.com...");
     try {
-      // First, get planetary positions using the tropical endpoint
-      const planetsResponse = await axios.post(
-        "https://json.astrologyapi.com/v1/planets/tropical",
-        {
-          day: parseInt(day),
-          month: parseInt(month),
-          year: parseInt(year),
-          hour: parseInt(hour),
-          min: parseInt(minute),
-          lat: parseFloat(latitude),
-          lon: parseFloat(longitude),
-          tzone: parseFloat(timezone || 0),
-        },
-        {
-          headers: generateAuth(),
-        },
-      );
+      const birthChart = await calculateNatalChart({
+        year,
+        month,
+        day,
+        hour,
+        minute,
+        latitude,
+        longitude,
+        timezone,
+        asteroids,
+      });
 
-      // Then, get house positions using the tropical endpoint
-      // Note: AstrologyAPI.com defaults to Placidus house system if not specified
-      // To use a different system, add 'house_system' parameter (e.g., 'placidus', 'koch', 'equal', 'whole_signs')
-      const housesResponse = await axios.post(
-        "https://json.astrologyapi.com/v1/house_cusps/tropical",
-        {
-          day: parseInt(day),
-          month: parseInt(month),
-          year: parseInt(year),
-          hour: parseInt(hour),
-          min: parseInt(minute),
-          lat: parseFloat(latitude),
-          lon: parseFloat(longitude),
-          tzone: parseFloat(timezone || 0),
-          house_system: "placidus", // Explicitly specify Placidus (default, but being explicit)
-        },
-        {
-          headers: generateAuth(),
-        },
-      );
-
-      console.log(
-        "Planets API Response:",
-        JSON.stringify(planetsResponse.data, null, 2),
-      );
-      console.log(
-        "Houses API Response:",
-        JSON.stringify(housesResponse.data, null, 2),
-      );
-
-      // Check if API returned an error instead of data
-      if (
-        planetsResponse.data.status === false ||
-        !Array.isArray(planetsResponse.data)
-      ) {
-        throw new Error(
-          `AstrologyAPI.com error: ${
-            planetsResponse.data.msg ||
-            "Invalid API credentials. Please set ASTROLOGY_API_USER_ID and ASTROLOGY_API_KEY in your .env file."
-          }`,
-        );
-      }
-
-      if (housesResponse.data.status === false) {
-        throw new Error(
-          `AstrologyAPI.com error: ${
-            housesResponse.data.msg || "Invalid API credentials"
-          }`,
-        );
-      }
-
-      // Transform the API responses to match our expected format
-      const birthChart = {
-        // Basic birth data
-        birthData: {
-          date: `${year}-${month}-${day}`,
-          time: `${hour}:${minute}`,
-          location: {
-            latitude,
-            longitude,
-            timezone,
-          },
-        },
-        // Angular points
-        angles: {
-          ascendant: {
-            degree: housesResponse.data.ascendant || 0,
-            sign:
-              planetsResponse.data.find((p) => p.name === "Ascendant")?.sign ||
-              "Unknown",
-            element: getElementFromSign(
-              planetsResponse.data.find((p) => p.name === "Ascendant")?.sign,
-            ),
-          },
-          midheaven: {
-            degree: housesResponse.data.midheaven || 0,
-            sign: getSignFromDegree(housesResponse.data.midheaven),
-            element: getElementFromSign(
-              getSignFromDegree(housesResponse.data.midheaven),
-            ),
-          },
-        },
-        // Planetary positions with additional data
-        planets: Object.fromEntries(
-          [
-            "Sun",
-            "Moon",
-            "Mercury",
-            "Venus",
-            "Mars",
-            "Jupiter",
-            "Saturn",
-            "Uranus",
-            "Neptune",
-            "Pluto",
-          ].map((planet) => {
-            const planetData = planetsResponse.data.find(
-              (p) => p.name === planet,
-            );
-            return [
-              planet.toLowerCase(),
-              {
-                degree: planetData?.fullDegree || 0,
-                sign: planetData?.sign || "Unknown",
-                element: getElementFromSign(planetData?.sign),
-                house: planetData?.house || 0,
-                isRetrograde: planetData?.isRetro === "true",
-                speed: planetData?.speed || 0,
-              },
-            ];
-          }),
-        ),
-        // House cusps with signs and elements
-        houses: housesResponse.data.houses.map((house, index) => ({
-          number: index + 1,
-          degree: house.degree,
-          sign: house.sign,
-          element: getElementFromSign(house.sign),
-        })),
-        // Aspects with additional data
-        points: (function optionalPoints() {
-          const nodeNames = [
-            "True Node",
-            "North Node",
-            "Mean Node",
-            "Rahu",
-          ];
-          const node = planetsResponse.data.find((p) =>
-            nodeNames.includes(p.name),
-          );
-          if (!node) return null;
-          return {
-            northNode: {
-              degree: node.fullDegree || 0,
-              sign: node.sign || "Unknown",
-              house: node.house || 0,
-              isRetrograde: node.isRetro === "true",
-            },
-          };
-        })(),
-        aspects: calculateAspects({
-          sun:
-            planetsResponse.data.find((p) => p.name === "Sun")?.fullDegree || 0,
-          moon:
-            planetsResponse.data.find((p) => p.name === "Moon")?.fullDegree ||
-            0,
-          mercury:
-            planetsResponse.data.find((p) => p.name === "Mercury")
-              ?.fullDegree || 0,
-          venus:
-            planetsResponse.data.find((p) => p.name === "Venus")?.fullDegree ||
-            0,
-          mars:
-            planetsResponse.data.find((p) => p.name === "Mars")?.fullDegree ||
-            0,
-          jupiter:
-            planetsResponse.data.find((p) => p.name === "Jupiter")
-              ?.fullDegree || 0,
-          saturn:
-            planetsResponse.data.find((p) => p.name === "Saturn")?.fullDegree ||
-            0,
-          uranus:
-            planetsResponse.data.find((p) => p.name === "Uranus")?.fullDegree ||
-            0,
-          neptune:
-            planetsResponse.data.find((p) => p.name === "Neptune")
-              ?.fullDegree || 0,
-          pluto:
-            planetsResponse.data.find((p) => p.name === "Pluto")?.fullDegree ||
-            0,
-        }).map((aspect) => ({
-          ...aspect,
-          planet1Sign: planetsResponse.data.find(
-            (p) =>
-              p.name ===
-              aspect.planet1.charAt(0).toUpperCase() + aspect.planet1.slice(1),
-          )?.sign,
-          planet2Sign: planetsResponse.data.find(
-            (p) =>
-              p.name ===
-              aspect.planet2.charAt(0).toUpperCase() + aspect.planet2.slice(1),
-          )?.sign,
-          planet1Element: getElementFromSign(
-            planetsResponse.data.find(
-              (p) =>
-                p.name ===
-                aspect.planet1.charAt(0).toUpperCase() +
-                  aspect.planet1.slice(1),
-            )?.sign,
-          ),
-          planet2Element: getElementFromSign(
-            planetsResponse.data.find(
-              (p) =>
-                p.name ===
-                aspect.planet2.charAt(0).toUpperCase() +
-                  aspect.planet2.slice(1),
-            )?.sign,
-          ),
-        })),
-      };
-
-      // Helper function to get element from sign
-      function getElementFromSign(sign) {
-        const elements = {
-          Aries: "Fire",
-          Leo: "Fire",
-          Sagittarius: "Fire",
-          Taurus: "Earth",
-          Virgo: "Earth",
-          Capricorn: "Earth",
-          Gemini: "Air",
-          Libra: "Air",
-          Aquarius: "Air",
-          Cancer: "Water",
-          Scorpio: "Water",
-          Pisces: "Water",
-        };
-        return elements[sign] || "Unknown";
-      }
-
-      // Helper function to get sign from degree
-      function getSignFromDegree(degree) {
-        const signs = [
-          { name: "Aries", start: 0, end: 30 },
-          { name: "Taurus", start: 30, end: 60 },
-          { name: "Gemini", start: 60, end: 90 },
-          { name: "Cancer", start: 90, end: 120 },
-          { name: "Leo", start: 120, end: 150 },
-          { name: "Virgo", start: 150, end: 180 },
-          { name: "Libra", start: 180, end: 210 },
-          { name: "Scorpio", start: 210, end: 240 },
-          { name: "Sagittarius", start: 240, end: 270 },
-          { name: "Capricorn", start: 270, end: 300 },
-          { name: "Aquarius", start: 300, end: 330 },
-          { name: "Pisces", start: 330, end: 360 },
-        ];
-        const normalizedDegree = ((degree % 360) + 360) % 360;
-        const sign = signs.find(
-          (s) => normalizedDegree >= s.start && normalizedDegree < s.end,
-        );
-        return sign ? sign.name : "Unknown";
-      }
-
-      // Log the raw API responses for debugging
-      console.log("Raw Planets Response:", planetsResponse.data);
-      console.log("Raw Houses Response:", housesResponse.data);
       console.log(
         "Transformed birth chart:",
         JSON.stringify(birthChart, null, 2),
@@ -672,7 +342,6 @@ app.post("/api/birth-chart", async (req, res) => {
 
       birthChart.architecture = buildChartArchitecture(birthChart);
 
-      // Generate deterministic interpretation using hardcoded rules
       const deterministicInterpretation =
         generateChartInterpretation(birthChart);
       const interpretationTemplate = formatInterpretationForAI(
@@ -680,38 +349,14 @@ app.post("/api/birth-chart", async (req, res) => {
         birthChart,
       );
 
-      // Add deterministic interpretation to the response
-      const response = {
+      return res.json({
         ...birthChart,
         deterministicInterpretation: deterministicInterpretation,
         interpretationTemplate: interpretationTemplate,
-        // Keep raw interpretation field for backward compatibility, but use deterministic template
         interpretation: interpretationTemplate,
-      };
-
-      // Return the transformed API response
-      return res.json(response);
-    } catch (apiError) {
-      // Log the full error details
-      console.error("Full API Error:", apiError);
-      console.error("API Error Response:", apiError.response?.data);
-      console.error("API Error Status:", apiError.response?.status);
-      console.error("API Error Headers:", apiError.response?.headers);
-      console.error("API Request Details:", {
-        url: "https://json.astrologyapi.com/v1/planets/tropical",
-        body: {
-          day: parseInt(day),
-          month: parseInt(month),
-          year: parseInt(year),
-          hour: parseInt(hour),
-          min: parseInt(minute),
-          lat: parseFloat(latitude),
-          lon: parseFloat(longitude),
-          tzone: parseFloat(timezone || 0),
-        },
       });
-
-      // Return a more detailed error response
+    } catch (apiError) {
+      console.error("Full chart calculation error:", apiError);
       return res.status(500).json({
         error: "Failed to calculate birth chart",
         details: apiError.response?.data?.message || apiError.message,
@@ -721,10 +366,6 @@ app.post("/api/birth-chart", async (req, res) => {
           latitude,
           longitude,
           timezone: timezone || 0,
-        },
-        apiError: {
-          status: apiError.response?.status,
-          data: apiError.response?.data,
         },
       });
     }

@@ -118,23 +118,44 @@ function generateAuth() {
 async function fetchCurrentPlanetaryPositions(date = null) {
   try {
     const targetDate = date ? new Date(date) : new Date();
-    const day = targetDate.getDate();
-    const month = targetDate.getMonth() + 1;
-    const year = targetDate.getFullYear();
-    const hour = targetDate.getHours();
-    const minute = targetDate.getMinutes();
+    const day = targetDate.getUTCDate();
+    const month = targetDate.getUTCMonth() + 1;
+    const year = targetDate.getUTCFullYear();
+    const hour = targetDate.getUTCHours();
+    const minute = targetDate.getUTCMinutes();
 
     // Use a default location (Greenwich, UK) for current transits
-    // In production, you might want to use user's location or a standard location
-    const lat = 51.5074; // London
+    const lat = 51.5074;
     const lon = -0.1278;
-    const tzone = 0; // UTC
+    const tzone = 0;
 
     console.log(
       `[EXTERNAL] Fetching current planetary positions for ${year}-${month}-${day}`
     );
 
-    // Fetch current planetary positions from AstrologyAPI.com
+    try {
+      const {
+        calculateTransitPositionsSwiss,
+      } = require("./swisseph_birth_chart");
+      const swiss = calculateTransitPositionsSwiss({
+        year,
+        month,
+        day,
+        hour,
+        minute,
+        latitude: lat,
+        longitude: lon,
+        timezone: tzone,
+      });
+      console.log("[EXTERNAL] Transit positions from Swiss Ephemeris");
+      return swiss;
+    } catch (swissErr) {
+      console.warn(
+        "[EXTERNAL] Swiss transits failed, using AstrologyAPI.com:",
+        swissErr.message,
+      );
+    }
+
     const response = await axios.post(
       "https://json.astrologyapi.com/v1/planets/tropical",
       {
