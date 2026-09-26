@@ -23,6 +23,8 @@ function isFactualQuestion(message) {
     /(conjunction|square|trine|opposition|sextile) (with|to|between)/i,
     /is (retrograde|direct)/i,
     /what (degree|degrees) (is|are)/i,
+    /what is my (sun|moon|rising|ascendant)/i,
+    /what sign is my (sun|moon|rising|ascendant|mercury|venus|mars)/i,
   ];
 
   return factualPatterns.some((pattern) => pattern.test(lowerMessage));
@@ -128,9 +130,9 @@ function answerFactualQuestion(message, birthChart) {
     }
   }
 
-  // What sign is a planet in
+  // What sign is a planet in (also "what sign is my sun", "what is my sun sign")
   const planetSignPattern =
-    /(sun|moon|mercury|venus|mars|jupiter|saturn|uranus|neptune|pluto) (is|in|sign)/i;
+    /(sun|moon|mercury|venus|mars|jupiter|saturn|uranus|neptune|pluto) (is|in|sign)|what sign is (my |the )?(sun|moon|mercury|venus|mars|jupiter|saturn|uranus|neptune|pluto)|what is my (sun|moon|mercury|venus|mars|jupiter|saturn|uranus|neptune|pluto) sign/i;
   if (planetSignPattern.test(message)) {
     const match = message.match(
       /(sun|moon|mercury|venus|mars|jupiter|saturn|uranus|neptune|pluto)/i
@@ -187,7 +189,10 @@ function answerFactualQuestion(message, birthChart) {
   }
 
   // What sign is the ascendant/midheaven in
-  if (/(ascendant|asc) (is|in|sign)/i.test(message)) {
+  if (
+    /(ascendant|asc|rising) (is|in|sign)/i.test(message) ||
+    /what (sign is my|is my) (rising|ascendant)/i.test(message)
+  ) {
     const asc = birthChart.angles?.ascendant;
     if (asc) {
       return `Your Ascendant is in ${asc.sign} at ${asc.degree.toFixed(2)}°.`;

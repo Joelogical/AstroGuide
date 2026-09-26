@@ -441,27 +441,27 @@
       }
       .user-message.user-send-slam {
         backface-visibility: hidden;
-        animation: user-send-slam 0.7s cubic-bezier(0.16, 0.84, 0.28, 1) both;
+        animation: user-send-slam 0.78s cubic-bezier(0.16, 0.84, 0.28, 1) both;
       }
       @keyframes user-send-slam {
         0% {
-          transform: translate3d(0, -27.7px, 0) scale(1.0495);
-          opacity: 0.21;
-          box-shadow: 0 18px 26px rgba(37, 99, 235, 0);
+          transform: translate3d(0, -35.6px, 0) scale(1.079);
+          opacity: 0.257;
+          box-shadow: 0 20px 28px rgba(37, 99, 235, 0);
         }
-        28% {
+        26% {
           opacity: 1;
         }
-        52% {
-          transform: translate3d(0, 5.9px, 0) scale(1.059, 0.901);
-          box-shadow: 0 8px 16px rgba(37, 99, 235, 0.277);
+        50% {
+          transform: translate3d(0, 7.9px, 0) scale(1.079, 0.861);
+          box-shadow: 0 10px 18px rgba(37, 99, 235, 0.317);
         }
-        70% {
-          transform: translate3d(0, -4px, 0) scale(0.9802, 1.0396);
-          box-shadow: 0 4px 12px rgba(37, 99, 235, 0.158);
+        68% {
+          transform: translate3d(0, -5px, 0) scale(0.9703, 1.0495);
+          box-shadow: 0 5px 12px rgba(37, 99, 235, 0.178);
         }
-        86% {
-          transform: translate3d(0, 1.5px, 0) scale(1.0099, 0.995);
+        84% {
+          transform: translate3d(0, 2px, 0) scale(1.0149, 0.992);
           box-shadow: 0 2px 8px rgba(37, 99, 235, 0.079);
         }
         100% {
@@ -1470,6 +1470,9 @@
         min-height: 50px;
         position: relative;
       }
+      .spinner-container.spinner-hidden {
+        opacity: 0;
+      }
       .spinner-container.spinner-enter {
         opacity: 0;
         animation: spinner-fade-in 0.65s ease-out forwards;
@@ -1537,9 +1540,16 @@
       const sendButton = document.getElementById("send-button");
       const chatMessages = document.getElementById("chat-messages");
       const CHIP_REVEAL_DELAY_MS = 2800;
-      const CHIP_SLAM_MS = 780;
-      const USER_SEND_SLAM_MS = 700;
-      const CHIP_SLAM_SETTLE_MS = 220;
+      const SEND_SLAM_MS = 780;
+      const SEND_SLAM_SETTLE_MS = 220;
+      const SEND_EASE_MS = 1400;
+      const FACTUAL_PAUSE_MS = 350;
+
+      function looksFactualQuestion(s) {
+        return /what (sign|house|element|degree)|which (sign|house|planet)|how many|where is my|what is my (sun|moon|rising|ascendant|mercury|venus|mars)|is my (sun|moon|mercury|venus|mars|jupiter|saturn)|what house is|what sign is/i.test(
+          String(s || ""),
+        );
+      }
       let pendingChipTimer = null;
       let pendingChipEaseTimer = null;
       let pendingChipScrollHandler = null;
@@ -1547,6 +1557,7 @@
       let pendingTrimAfterScroll = false;
       let sendMotionWaiters = [];
       let spinnerWanted = false;
+      let sendMotionPending = false;
       if (chatMessages) {
         chatMessages.addEventListener("wheel", function () {
           cancelFeedScrollAnim();
@@ -1908,7 +1919,11 @@
             delay: 0,
           });
         }
-        container.scrollTop = container.scrollHeight;
+        if (container.scrollHeight > container.clientHeight + 1) {
+          container.scrollTop = container.scrollHeight;
+        } else {
+          container.scrollTop = 0;
+        }
       }
 
       function switchToProfile(profileId) {
@@ -2492,8 +2507,12 @@
         });
       }
 
+      function beginSendMotion() {
+        sendMotionPending = true;
+      }
+
       function whenSendMotionDone(fn) {
-        if (!pendingChipEaseTimer && !feedScrollAnim) {
+        if (!sendMotionPending && !pendingChipEaseTimer && !feedScrollAnim) {
           fn();
           return;
         }
@@ -2507,14 +2526,46 @@
         );
       }
 
-      function animateFeedScrollTo(targetTop, durationMs) {
-        animateScrollerTo(chatMessages, targetTop, durationMs);
+      function chatViewRect() {
+        if (!chatMessages) return null;
+        const c = chatMessages.getBoundingClientRect();
+        if (chatFeedIsScrollport()) {
+          return { top: c.top, bottom: c.bottom, height: c.height };
+        }
+        const input = document.querySelector(".input-container");
+        const inputTop = input
+          ? input.getBoundingClientRect().top
+          : window.innerHeight;
+        const top = Math.max(c.top, 0);
+        const bottom = Math.min(c.bottom, inputTop, window.innerHeight);
+        return { top, bottom, height: Math.max(0, bottom - top) };
       }
 
-      function animateScrollerTo(scroller, targetTop, durationMs) {
+      function isFullyInChatView(el, pad) {
+        const view = chatViewRect();
+        if (!view || !el) return true;
+        const p = pad == null ? 8 : pad;
+        const r = el.getBoundingClientRect();
+        return r.top >= view.top - 2 && r.bottom <= view.bottom + p;
+      }
+
+      function chatViewHasUnusedRoom() {
+        const view = chatViewRect();
+        if (!view || !chatMessages) return true;
+        const last = chatMessages.lastElementChild;
+        if (!last) return true;
+        return last.getBoundingClientRect().bottom < view.bottom - 16;
+      }
+
+      function animateFeedScrollTo(targetTop, durationMs, onDone) {
+        animateScrollerTo(chatMessages, targetTop, durationMs, onDone);
+      }
+
+      function animateScrollerTo(scroller, targetTop, durationMs, onDone) {
         function done() {
           finishFeedScrollAnim();
           flushSendMotionWaiters();
+          if (typeof onDone === "function") onDone();
         }
         if (!scroller) {
           done();
@@ -2589,12 +2640,22 @@
         });
       }
 
-      function easePromptToTop(el, durationMs) {
+      function easePromptToTop(el, durationMs, onDone) {
+        function finish() {
+          if (typeof onDone === "function") onDone();
+        }
         if (!el) {
           flushSendMotionWaiters();
+          finish();
+          return;
+        }
+        if (chatViewHasUnusedRoom()) {
+          finish();
           return;
         }
         const dur = durationMs || 2000;
+        const view = chatViewRect();
+        const destTop = view ? view.top + 8 : 12;
         if (chatMessages && chatFeedIsScrollport()) {
           void chatMessages.offsetHeight;
           const padTop =
@@ -2608,66 +2669,129 @@
             0,
             chatMessages.scrollHeight - chatMessages.clientHeight,
           );
-          if (want > maxScroll) {
-            const h0 = chatMessages.clientHeight;
-            chatMessages.style.paddingBottom = want - maxScroll + "px";
-            void chatMessages.offsetHeight;
-            if (chatMessages.clientHeight > h0 + 1) {
-              chatMessages.style.paddingBottom = "";
-            } else {
-              animateFeedScrollTo(want, dur);
-              return;
-            }
-          } else {
-            animateFeedScrollTo(want, dur);
+          if (want <= maxScroll) {
+            animateFeedScrollTo(want, dur, onDone);
             return;
           }
+          finish();
+          return;
         }
+        const delta = el.getBoundingClientRect().top - destTop;
+        if (Math.abs(delta) < 2) {
+          finish();
+          return;
+        }
+        const maxY = Math.max(
+          0,
+          document.documentElement.scrollHeight - window.innerHeight,
+        );
         const target = Math.max(
           0,
-          window.scrollY + el.getBoundingClientRect().top - 12,
+          Math.min(maxY, window.scrollY + delta),
         );
-        animateScrollerTo(window, target, dur);
+        if (Math.abs(target - window.scrollY) < 2) {
+          finish();
+          return;
+        }
+        animateScrollerTo(window, target, dur, onDone);
       }
 
       function ensureElementVisible(el, opts) {
-        if (!el) return;
+        if (!el) {
+          if (opts && opts.onDone) opts.onDone();
+          return;
+        }
         const pad = 12;
+        const view = chatViewRect();
+        if (!view) {
+          if (opts && opts.onDone) opts.onDone();
+          return;
+        }
+        void (chatMessages && chatMessages.offsetHeight);
+        const eRect = el.getBoundingClientRect();
+        let delta = 0;
+        if (eRect.bottom > view.bottom - pad) {
+          delta = eRect.bottom - view.bottom + pad;
+        } else if (eRect.top < view.top + pad) {
+          delta = -(view.top + pad - eRect.top);
+        }
+        if (!delta) {
+          if (opts && opts.onDone) opts.onDone();
+          return;
+        }
         if (!chatFeedIsScrollport()) {
-          const eRect = el.getBoundingClientRect();
-          let delta = 0;
-          if (eRect.bottom > window.innerHeight - pad) {
-            delta = eRect.bottom - window.innerHeight + pad;
-          } else if (eRect.top < pad) {
-            delta = eRect.top - pad;
-          }
-          if (!delta) return;
           const target = window.scrollY + delta;
           if (opts && opts.smooth) {
-            animateScrollerTo(window, target, opts.duration || 2000);
+            animateScrollerTo(
+              window,
+              target,
+              opts.duration || 2000,
+              opts.onDone,
+            );
           } else {
             window.scrollTo(0, target);
+            if (opts && opts.onDone) opts.onDone();
           }
           return;
         }
-        void chatMessages.offsetHeight;
-        const cRect = chatMessages.getBoundingClientRect();
-        const eRect = el.getBoundingClientRect();
-        let delta = 0;
-        if (eRect.bottom > cRect.bottom - pad) {
-          delta = eRect.bottom - cRect.bottom + pad;
-        } else if (eRect.top < cRect.top + pad) {
-          delta = -(cRect.top + pad - eRect.top);
-        }
-        if (!delta) return;
         if (opts && opts.smooth) {
           animateFeedScrollTo(
             chatMessages.scrollTop + delta,
             opts.duration || 2000,
+            opts.onDone,
           );
         } else {
           chatMessages.scrollTop += delta;
+          if (opts && opts.onDone) opts.onDone();
         }
+      }
+
+      function afterSendMotion(easeEl) {
+        function finish() {
+          sendMotionPending = false;
+          flushSendMotionWaiters();
+        }
+        if (!easeEl) {
+          finish();
+          return;
+        }
+        if (chatViewHasUnusedRoom()) {
+          finish();
+          return;
+        }
+        easePromptToTop(easeEl, SEND_EASE_MS, finish);
+      }
+
+      function startOutgoingSend(easeEl, animEl, slamClass, slamName) {
+        if (!easeEl || !animEl) return;
+        void (chatMessages && chatMessages.offsetHeight);
+        beginSendMotion();
+        if (!isFullyInChatView(easeEl, 8)) {
+          ensureElementVisible(easeEl);
+        }
+        animEl.classList.add(slamClass);
+        easeAfterSendSlam(animEl, easeEl, slamClass, slamName, SEND_SLAM_MS);
+      }
+
+      function maybeScrollForBotReply(botEl) {
+        if (!botEl) {
+          flushSendMotionWaiters();
+          return;
+        }
+        void (chatMessages && chatMessages.offsetHeight);
+        const view = chatViewRect();
+        const botH = botEl.getBoundingClientRect().height;
+        if (view && botH > view.height - 16) {
+          const prompt = getLastUserBubble();
+          if (prompt) easePromptToTop(prompt, 2000);
+          else ensureElementVisible(botEl, { smooth: true, duration: 2000 });
+          return;
+        }
+        if (!isFullyInChatView(botEl, 8)) {
+          ensureElementVisible(botEl, { smooth: true, duration: 1400 });
+          return;
+        }
+        flushSendMotionWaiters();
       }
 
       function getLastUserBubble() {
@@ -2689,8 +2813,8 @@
           if (animClass) animEl.classList.remove(animClass);
           pendingChipEaseTimer = setTimeout(function () {
             pendingChipEaseTimer = null;
-            easePromptToTop(easeEl, 2000);
-          }, CHIP_SLAM_SETTLE_MS);
+            afterSendMotion(easeEl);
+          }, SEND_SLAM_SETTLE_MS);
         }
         animEl.addEventListener(
           "animationend",
@@ -2719,16 +2843,7 @@
         chip.textContent = String(text || "").trim();
         row.appendChild(chip);
         chatMessages.appendChild(row);
-        void chatMessages.offsetHeight;
-        ensureElementVisible(row);
-        chip.classList.add("chip-slam");
-        easeAfterSendSlam(
-          chip,
-          row,
-          "chip-slam",
-          "follow-up-chip-slam",
-          CHIP_SLAM_MS,
-        );
+        startOutgoingSend(row, chip, "chip-slam", "follow-up-chip-slam");
       }
 
       function addMessage(message, isUser = false, fromQueue = false) {
@@ -2740,15 +2855,11 @@
             console.log("[MESSAGE] Adding user message:", message);
             messageDiv.textContent = message;
             chatMessages.appendChild(messageDiv);
-            void chatMessages.offsetHeight;
-            ensureElementVisible(messageDiv);
-            messageDiv.classList.add("user-send-slam");
-            easeAfterSendSlam(
+            startOutgoingSend(
               messageDiv,
               messageDiv,
               "user-send-slam",
               "user-send-slam",
-              USER_SEND_SLAM_MS,
             );
             resolve();
           } else {
@@ -2762,6 +2873,9 @@
             messageDiv.appendChild(p);
             messageDiv.classList.remove("typing");
             scheduleTrimChatFeedPadding();
+            requestAnimationFrame(function () {
+              maybeScrollForBotReply(messageDiv);
+            });
 
             setTimeout(() => {
               resolve();
@@ -2783,6 +2897,7 @@
           chatMessages.style.paddingBottom = "";
           pendingTrimAfterScroll = false;
           spinnerWanted = false;
+          sendMotionPending = false;
           sendMotionWaiters = [];
           if (pendingChipEaseTimer) {
             clearTimeout(pendingChipEaseTimer);
@@ -2861,15 +2976,26 @@
           // Handle questions about the birth chart
           // (birthChartData is either already loaded or was just loaded above)
           if (birthChartData) {
-            console.log("[SPINNER] Showing spinner for chat follow-up");
-            showSpinner();
+            const treatAsFactual = looksFactualQuestion(message);
+            let factualSpinnerTimer = null;
+            if (!treatAsFactual) {
+              console.log("[SPINNER] Showing spinner for chat follow-up");
+              showSpinner();
+            } else {
+              factualSpinnerTimer = setTimeout(function () {
+                factualSpinnerTimer = null;
+                showSpinner();
+              }, 700);
+            }
+            const sentAt = performance.now();
             // Get conversation history for the active profile
             let conversationHistory = getActiveProfileConversation().slice();
 
             // If user is repeating a prompt/topic, show a brief "thinking" cue (deeper answer + more specific sources)
             function isRepeatPrompt(currentMsg, history) {
-              const text = String(currentMsg || "").toLowerCase();
-              if (text.length < 8) return false;
+              const text = String(currentMsg || "").toLowerCase().trim();
+              if (text.length < 40) return false;
+              if (looksFactualQuestion(text)) return false;
               const stop = new Set([
                 "the",
                 "a",
@@ -2933,21 +3059,24 @@
                 return union ? inter / union : 0;
               }
               const curTok = tokens(text);
+              if (curTok.length < 4) return false;
               const recentUser = (history || [])
                 .filter((m) => m && m.role === "user" && m.content)
                 .slice(-8);
               for (const m of recentUser) {
-                const prev = String(m.content || "").toLowerCase();
+                const prev = String(m.content || "").toLowerCase().trim();
                 if (!prev) continue;
                 if (prev === text) return true;
                 if (
-                  prev.length > 0 &&
+                  prev.length > 40 &&
                   (prev.includes(text) || text.includes(prev)) &&
-                  Math.min(prev.length, text.length) > 18
+                  Math.min(prev.length, text.length) > 40
                 )
                   return true;
-                const sim = jaccard(curTok, tokens(prev));
-                if (sim >= 0.45) return true;
+                const prevTok = tokens(prev);
+                if (prevTok.length < 4) continue;
+                const sim = jaccard(curTok, prevTok);
+                if (sim >= 0.72) return true;
               }
               return false;
             }
@@ -2991,6 +3120,10 @@
               });
 
               const data = await response.json().catch(() => ({}));
+              if (factualSpinnerTimer) {
+                clearTimeout(factualSpinnerTimer);
+                factualSpinnerTimer = null;
+              }
               console.log("[API] Received chat response:", data);
               if (data.memoryUpdate) {
                 mergeMemoryUpdate(data.memoryUpdate);
@@ -3063,6 +3196,17 @@
               // Save the updated conversation history to the active profile
               saveActiveProfileConversation(conversationHistory);
 
+              if (data.isFactual || treatAsFactual) {
+                const wait = Math.max(
+                  0,
+                  FACTUAL_PAUSE_MS - (performance.now() - sentAt),
+                );
+                if (wait) {
+                  await new Promise(function (resolve) {
+                    setTimeout(resolve, wait);
+                  });
+                }
+              }
               await queueBotMessage(data.response);
               const followUps =
                 Array.isArray(data.followUpSuggestions) &&
@@ -3081,6 +3225,10 @@
                   : "I'm having trouble processing your question right now. Could you try rephrasing it?",
               );
             } finally {
+              if (factualSpinnerTimer) {
+                clearTimeout(factualSpinnerTimer);
+                factualSpinnerTimer = null;
+              }
               console.log("[SPINNER] Hiding spinner after chat follow-up");
               hideSpinner();
             }
@@ -6131,11 +6279,24 @@
         });
       }
 
+      function revealSpinnerEl(el) {
+        if (!el || !spinnerWanted) return;
+        el.classList.remove("spinner-hidden");
+        el.classList.add("spinner-enter");
+      }
+
       function mountSpinner() {
         if (!chatMessages || !spinnerWanted) return;
-        removeSpinnerEl();
+        if (document.querySelector(".spinner-container")) return;
+        if (sendMotionPending || pendingChipEaseTimer || feedScrollAnim) {
+          whenSendMotionDone(function () {
+            if (!spinnerWanted) return;
+            mountSpinner();
+          });
+          return;
+        }
         const spinnerContainer = document.createElement("div");
-        spinnerContainer.className = "spinner-container spinner-enter";
+        spinnerContainer.className = "spinner-container spinner-hidden";
         const spinner = document.createElement("div");
         spinner.className = "spinner";
         const typingIndicator = document.createElement("div");
@@ -6144,6 +6305,15 @@
         spinnerContainer.appendChild(spinner);
         spinnerContainer.appendChild(typingIndicator);
         chatMessages.appendChild(spinnerContainer);
+        void chatMessages.offsetHeight;
+        ensureElementVisible(spinnerContainer, {
+          smooth: true,
+          duration: 1400,
+          onDone: function () {
+            revealSpinnerEl(spinnerContainer);
+            sendMotionPending = false;
+          },
+        });
       }
 
       function showSpinner() {

@@ -38,6 +38,7 @@ const {
   composeSystemContent,
 } = require("./prompt_layers");
 const { generateFollowUpSuggestionsLLM } = require("./followup_suggestions");
+const { isGibberishPrompt, gibberishReply } = require("./gibberish_prompt");
 const { handleQuestion } = require("./enhanced_question_handler");
 const {
   buildChartArchitecture,
@@ -1045,6 +1046,29 @@ app.post("/api/chat", (req, res) => {
         });
       }
 
+      if (isGibberishPrompt(message)) {
+        console.log("[CHAT] Gibberish prompt — instant reply");
+        return res.json({
+          response: gibberishReply(),
+          followUpSuggestions: [],
+          followUpQuestion: null,
+          isGibberish: true,
+        });
+      }
+
+      if (isFactualQuestion(message)) {
+        const factualAnswer = answerFactualQuestion(message, birthChart);
+        if (factualAnswer) {
+          console.log("[FACTUAL] Answered factual question deterministically");
+          return res.json({
+            response: factualAnswer,
+            isFactual: true,
+            followUpSuggestions: [],
+            followUpQuestion: null,
+          });
+        }
+      }
+
       // ⚠️ CHECK FOR GENERAL ASTROLOGY QUESTIONS FIRST (before any chart processing)
       // This ensures we handle general questions without any chart context
       const lowerMessage = message.toLowerCase().trim();
@@ -1243,41 +1267,6 @@ app.post("/api/chat", (req, res) => {
 
       // Note: General question check already happened above at the start of the function
       // If we reach here, it's not a general question, so process as chart question
-
-      // Check if this is a factual question that can be answered deterministically
-      if (isFactualQuestion(message)) {
-        const factualAnswer = answerFactualQuestion(message, birthChart);
-        if (factualAnswer) {
-          console.log("[FACTUAL] Answered factual question deterministically");
-          let followUpSuggestions = [];
-          try {
-            followUpSuggestions = await generateFollowUpSuggestionsLLM(
-              openai,
-              {
-                userMessage: message,
-                assistantResponse: factualAnswer,
-                birthChart,
-                chartSummary,
-                conversationHistory,
-                isGeneralQuestion: false,
-                lastMode: "chart",
-              },
-            );
-          } catch (fuErr) {
-            console.warn(
-              "[CHAT] Follow-up suggestions (factual) failed:",
-              fuErr.message,
-            );
-          }
-          return res.json({
-            response: factualAnswer,
-            isFactual: true,
-            followUpSuggestions,
-            followUpQuestion: followUpSuggestions[0] || null,
-          });
-        }
-        // If it matched a pattern but couldn't answer, fall through to AI
-      }
 
       stage = "after-interpretation";
 
@@ -1550,8 +1539,15 @@ app.post("/api/chat", (req, res) => {
       // Add the current message with a format reminder so every turn enforces prose-only and web use (avoids checklist slip on follow-ups)
       // Detect repeated prompts so the model deepens instead of repeating basics (topic-agnostic)
       function isRepeatPrompt(currentMsg, history) {
-        const text = String(currentMsg || "").toLowerCase();
-        if (text.length < 8) return false;
+        const text = String(currentMsg || "").toLowerCase().trim();
+        if (text.length < 40) return false;
+        if (
+          /what (sign|house|element|degree)|which (sign|house|planet)|how many|where is my|what is my (sun|moon|rising|ascendant)|what house is|what sign is/i.test(
+            text,
+          )
+        ) {
+          return false;
+        }
         const stop = new Set([
           "the",
           "a",
@@ -1615,20 +1611,24 @@ app.post("/api/chat", (req, res) => {
           return union ? inter / union : 0;
         }
         const curTok = tokens(text);
+        if (curTok.length < 4) return false;
         const recentUser = (history || [])
           .filter((m) => m && m.role === "user" && m.content)
           .slice(-10);
         for (const m of recentUser) {
-          const prev = String(m.content || "").toLowerCase();
+          const prev = String(m.content || "").toLowerCase().trim();
           if (!prev) continue;
           if (prev === text) return true;
           if (
+            prev.length > 40 &&
             (prev.includes(text) || text.includes(prev)) &&
-            Math.min(prev.length, text.length) > 18
+            Math.min(prev.length, text.length) > 40
           )
             return true;
-          const sim = jaccard(curTok, tokens(prev));
-          if (sim >= 0.45) return true;
+          const prevTok = tokens(prev);
+          if (prevTok.length < 4) continue;
+          const sim = jaccard(curTok, prevTok);
+          if (sim >= 0.72) return true;
         }
         return false;
       }
