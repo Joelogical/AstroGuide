@@ -4,6 +4,14 @@
  */
 
 const { getPromptSection } = require("./prompt_loader");
+const { isFactualQuestion } = require("./factual_questions");
+
+const PLANET_WORD =
+  "sun|moon|mercury|venus|mars|jupiter|saturn|uranus|neptune|pluto|chiron|ceres|pallas|juno|vesta";
+const SIGN_WORD =
+  "aries|taurus|gemini|cancer|leo|virgo|libra|scorpio|sagittarius|capricorn|aquarius|pisces";
+const OUTER_PLANETS = { uranus: true, neptune: true, pluto: true };
+const MAJOR_IMPORTANCE = 4;
 
 function normalizeAsk(message) {
   return String(message || "")
@@ -17,13 +25,41 @@ function normalizeAsk(message) {
     .replace(/^(can you|could you|would you)\s+/, "");
 }
 
-/**
- * Short umbrella chart questions, including ones under 40 characters.
- * Not a life-area question and not a factual lookup.
- */
-function isBroadChartAnalysisPrompt(message) {
+function hasExplicitAnalyticalTarget(message) {
   const t = normalizeAsk(message);
   if (!t) return false;
+  if (new RegExp("\\b(" + PLANET_WORD + ")\\b").test(t)) return true;
+  if (new RegExp("\\b(" + SIGN_WORD + ")\\b").test(t)) return true;
+  if (
+    /\b(ascendant|midheaven|descendant|imum coeli|rising|houses?|\d+(?:st|nd|rd|th)\s+house|house\s+\d+)\b/.test(
+      t,
+    )
+  ) {
+    return true;
+  }
+  if (
+    /\b(conjunctions?|conjunct|squares?|trines?|oppositions?|sextiles?|quincunxes?|aspects?|orbs?|degrees?|retrograde)\b/.test(
+      t,
+    )
+  ) {
+    return true;
+  }
+  if (/\b(t-?squares?|grand trines?|yods?|kites?|stelliums?)\b/.test(t)) {
+    return true;
+  }
+  if (
+    /\b(career|job|work|relationships?|love|money|finances?|family|home|friends?|health|purpose)\b/.test(
+      t,
+    )
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function isExplicitBroadChartPrompt(message) {
+  const t = normalizeAsk(message);
+  if (!t || hasExplicitAnalyticalTarget(t)) return false;
   if (
     /^(tell me about|analyze|analyse|read|interpret|walk me through)( my| the| this)?( birth)? chart$/.test(
       t,
@@ -31,11 +67,10 @@ function isBroadChartAnalysisPrompt(message) {
   ) {
     return true;
   }
-  if (
-    /^what stands out( in| about)?( my| the| this)?( birth)?( chart)?$/.test(t)
-  ) {
+  if (/^what stands out( in| about)?( my| the| this)?( birth)? chart$/.test(t)) {
     return true;
   }
+  if (/^what stands out$/.test(t)) return true;
   if (
     /^what(?:'s| is) interesting( about)?( my| the| this)?( birth)?( chart)?$/.test(
       t,
@@ -53,8 +88,114 @@ function isBroadChartAnalysisPrompt(message) {
   return false;
 }
 
-function isChartAnalysisQuestion(message) {
-  if (isBroadChartAnalysisPrompt(message)) return true;
+function isOpenContinuation(message) {
+  const t = normalizeAsk(message);
+  if (!t || hasExplicitAnalyticalTarget(t) || isFactualQuestion(t)) return false;
+  return /^(tell me more|say more|go deeper|go on|keep going|what else stands out|what else do you see|what else|anything else|and)$/.test(
+    t,
+  );
+}
+
+function isInherentChartAnalysisQuestion(message) {
+  if (isFactualQuestion(message)) return false;
+  if (
+    hasExplicitAnalyticalTarget(message) &&
+    !isExplicitBroadChartPrompt(message)
+  ) {
+    return false;
+  }
+  if (isExplicitBroadChartPrompt(message)) return true;
+  const t = String(message || "").toLowerCase().trim();
+  if (!t) return false;
+  if (
+    /\b(analyze|analyse|interpret(ing)?)\s+(my |the |this )?(birth )?chart\b/.test(
+      t,
+    )
+  ) {
+    return true;
+  }
+  if (/\btell me about (my |the |this )?(birth )?chart\b/.test(t)) return true;
+  if (/\bwalk (me )?through (my |the |this )?(birth )?chart\b/.test(t)) {
+    return true;
+  }
+  if (/\bread (my |the |this )?(birth )?chart\b/.test(t)) return true;
+  if (/\bchart architecture\b/.test(t)) return true;
+  if (/\bwhat stands out\b/.test(t) && /\bchart\b/.test(t) && !/\belse\b/.test(t)) {
+    return true;
+  }
+  if (/\bwhat('s| is) interesting about (my |the |this )?chart\b/.test(t)) {
+    return true;
+  }
+  if (
+    /\bdominant (features|themes|patterns|factors|structures)\b/.test(t) &&
+    /\bchart\b/.test(t)
+  ) {
+    return true;
+  }
+  if (
+    /\b(what )?(patterns|configurations|structures) (are )?(present|in|showing)\b/.test(
+      t,
+    ) &&
+    /\bchart\b/.test(t)
+  ) {
+    return true;
+  }
+  if (/\btechnically significant\b/.test(t) && /\bchart\b/.test(t)) return true;
+  if (
+    /\bwhat('s| is) (in|going on in|happening (in|astrologically in)) (my |the |this )?(birth )?chart\b/.test(
+      t,
+    )
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function contextIsChartAnalysis(history) {
+  const users = (history || []).filter(function (message) {
+    return message && message.role === "user" && message.content;
+  });
+  for (let i = users.length - 1; i >= 0; i--) {
+    const text = users[i].content;
+    if (isFactualQuestion(text)) return false;
+    if (isOpenContinuation(text)) continue;
+    if (
+      hasExplicitAnalyticalTarget(text) &&
+      !isExplicitBroadChartPrompt(text)
+    ) {
+      return false;
+    }
+    return isInherentChartAnalysisQuestion(text);
+  }
+  return false;
+}
+
+/**
+ * Broad chart questions, including short ones and vague continuations.
+ * A continuation inherits CHART_ANALYSIS only from preceding chart-analysis context.
+ * An explicit planet, aspect, house, or life-area target is not broad.
+ */
+function isBroadChartAnalysisPrompt(message, history) {
+  if (isFactualQuestion(message)) return false;
+  if (
+    hasExplicitAnalyticalTarget(message) &&
+    !isExplicitBroadChartPrompt(message)
+  ) {
+    return false;
+  }
+  if (isExplicitBroadChartPrompt(message)) return true;
+  return isOpenContinuation(message) && contextIsChartAnalysis(history);
+}
+
+function isChartAnalysisQuestion(message, history) {
+  if (isFactualQuestion(message)) return false;
+  if (
+    hasExplicitAnalyticalTarget(message) &&
+    !isExplicitBroadChartPrompt(message)
+  ) {
+    return false;
+  }
+  if (isBroadChartAnalysisPrompt(message, history)) return true;
   const t = String(message || "").toLowerCase().trim();
   if (!t) return false;
   if (
@@ -108,10 +249,16 @@ function getChartAnalysisRules(preferredMode, progression) {
       "chart-analysis.md",
       advanced ? "advanced" : "beginner",
     );
-  if (progression && progression.phase === "progression") {
+  if (progression && progression.phase === "breadth") {
     text +=
       "\n\n" +
       getPromptSection("chart-analysis.md", "progression") +
+      "\n\n" +
+      String(progression.directive || "");
+  } else if (progression && progression.phase === "integration") {
+    text +=
+      "\n\n" +
+      getPromptSection("chart-analysis.md", "integration") +
       "\n\n" +
       String(progression.directive || "");
   } else if (progression && progression.phase === "overview") {
@@ -328,48 +475,299 @@ function historyBeforeCurrentTurn(currentMsg, history) {
   return items;
 }
 
-function historyCorpus(history) {
-  return (history || [])
-    .map(function (message) {
-      return message && message.content ? String(message.content) : "";
-    })
-    .join("\n");
+function allowedPlanet(arch, name) {
+  const key = String(name || "").toLowerCase();
+  if (!key) return false;
+  if (arch && arch.chartSystem === "traditional" && OUTER_PLANETS[key]) {
+    return false;
+  }
+  return true;
 }
 
-function coverageHits(text, cues) {
-  let distinct = 0;
-  let total = 0;
-  cues.forEach(function (re) {
-    const flags = re.flags.indexOf("g") === -1 ? re.flags + "g" : re.flags;
-    const matches = String(text || "").match(new RegExp(re.source, flags));
-    if (matches && matches.length) {
-      distinct += 1;
-      total += matches.length;
+function timeKnown(arch) {
+  return !!(arch && arch.ok && !arch.unknownBirthTime);
+}
+
+function dominants(arch) {
+  return ((arch && arch.dominantPlanets) || []).filter(function (item) {
+    return item && allowedPlanet(arch, item.planet);
+  });
+}
+
+function configList(arch) {
+  const cfg = (arch && arch.configurations) || {};
+  return ["tSquares", "grandTrines", "kites", "yods"].reduce(function (all, key) {
+    return all.concat(cfg[key] || []);
+  }, []);
+}
+
+function lensImportance(id, arch) {
+  if (!arch || !arch.ok) return 0;
+  const tops = dominants(arch).slice(0, 3);
+  const topNames = tops.map(function (item) {
+    return item.planet;
+  });
+  const conditions = arch.planetConditions || {};
+  if (id === "configurations") return configList(arch).length ? 8 : 0;
+  if (id === "rulership_chains") {
+    const disp = arch.dispositors || {};
+    const hubs = (disp.hubs || []).filter(function (hub) {
+      return hub && allowedPlanet(arch, hub.planet) && Number(hub.count) >= 3;
+    });
+    let score = 0;
+    if (
+      disp.finalDispositor &&
+      allowedPlanet(arch, disp.finalDispositor) &&
+      topNames.indexOf(disp.finalDispositor) !== -1
+    ) {
+      score += 6;
+    }
+    if (hubs.length) score += 4;
+    return score;
+  }
+  if (id === "aspect_topology") {
+    const networked = (
+      (arch.network && arch.network.mostNetworked) ||
+      []
+    ).filter(function (item) {
+      return item && allowedPlanet(arch, item.planet);
+    });
+    let score = 0;
+    networked.forEach(function (item) {
+      if (Number(item.count) >= 5) score += 6;
+      else if (Number(item.count) >= 4) score += 4;
+    });
+    let tight = 0;
+    (arch.aspectsAnnotated || []).forEach(function (aspect) {
+      if (!aspect || !aspect.major || Number(aspect.orb) > 2) return;
+      if (
+        !allowedPlanet(arch, aspect.planet1) ||
+        !allowedPlanet(arch, aspect.planet2)
+      ) {
+        return;
+      }
+      tight += 1;
+    });
+    if (tight >= 2) score += 4;
+    return score;
+  }
+  if (id === "house_axes") {
+    if (!timeKnown(arch)) return 0;
+    const angularHouse = { 1: true, 4: true, 7: true, 10: true };
+    let score = 0;
+    ((arch.stelliums && arch.stelliums.houses) || []).forEach(function (item) {
+      if (item && angularHouse[item.house]) score += 5;
+    });
+    return score;
+  }
+  if (id === "angular_structure") {
+    if (!timeKnown(arch)) return 0;
+    let score = 0;
+    const angles = arch.angleAspects || [];
+    if (angles.length) score += 4;
+    if (
+      angles.some(function (aspect) {
+        return aspect && Number(aspect.orb) <= 3;
+      })
+    ) {
+      score += 2;
+    }
+    const angularDominant = tops.some(function (item) {
+      const condition = conditions[item.planet];
+      return condition && condition.houseClass === "angular";
+    });
+    if (angularDominant) score += 5;
+    return score;
+  }
+  if (id === "dignity_reception") {
+    let score = 0;
+    const receptions =
+      arch.dispositors && arch.dispositors.mutualReceptions
+        ? arch.dispositors.mutualReceptions
+        : [];
+    if (receptions.length) score += 6;
+    tops.forEach(function (item) {
+      const dignity = conditions[item.planet] && conditions[item.planet].dignity;
+      if (dignity && dignity !== "peregrine") score += 4;
+    });
+    return score;
+  }
+  if (id === "element_modality") {
+    const elements = arch.elements || {};
+    const modalities = arch.modalities || {};
+    let score = 0;
+    if (Number(elements.dominantCount) >= 5) score += 6;
+    else if (Number(elements.dominantCount) >= 4) score += 4;
+    if (Number(modalities.dominantCount) >= 5) score += 4;
+    else if (Number(modalities.dominantCount) >= 4) score += 3;
+    return score;
+  }
+  if (id === "isolated_planets") {
+    const unaspected = (
+      (arch.network && arch.network.unaspected) ||
+      []
+    ).filter(function (name) {
+      return allowedPlanet(arch, name);
+    });
+    if (!unaspected.length) return 0;
+    const top = {};
+    tops.forEach(function (item) {
+      top[item.planet] = true;
+    });
+    let score = 0;
+    unaspected.forEach(function (name) {
+      if (top[name] || name === "sun" || name === "moon") score += 5;
+    });
+    return score;
+  }
+  return 0;
+}
+
+function developedSentences(text, cues) {
+  return String(text || "")
+    .split(/[.!?]+/)
+    .map(function (sentence) {
+      return sentence.trim();
+    })
+    .filter(function (sentence) {
+      return (
+        sentence.length >= 40 &&
+        cues.some(function (re) {
+          return re.test(sentence);
+        })
+      );
+    });
+}
+
+function lensIsCovered(history, cues) {
+  return (history || []).some(function (message) {
+    return (
+      message &&
+      message.role === "assistant" &&
+      developedSentences(message.content, cues).length >= 3
+    );
+  });
+}
+
+function priorBroadCount(history) {
+  const items = history || [];
+  let count = 0;
+  items.forEach(function (message, index) {
+    if (!message || message.role !== "user") return;
+    if (isBroadChartAnalysisPrompt(message.content, items.slice(0, index))) {
+      count += 1;
     }
   });
-  return { distinct: distinct, total: total };
+  return count;
 }
 
-function coverageIsSubstantial(hits) {
-  return hits.total >= 2;
+const INTEGRATION_PASSES = [
+  {
+    id: "integrate_relations",
+    label: "how the analyzed structures relate",
+    cues: [
+      /\bthese structures\b/i,
+      /\brelationship between\b/i,
+      /\btogether they\b/i,
+      /\bone qualifies the other\b/i,
+    ],
+    importance: function (arch, coveredIds) {
+      return coveredIds.length >= 2 ? 7 : 0;
+    },
+    task: "Relate the structures already analyzed. Show where they reinforce, qualify, or contradict one another. Do not open a new minor category.",
+  },
+  {
+    id: "integrate_dispositor_aspects",
+    label: "dispositorship together with the aspect network",
+    cues: [
+      /\bdispositor[^.!?]{0,80}aspect/i,
+      /\baspect network[^.!?]{0,80}dispositor/i,
+      /\bchain[^.!?]{0,60}(square|trine|opposition|conjunction)/i,
+    ],
+    importance: function (arch) {
+      if (lensImportance("rulership_chains", arch) < MAJOR_IMPORTANCE) return 0;
+      if (lensImportance("aspect_topology", arch) < MAJOR_IMPORTANCE) return 0;
+      return 6;
+    },
+    task: "Show how the dispositor chain and the aspect network act on the same planets. Use only links already present in the architecture.",
+  },
+  {
+    id: "integrate_houses_angles",
+    label: "house rulership together with angularity",
+    cues: [
+      /\bhouse ruler[^.!?]{0,80}angular/i,
+      /\bangular[^.!?]{0,80}(house ruler|rulership)/i,
+    ],
+    importance: function (arch) {
+      if (!timeKnown(arch)) return 0;
+      if (lensImportance("angular_structure", arch) < MAJOR_IMPORTANCE) return 0;
+      return 6;
+    },
+    task: "Show how angular planets participate in the house-ruler chains already computed. Do not invent angles or houses. Birth-time-dependent claims stay limited to what the architecture marks as known.",
+  },
+  {
+    id: "integrate_contradictions",
+    label: "contradictions between dominant configurations",
+    cues: [
+      /\bcontradict/i,
+      /\bcompeting configurations?\b/i,
+      /\bpull against\b/i,
+    ],
+    importance: function (arch) {
+      return configList(arch).length >= 2 ? 6 : 0;
+    },
+    task: "State the competition between dominant configurations the architecture already lists. Do not resolve it into a single theme or a new minor factor.",
+  },
+  {
+    id: "integrate_synthesis",
+    label: "synthesis of the structures already analyzed",
+    cues: [
+      /\btaken together\b/i,
+      /\bthe same dominant\b/i,
+      /\bwithout adding a new factor\b/i,
+    ],
+    importance: function (arch, coveredIds) {
+      return coveredIds.length >= 1 ? 4 : 0;
+    },
+    task: "Synthesize the structures already analyzed. A dominant fact may be stated again when it connects them. Do not introduce a low-weight feature in order to sound new.",
+  },
+];
+
+function focusDirective(item, kind) {
+  const lines = [
+    "PRIMARY FOCUS: " + item.label + ".",
+    item.task,
+    "SUPPORTING CONTEXT: a dominant factor may be mentioned again when it participates in this focus. Already discussed does not mean forbidden.",
+    "Do not reproduce the previous reading as a whole. Recurring facts are appropriate when they explain the focus.",
+    "Do not invent a minor or obscure factor to sound different.",
+    "The architecture ranking is unchanged by what has already been said. CHART FACTS and the architecture block stay authoritative. Do not calculate new positions, aspects, houses, or dignities.",
+  ];
+  if (kind === "integration") {
+    lines.splice(
+      2,
+      0,
+      "The major unexplored structures are exhausted. Deepen the relationship among structures already analyzed.",
+    );
+  } else {
+    lines.splice(
+      2,
+      0,
+      "This focus is high value in the computed architecture and has not yet been analyzed at length.",
+    );
+  }
+  return lines.join("\n");
 }
 
 /**
  * First broad chart-analysis turn: dominant overview.
- * Later broad turns: the next architecture lens that prior replies have not developed.
+ * Later broad turns: highest-value unexplored architecture, then integration.
+ * Does not modify architecture scores.
  * @param {object} arch
  * @param {Array} history
  * @returns {object}
  */
 function selectChartAnalysisFocus(arch, history) {
-  const priorBroad = (history || []).filter(function (message) {
-    return (
-      message &&
-      message.role === "user" &&
-      isBroadChartAnalysisPrompt(message.content)
-    );
-  }).length;
-  if (!priorBroad) {
+  if (!priorBroadCount(history)) {
     return {
       phase: "overview",
       id: "dominant_overview",
@@ -377,89 +775,82 @@ function selectChartAnalysisFocus(arch, history) {
       directive: "",
     };
   }
-  const text = historyCorpus(history);
-  const scored = ANALYSIS_LENSES.filter(function (lens) {
-    return arch && arch.ok && lens.available(arch);
-  }).map(function (lens, index) {
-    const hits = coverageHits(text, lens.cues);
+  const breadth = ANALYSIS_LENSES.filter(function (lens) {
+    return lens.id !== "secondary_unusual";
+  })
+    .map(function (lens, index) {
+      return {
+        lens: lens,
+        index: index,
+        importance: lensImportance(lens.id, arch),
+        covered: lensIsCovered(history, lens.cues),
+      };
+    })
+    .filter(function (item) {
+      return item.importance >= MAJOR_IMPORTANCE && !item.covered;
+    })
+    .sort(function (a, b) {
+      return b.importance - a.importance || a.index - b.index;
+    });
+  if (breadth.length) {
+    const chosen = breadth[0].lens;
     return {
-      lens: lens,
+      phase: "breadth",
+      id: chosen.id,
+      label: chosen.label,
+      directive: focusDirective(chosen, "breadth"),
+    };
+  }
+  const coveredIds = ANALYSIS_LENSES.filter(function (lens) {
+    return (
+      lens.id !== "secondary_unusual" &&
+      lensImportance(lens.id, arch) >= MAJOR_IMPORTANCE &&
+      lensIsCovered(history, lens.cues)
+    );
+  }).map(function (lens) {
+    return lens.id;
+  });
+  const integration = INTEGRATION_PASSES.map(function (pass, index) {
+    return {
+      pass: pass,
       index: index,
-      hits: hits,
-      substantial: coverageIsSubstantial(hits),
+      importance: pass.importance(arch, coveredIds),
+      covered: lensIsCovered(history, pass.cues),
     };
-  });
-  const uncovered = scored.filter(function (item) {
-    return !item.substantial;
-  });
-  let chosen = uncovered[0] || null;
-  let exhausted = false;
-  if (!chosen && scored.length) {
-    exhausted = true;
-    chosen = scored.slice().sort(function (a, b) {
-      return a.hits.total - b.hits.total || a.index - b.index;
-    })[0];
-  }
-  if (!chosen) {
+  })
+    .filter(function (item) {
+      return item.importance >= MAJOR_IMPORTANCE && !item.covered;
+    })
+    .sort(function (a, b) {
+      return b.importance - a.importance || a.index - b.index;
+    });
+  if (integration.length) {
+    const chosen = integration[0].pass;
     return {
-      phase: "progression",
-      id: "none",
-      label: "no unused structure",
-      directive:
-        "No further unused structure is present in the computed architecture. Say that the available structures have already been covered and stop. Do not invent a pattern.",
+      phase: "integration",
+      id: chosen.id,
+      label: chosen.label,
+      directive: focusDirective(chosen, "integration"),
     };
   }
-  const coveredLabels = scored
-    .filter(function (item) {
-      return item.substantial && item.lens.id !== chosen.lens.id;
-    })
-    .map(function (item) {
-      return item.lens.label;
-    });
-  const unusedLabels = scored
-    .filter(function (item) {
-      return !item.substantial && item.lens.id !== chosen.lens.id;
-    })
-    .map(function (item) {
-      return item.lens.label;
-    });
-  const lines = [
-    "ASSIGNED FOCUS: " + chosen.lens.label + ".",
-    chosen.lens.task,
-    "This focus is present in the computed architecture and has not yet received substantial attention.",
-  ];
-  if (exhausted) {
-    lines.push(
-      "Every available lens has already been discussed. This is the least developed one. Go further into it. Do not restate earlier paragraphs.",
-    );
-  }
-  if (coveredLabels.length) {
-    lines.push(
-      "Already given substantial attention (context only, not the subject): " +
-        coveredLabels.join("; ") +
-        ".",
-    );
-  }
-  if (unusedLabels.length) {
-    lines.push(
-      "Leave these for a later broad request: " + unusedLabels.join("; ") + ".",
-    );
-  }
-  lines.push(
-    "A dominant feature may be named only when this focus cannot be understood without it. Then return to the focus.",
-  );
-  lines.push(
-    "CHART FACTS and the architecture block stay authoritative. Do not calculate new positions, aspects, houses, or dignities.",
-  );
   return {
-    phase: "progression",
-    id: chosen.lens.id,
-    label: chosen.lens.label,
-    directive: lines.join("\n"),
+    phase: "integration",
+    id: "hold",
+    label: "the relationship among the dominant factors already analyzed",
+    directive: focusDirective(
+      {
+        label: "the relationship among the dominant factors already analyzed",
+        task: "Stay with the highest-ranked factors already in the architecture. Explain how they work together. Do not search the chart for a leftover curiosity.",
+      },
+      "integration",
+    ),
   };
 }
 
 module.exports = {
+  hasExplicitAnalyticalTarget,
+  isOpenContinuation,
+  contextIsChartAnalysis,
   isBroadChartAnalysisPrompt,
   isChartAnalysisQuestion,
   getChartAnalysisRules,

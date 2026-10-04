@@ -231,9 +231,12 @@ function sourceGuard(ctx) {
       "CHART_ANALYSIS still governs: inspect the chart as a system. Do not turn this source into a personality reading.",
     );
   }
-  if (ctx.progressionPhase === "progression") {
+  if (
+    ctx.progressionPhase === "breadth" ||
+    ctx.progressionPhase === "integration"
+  ) {
     lines.push(
-      "This is a later broad chart-analysis turn. Apply these modules only to the assigned focus. Their general hierarchy does not replace that focus. Dominant features are context.",
+      "This is a later broad chart-analysis turn. Apply these modules to the assigned primary focus. Their general hierarchy does not replace that focus. Dominant factors may be repeated as supporting context when they participate in the focus. Do not use this source to hunt for a minor novelty.",
     );
   }
   return lines.join("\n");

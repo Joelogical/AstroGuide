@@ -37,11 +37,15 @@ Do not try to exhaust every lens. Later broad requests take the structures this 
 Name a dominant feature because it organizes the chart, and say briefly why it outranks the rest.
 
 <!-- section:progression -->
-THIS IS A LATER BROAD CHART_ANALYSIS REQUEST IN THE SAME CONVERSATION.
-Do not restate the dominant overview and do not rotate its wording.
-Develop only the assigned focus below. It is chosen from structures present in the computed architecture that earlier replies have not yet treated at length.
-A dominant feature may appear only as context this focus needs. Then stay with the focus.
-Do not invent structures, and do not pick a different focus because it would sound fresher.
+THIS IS A LATER BROAD CHART_ANALYSIS REQUEST.
+The assigned block below is the PRIMARY FOCUS. It is the highest-value structure in the computed architecture that earlier replies have not actually analyzed.
+SUPPORTING CONTEXT is allowed. A dominant planet, configuration, or rulership may be named again when it takes part in that focus. Already discussed does not mean forbidden.
+Do not reproduce the previous reading as a whole. Do not hunt for a minor factor so the reply sounds new. The architecture's ranking is unchanged by the conversation.
+
+<!-- section:integration -->
+THE MAJOR UNEXPLORED STRUCTURES HAVE ALREADY BEEN ANALYZED.
+Deepen how those structures relate. Do not open a low-weight category just to produce a different reply.
+A dominant fact may be repeated when it explains the relationship. Do not invent an obscure reading.
 
 <!-- section:closing -->
  CHART_ANALYSIS: describe the chart’s structure. Do not translate placements into personality.

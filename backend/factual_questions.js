@@ -22,6 +22,9 @@ function isFactualQuestion(message) {
     /what (aspects|aspect) (does|do|has|have)/i,
     /(conjunction|square|trine|opposition|sextile) (with|to|between)/i,
     /is (retrograde|direct)/i,
+    /is (the )?(sun|moon|mercury|venus|mars|jupiter|saturn|uranus|neptune|pluto) (retrograde|direct)/i,
+    /where is (my |the )?(sun|moon|mercury|venus|mars|jupiter|saturn|uranus|neptune|pluto)/i,
+    /what house is (my |the )?(sun|moon|mercury|venus|mars|jupiter|saturn|uranus|neptune|pluto)/i,
     /what (degree|degrees) (is|are)/i,
     /what is my (sun|moon|rising|ascendant)/i,
     /what sign is my (sun|moon|rising|ascendant|mercury|venus|mars)/i,
@@ -128,6 +131,53 @@ function answerFactualQuestion(message, birthChart) {
         )}.`;
       }
     }
+  }
+
+  const namedPlanet =
+    message.match(
+      /\b(sun|moon|mercury|venus|mars|jupiter|saturn|uranus|neptune|pluto)\b/i,
+    );
+  const namedPlanetKey = namedPlanet ? namedPlanet[1].toLowerCase() : "";
+  const namedPlanetBody =
+    namedPlanetKey && birthChart.planets
+      ? birthChart.planets[namedPlanetKey]
+      : null;
+  const namedPlanetLabel = namedPlanetKey
+    ? namedPlanetKey.charAt(0).toUpperCase() + namedPlanetKey.slice(1)
+    : "";
+  if (
+    namedPlanetBody &&
+    /where is (my |the )?(sun|moon|mercury|venus|mars|jupiter|saturn|uranus|neptune|pluto)|what house is (my |the )?(sun|moon|mercury|venus|mars|jupiter|saturn|uranus|neptune|pluto)|what degree is (my |the )?(sun|moon|mercury|venus|mars|jupiter|saturn|uranus|neptune|pluto)/i.test(
+      message,
+    )
+  ) {
+    const signBit = "Your " + namedPlanetLabel + " is in " + namedPlanetBody.sign;
+    const degreeBit =
+      namedPlanetBody.degree != null
+        ? " at " + Number(namedPlanetBody.degree).toFixed(2) + "°"
+        : "";
+    if (/what degree is/i.test(message)) {
+      return signBit + degreeBit + ".";
+    }
+    if (birthChart.unknownBirthTime) {
+      return signBit + degreeBit + ". The birth time is unknown, so the house is not available.";
+    }
+    if (/what house is/i.test(message)) {
+      return (
+        "Your " +
+        namedPlanetLabel +
+        " is in house " +
+        namedPlanetBody.house +
+        "."
+      );
+    }
+    return (
+      signBit +
+      degreeBit +
+      ", in house " +
+      namedPlanetBody.house +
+      "."
+    );
   }
 
   // What sign is a planet in (also "what sign is my sun", "what is my sun sign")

@@ -52,7 +52,9 @@ const {
 } = require("./chart_architecture");
 const {
   isChartAnalysisQuestion,
+  hasExplicitAnalyticalTarget,
   isBroadChartAnalysisPrompt,
+  contextIsChartAnalysis,
   selectChartAnalysisFocus,
   historyBeforeCurrentTurn,
 } = require("./chart_analysis");
@@ -554,7 +556,7 @@ function isWholeSelfQuestion(message) {
 
 function isVagueFollowUp(message) {
   const t = String(message || "").toLowerCase().trim();
-  return /^(why(\?$| is that| do i)|how come|say more|tell me more|go (on|deeper)|and\?$|what do you mean|can you (say|explain|go) more|keep going)\b/.test(
+  return /^(why(\?$| is that| do i)|how come|say more|tell me more|go (on|deeper)|and\?$|what do you mean|can you (say|explain|go) more|keep going|what else( stands out| do you see)?|anything else)\b/.test(
     t,
   );
 }
@@ -1080,15 +1082,19 @@ app.post("/api/chat", (req, res) => {
         });
       }
 
-      const questionForMode = effectiveQuestion(message, conversationHistory);
       const priorConversation = historyBeforeCurrentTurn(
         message,
         conversationHistory,
       );
+      const questionForMode = hasExplicitAnalyticalTarget(message)
+        ? message
+        : effectiveQuestion(message, priorConversation);
       const clickedAspect = parseClickedAspect(message);
       const aspectMode = !!clickedAspect;
       const chartAnalysisMode =
-        !aspectMode && isChartAnalysisQuestion(questionForMode);
+        !aspectMode &&
+        !isFactualQuestion(message) &&
+        isChartAnalysisQuestion(questionForMode, priorConversation);
       const chartMode =
         !aspectMode &&
         !chartAnalysisMode &&
@@ -1342,14 +1348,8 @@ app.post("/api/chat", (req, res) => {
         ) {
           return false;
         }
-        if (isBroadChartAnalysisPrompt(text)) {
-          return (history || []).some(function (entry) {
-            return (
-              entry &&
-              entry.role === "user" &&
-              isBroadChartAnalysisPrompt(entry.content)
-            );
-          });
+        if (isBroadChartAnalysisPrompt(text, history)) {
+          return contextIsChartAnalysis(history);
         }
         if (text.length < 40) return false;
         const stop = new Set([
@@ -1441,11 +1441,13 @@ app.post("/api/chat", (req, res) => {
       const advancedMode =
         profileMemory && profileMemory.preferredMode === "advanced";
       const chartAnalysisNote = chartAnalysisProgression
-        ? chartAnalysisProgression.phase === "progression"
-          ? "\n\n[Repeated broad chart analysis. Do not repeat the overview. Develop only this focus: " +
+        ? chartAnalysisProgression.phase === "breadth"
+          ? "\n\n[Repeated broad chart analysis. Primary focus: " +
             chartAnalysisProgression.label +
-            ". Dominant features are context, not the subject. Use the computed architecture and CHART FACTS. Do not search the web to vary the wording.]"
-          : "\n\n[First broad chart analysis. Give the dominant structural overview. Do not try to exhaust every lens.]"
+            ". Dominant factors may be mentioned again as supporting context when they participate. Do not reproduce the previous reading, and do not invent a minor factor to sound new.]"
+          : chartAnalysisProgression.phase === "integration"
+            ? "\n\n[Broad chart analysis, major structures already analyzed. Relate those structures. Do not introduce a low-weight leftover to sound different. Dominant facts may recur when they explain the relationship.]"
+            : "\n\n[First broad chart analysis. Give the dominant structural overview. Do not try to exhaust every lens.]"
         : "";
       const userContent = chartAnalysisMode
         ? message +
