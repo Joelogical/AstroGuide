@@ -15,6 +15,11 @@ function chartCapabilities(source) {
   const timed = usable && !unknown;
   const traditional =
     source && String(source.chartSystem || "").toLowerCase() === "traditional";
+  const activeAsteroids = traditional
+    ? []
+    : Array.isArray(source && source.activeAsteroids)
+      ? source.activeAsteroids.slice()
+      : [];
   return {
     chartSystem: traditional ? "traditional" : "modern",
     unknownBirthTime: unknown,
@@ -25,6 +30,8 @@ function chartCapabilities(source) {
     canUseAngularHouses: timed,
     canUseSect: timed,
     allowOuterPlanets: !traditional,
+    allowAsteroids: activeAsteroids.length > 0,
+    activeAsteroids: activeAsteroids,
   };
 }
 

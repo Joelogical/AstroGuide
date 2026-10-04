@@ -66,6 +66,7 @@ function applyTraditionalChartView(chart) {
     chartSystem: "traditional",
     planets: planets,
     asteroids: {},
+    selectedAsteroids: [],
     aspects: (chart.aspects || []).filter(isTraditionalAspect),
     architecture: undefined,
     architectureTraditional: undefined,

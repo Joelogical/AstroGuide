@@ -58,8 +58,11 @@ const { calculateNatalChart } = require("./birth_chart_service");
 const {
   isTraditionalChart,
   applyTraditionalChartView,
-  traditionalMissingBodyReply,
 } = require("./traditional_chart");
+const {
+  unavailableBodyReply,
+  resolveChatReading,
+} = require("./reading_configuration");
 
 // Debug logging for environment variables
 console.log("Environment variables loaded:");
@@ -689,18 +692,10 @@ app.post("/api/chat", (req, res) => {
       const conversationHistory = body.conversationHistory || [];
       const profileMemory = body.profileMemory || null;
       const chartSummary = body.chartSummary || null;
-      const chartSystem =
-        String(body.chartSystem || (birthChart && birthChart.chartSystem) || "modern")
-          .toLowerCase() === "traditional"
-          ? "traditional"
-          : "modern";
-      if (birthChart && typeof birthChart === "object") {
-        birthChart.chartSystem = chartSystem;
-      }
-      const readingChart =
-        chartSystem === "traditional" && birthChart
-          ? applyTraditionalChartView(birthChart)
-          : birthChart;
+      const chatReading = resolveChatReading(body);
+      const chartSystem = chatReading.chartSystem;
+      const readingConfig = chatReading.readingConfig;
+      const readingChart = chatReading.readingChart;
       stage = "after-body";
 
       if (!message || !birthChart) {
@@ -720,10 +715,7 @@ app.post("/api/chat", (req, res) => {
         });
       }
 
-      const missingTraditionalBody = traditionalMissingBodyReply(
-        message,
-        birthChart,
-      );
+      const missingTraditionalBody = unavailableBodyReply(message, readingConfig);
       if (missingTraditionalBody) {
         return res.json({
           response: missingTraditionalBody,
@@ -1016,7 +1008,7 @@ app.post("/api/chat", (req, res) => {
       let knowledgeStructures = null;
       let chartAnalysisProgression = null;
       try {
-        const arch = ensureArchitecture(birthChart);
+        const arch = ensureArchitecture(readingChart);
         if (arch && arch.ok) {
           knowledgeStructures = structuresFromArchitecture(arch);
           if (route.progressionEligible) {
@@ -1190,6 +1182,7 @@ app.post("/api/chat", (req, res) => {
             : null,
         unknownBirthTime: !!(birthChart && birthChart.unknownBirthTime),
         chartSystem,
+        readingConfig,
         predictionMode: isPredictionQuestion(message),
         question: questionForMode,
         structures: knowledgeStructures,

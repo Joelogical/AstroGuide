@@ -6,6 +6,8 @@ const tests = [
   ["./knowledge_retrieval.test", require("./knowledge_retrieval.test")],
   ["./prompt_assembly.test", require("./prompt_assembly.test")],
   ["./swiss.test", require("./swiss.test")],
+  ["./configuration.test", require("./configuration.test")],
+  ["./pipeline.test", require("./pipeline.test")],
 ];
 
 async function main() {

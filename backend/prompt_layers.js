@@ -12,6 +12,7 @@
  */
 
 const { getTraditionalChartRules } = require("./traditional_chart");
+const { formatActiveBodies } = require("./reading_configuration");
 const {
   getNoPredictionRules,
   getPredictionQuestionRules,
@@ -74,7 +75,7 @@ function getAstrologyInterpreterRules() {
     "CHART RULER AND ITS CONDITION – CORE DIRECTION: Determine the chart ruler from the Ascendant sign (e.g. Aries rising → Mars, Libra rising → Venus, etc.). " +
     "Interpret the chart ruler by looking at: its sign (how the life direction expresses itself), its house (where in life this shows up most strongly), aspects to it (what supports or challenges it), its dignity or debility (domicile/exaltation vs detriment/fall), and whether it is retrograde. " +
     "Treat the chart ruler as a key to the native's core life direction and identity style. Make sure your overall interpretation is consistent with the ruler's condition: even when you discuss other placements, they should not contradict the core story implied by the chart ruler—they should refine, nuance, or add tension to it.\n\n" +
-    "RULERSHIP AND DIGNITY ARE ALREADY COMPUTED: Use the rulership, dignity, debility, and reception in the architecture and CHART FACTS. Do not recalculate them from a memorized table. If you use modern rulers (Uranus/Neptune/Pluto), treat them as secondary nuances; the architecture's chart ruler and dispositor chains stay primary.\n\n" +
+    "RULERSHIP AND DIGNITY ARE ALREADY COMPUTED: Use the rulership, dignity, debility, and reception in the architecture and CHART FACTS. Do not recalculate them from a memorized table. Both Modern and Traditional use those classical rulers (Aquarius→Saturn, Scorpio→Mars, Pisces→Jupiter). Uranus, Neptune, and Pluto are not sign rulers.\n\n" +
     "OPTIONAL ASTEROIDS: If the architecture includes asteroid condition, stelliums, configurations, house occupants, or ASC/MC aspects involving Chiron, Ceres, Pallas, Juno, or Vesta, use those facts as supporting color when they are tightly linked to the question or to the Sun, Moon, or chart ruler. Do not treat asteroids as equal to those core drivers, and do not invent asteroid placements that are not listed.\n\n" +
     "DOMINANT PLANETS – PRIMARY NARRATIVE DRIVERS: The architecture already ranks dominant planets. Use that order. Do not rescore them. " +
     "Let the top-ranked planets drive the story: they should appear as recurring motifs. Non-dominant planets can still matter, but they should feel like supporting actors. When in doubt about what to emphasize, follow the architecture's ranking.\n\n" +
@@ -417,6 +418,9 @@ function buildRuntimeContext(options) {
     out += getPromptSection("beginner.md", "closing");
   }
   out += "\n";
+  if (options && options.readingConfig) {
+    out += "\n=== ACTIVE BODIES ===\n" + formatActiveBodies(options.readingConfig) + "\n";
+  }
 
   return out;
 }

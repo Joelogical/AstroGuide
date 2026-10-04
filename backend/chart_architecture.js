@@ -5,10 +5,8 @@
  */
 
 const { ASTEROID_KEYS } = require("./chart_format");
-const {
-  isTraditionalChart,
-  applyTraditionalChartView,
-} = require("./traditional_chart");
+const { isTraditionalChart } = require("./traditional_chart");
+const { applyActiveBodyView } = require("./reading_configuration");
 
 const SIGN_RULERS = {
   Aries: "mars",
@@ -902,9 +900,7 @@ function buildChartArchitecture(birthChart) {
   if (!birthChart || typeof birthChart !== "object") {
     return { ok: false, reason: "no chart" };
   }
-  if (isTraditionalChart(birthChart)) {
-    birthChart = applyTraditionalChartView(birthChart);
-  }
+  birthChart = applyActiveBodyView(birthChart);
   const entries = planetEntries(birthChart);
   const astEntries = asteroidEntries(birthChart);
   const combinedEntries = entries.concat(astEntries);
@@ -1037,8 +1033,11 @@ function buildChartArchitecture(birthChart) {
       };
     }),
     selectedAsteroids: Array.isArray(birthChart.selectedAsteroids)
-      ? birthChart.selectedAsteroids
-      : astEntries.map(([k]) => k),
+      ? birthChart.selectedAsteroids.slice()
+      : [],
+    activeAsteroids: Array.isArray(birthChart.selectedAsteroids)
+      ? birthChart.selectedAsteroids.slice()
+      : [],
   };
   architecture.repeatingThemes = collectRepeatingThemes(architecture);
   architecture.thesisClaims = buildThesisClaims(architecture);
@@ -1271,9 +1270,17 @@ function architectureCacheValid(arch, birthChart, traditional) {
   if (!!arch.unknownBirthTime !== !!birthChart.unknownBirthTime) return false;
   if ((arch.chartSystem === "traditional") !== traditional) return false;
   if (traditional) return true;
-  const hasAsteroids =
-    birthChart.asteroids && Object.keys(birthChart.asteroids).length > 0;
-  return !hasAsteroids || !!arch.asteroidConditions;
+  const wanted = Array.isArray(birthChart.selectedAsteroids)
+    ? birthChart.selectedAsteroids.slice().sort().join(",")
+    : "";
+  const stored = Array.isArray(arch.activeAsteroids)
+    ? arch.activeAsteroids.slice().sort().join(",")
+    : "";
+  if (wanted !== stored) return false;
+  const wantedSet = wanted ? wanted.split(",") : [];
+  return Object.keys(arch.asteroidConditions || {}).every(function (key) {
+    return wantedSet.indexOf(key) !== -1;
+  });
 }
 
 function ensureArchitecture(birthChart) {

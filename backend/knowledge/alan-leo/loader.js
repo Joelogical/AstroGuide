@@ -77,6 +77,25 @@ function readKnowledgeFile(filename) {
   return fileCache.get(filename);
 }
 
+function bodyAllowed(name, ctx) {
+  const config = ctx && ctx.readingConfig;
+  if (!config) return true;
+  const key = String(name || "").toLowerCase();
+  if (
+    !config.allowOuterPlanets &&
+    (key === "uranus" || key === "neptune" || key === "pluto")
+  ) {
+    return false;
+  }
+  if (
+    ["chiron", "ceres", "pallas", "juno", "vesta"].indexOf(key) !== -1 &&
+    (config.activeAsteroids || []).indexOf(key) === -1
+  ) {
+    return false;
+  }
+  return true;
+}
+
 function planetNamesIn(text) {
   const ql = String(text || "").toLowerCase();
   return PLANET_NAMES.filter(function (name) {
@@ -140,7 +159,9 @@ function selectAlanLeoModuleIds(ctx) {
   const elementHit = ELEMENT_RE.test(ql);
   const nodeHit = NODE_RE.test(ql);
   const decanHit = DECAN_RE.test(ql);
-  const planetsNamed = planetNamesIn(ql);
+  const planetsNamed = planetNamesIn(ql).filter(function (name) {
+    return bodyAllowed(name, ctx);
+  });
   const wholeChart = !!(ctx.chartAnalysisMode || ctx.thesisMode);
 
   const signaled =
@@ -169,7 +190,6 @@ function selectAlanLeoModuleIds(ctx) {
 
   if (wholeChart) {
     add("methodology");
-    if (advanced) add("advancedRules");
     const s = structures || {};
     if (aspectHit || s.aspects) add("aspects");
     if (explicitHouse || houseHit || (s.houses && !unknownTime)) add("houses");
@@ -179,7 +199,6 @@ function selectAlanLeoModuleIds(ctx) {
     if (aspectHit) {
       add("aspects");
       add("planets");
-      if (advanced) add("methodology");
     }
     if (houseHit || explicitHouse) add("houses");
     if (houseHit || explicitHouse || lifeArea) {
@@ -189,7 +208,6 @@ function selectAlanLeoModuleIds(ctx) {
     if (elementHit) add("signs");
     if (planetsNamed.length) {
       add("planets");
-      if (advanced) add("methodology");
     }
   }
 
@@ -226,10 +244,14 @@ function selectAlanLeoModuleIds(ctx) {
 
 function moduleBody(id, ctx) {
   if (id === "planets") {
-    const named = planetNamesIn(ctx.question || "");
+    const named = planetNamesIn(ctx.question || "").filter(function (name) {
+      return bodyAllowed(name, ctx);
+    });
     const fromChart =
       ctx.structures && ctx.structures.planets && ctx.structures.planets.length
-        ? ctx.structures.planets
+        ? ctx.structures.planets.filter(function (name) {
+            return bodyAllowed(name, ctx);
+          })
         : null;
     return slicePlanetaryPrinciples(named.length ? named : fromChart);
   }
@@ -290,6 +312,7 @@ function buildAlanLeoKnowledgeBlock(runtime) {
     chartAnalysisMode: !!(runtime && runtime.chartAnalysisMode),
     unknownBirthTime: !!(runtime && runtime.unknownBirthTime),
     structures: (runtime && runtime.structures) || null,
+    readingConfig: (runtime && runtime.readingConfig) || null,
     progressionPhase:
       runtime &&
       runtime.chartAnalysisProgression &&

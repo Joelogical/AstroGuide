@@ -5,6 +5,10 @@
  */
 
 const { getAspectStyle } = require("./astrology_rules");
+const {
+  ASTEROID_SUPPORTING_WEIGHT,
+  isAsteroidName,
+} = require("./reading_configuration");
 
 function getChartRuler(ascendantSign) {
   const rulers = {
@@ -112,7 +116,10 @@ function getPrioritizedChartPoints(birthChart, userMessage = "", transits = null
     const style = getAspectStyle(a.aspect);
     const orbStrength = getOrbStrength(a.orb);
     const aspectBase = (style.strength || 0.5) * 1.2;
-    const score = orbStrength * aspectBase;
+    const asteroidPair =
+      isAsteroidName(a.planet1) || isAsteroidName(a.planet2);
+    const score =
+      orbStrength * aspectBase * (asteroidPair ? ASTEROID_SUPPORTING_WEIGHT : 1);
     const category = style.tension === "high" ? "caveat" : "strength";
     const p1 = (a.planet1 || "").charAt(0).toUpperCase() + (a.planet1 || "").slice(1);
     const p2 = (a.planet2 || "").charAt(0).toUpperCase() + (a.planet2 || "").slice(1);
@@ -137,7 +144,7 @@ function getPrioritizedChartPoints(birthChart, userMessage = "", transits = null
       planet: "ascendant",
     });
   }
-  if (angles.midheaven?.sign) {
+  if (!timeUnknown && angles.midheaven?.sign) {
     signals.push({
       type: "angle",
       text: `Midheaven in ${angles.midheaven.sign}`,
