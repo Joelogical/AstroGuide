@@ -349,7 +349,7 @@
             </p>
           </div>
           <div class="message bot-message initial-message">
-            <p class="word-reveal">
+            <p>
               Hello! I'm AstroGuide, your astrological guide. I'm here to help you understand yourself through your birth chart. What would you like to explore?
             </p>
           </div>
@@ -1050,6 +1050,51 @@
         border-radius: 8px;
         display: block;
         margin: 0 auto;
+      }
+      @keyframes chart-wheel-fade-in {
+        0% {
+          opacity: 0;
+          transform: scale(0.9);
+        }
+        28% {
+          opacity: 0;
+          transform: scale(0.94);
+        }
+        100% {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+      .chart-wheel-container svg.chart-wheel-fade-in {
+        transform-origin: center center;
+        animation: chart-wheel-fade-in 2.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+      }
+      @keyframes chart-wheel-fade-out {
+        0% {
+          opacity: 1;
+          transform: scale(1);
+        }
+        70% {
+          opacity: 0;
+          transform: scale(0.94);
+        }
+        100% {
+          opacity: 0;
+          transform: scale(0.9);
+        }
+      }
+      .chart-wheel-container svg.chart-wheel-fade-out {
+        transform-origin: center center;
+        animation: chart-wheel-fade-out 1.7s cubic-bezier(0.4, 0, 1, 1) forwards;
+        pointer-events: none;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .chart-wheel-container svg.chart-wheel-fade-in,
+        .chart-wheel-container svg.chart-wheel-fade-out {
+          animation: none;
+          opacity: 1;
+          transform: none;
+        }
       }
       .chart-tooltip {
         position: absolute;
@@ -1778,6 +1823,20 @@
       const messageInput = document.getElementById("message-input");
       const sendButton = document.getElementById("send-button");
       const chatMessages = document.getElementById("chat-messages");
+      if (chatMessages) {
+        chatMessages.addEventListener(
+          "scroll",
+          function () {
+            try {
+              sessionStorage.setItem(
+                "astroguideChatScroll:" + (getActiveProfileId() || "none"),
+                String(chatMessages.scrollTop),
+              );
+            } catch (err) {}
+          },
+          { passive: true },
+        );
+      }
       const CHIP_REVEAL_DELAY_MS = 2800;
       const SEND_SLAM_MS = 780;
       const SEND_SLAM_SETTLE_MS = 220;
@@ -1857,7 +1916,13 @@
         setChartProfiles(profiles);
         // Automatically render the chart wheel when chart data is saved
         if (birthChartData) {
-          renderChartWheel(birthChartData);
+          const hadWheel = !!document.querySelector(
+            "#chart-wheel-container svg",
+          );
+          renderChartWheel(
+            birthChartData,
+            hadWheel ? undefined : { fadeInWheel: true },
+          );
         }
       }
 
@@ -2199,9 +2264,10 @@
         }
       }
 
-      function renderConversation(profile) {
+      function renderConversation(profile, options) {
         const container = document.getElementById("chat-messages");
         if (!container) return;
+        const restore = !!(options && options.restore);
         const timeDisclaimer = container.querySelector(
           ".unknown-time-disclaimer",
         );
@@ -2239,16 +2305,77 @@
           appendFollowUpSuggestionChips(pending, {
             persist: false,
             delay: 0,
+            scroll: !restore,
           });
         }
-        if (container.scrollHeight > container.clientHeight + 1) {
+        if (restore) {
+          let saved = null;
+          try {
+            saved = sessionStorage.getItem(
+              "astroguideChatScroll:" + (getActiveProfileId() || "none"),
+            );
+          } catch (err) {
+            saved = null;
+          }
+          if (saved != null && saved !== "" && !isNaN(Number(saved))) {
+            container.scrollTop = Number(saved);
+          } else {
+            container.scrollTop = container.scrollHeight;
+          }
+        } else if (container.scrollHeight > container.clientHeight + 1) {
           container.scrollTop = container.scrollHeight;
         } else {
           container.scrollTop = 0;
         }
       }
 
+      let wheelSwitchToken = 0;
+
+      function fadeOutChartWheel() {
+        const svg = document.querySelector("#chart-wheel-container svg");
+        if (!svg) return Promise.resolve();
+        if (
+          window.matchMedia &&
+          window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ) {
+          return Promise.resolve();
+        }
+        return new Promise(function (resolve) {
+          let done = false;
+          function finish() {
+            if (done) return;
+            done = true;
+            svg.removeEventListener("animationend", onEnd);
+            resolve();
+          }
+          function onEnd(e) {
+            if (e.target !== svg) return;
+            if (e.animationName !== "chart-wheel-fade-out") return;
+            finish();
+          }
+          svg.classList.remove("chart-wheel-fade-in");
+          svg.classList.remove("chart-wheel-fade-out");
+          void svg.offsetWidth;
+          svg.classList.add("chart-wheel-fade-out");
+          svg.addEventListener("animationend", onEnd);
+          setTimeout(finish, 2000);
+        });
+      }
+
       function switchToProfile(profileId, wheelAnim) {
+        const current = getActiveProfile();
+        if (current && current.id === profileId) {
+          closeHeaderDropdown(document.getElementById("profile-dropdown"));
+          return;
+        }
+        const token = ++wheelSwitchToken;
+        fadeOutChartWheel().then(function () {
+          if (token !== wheelSwitchToken) return;
+          applyProfileSwitch(profileId, wheelAnim);
+        });
+      }
+
+      function applyProfileSwitch(profileId, wheelAnim) {
         const profiles = getChartProfiles();
         const current = getActiveProfile();
 
@@ -2285,7 +2412,8 @@
         ensureChartLoadedForActiveProfile();
         // Render chart wheel for the switched profile if chart data exists
         if (next && next.birthChartData) {
-          renderChartWheel(next.birthChartData, wheelAnim);
+          const anim = Object.assign({}, wheelAnim || {}, { fadeInWheel: true });
+          renderChartWheel(next.birthChartData, anim);
         } else {
           // Clear wheel if no chart data
           const container = document.getElementById("chart-wheel-container");
@@ -3191,7 +3319,8 @@
         aspectStroke: 2.5,
         angleLabelPad: 24,
         angleLabelPadHorizon: 28,
-        aspectLineOpacity: 0.6,
+        aspectLineOpacity: 0.34,
+        aspectLineOpacityHover: 1,
         tooltipDelayMs: 2000,
         aspectTickLen: 8,
         planetDegLabelOffsetY: 18,
@@ -3230,7 +3359,8 @@
         aspectStroke: 2,
         angleLabelPad: 18,
         angleLabelPadHorizon: 22,
-        aspectLineOpacity: 0.45,
+        aspectLineOpacity: 0.4,
+        aspectLineOpacityHover: 1,
         tooltipDelayMs: 450,
         aspectTickLen: 6,
         planetDegLabelOffsetY: 15,
@@ -3288,7 +3418,7 @@
         activeProfile.conversationHistory &&
         activeProfile.conversationHistory.length > 0
       ) {
-        renderConversation(activeProfile);
+        renderConversation(activeProfile, { restore: true });
       } else {
         syncUnknownTimeDisclaimer(activeProfile);
       }
@@ -4190,7 +4320,9 @@
           });
           chatMessages.appendChild(wrap);
           trimChatFeedPadding();
-          ensureElementVisible(wrap, { smooth: true, duration: 2200 });
+          if (!opts || opts.scroll !== false) {
+            ensureElementVisible(wrap, { smooth: true, duration: 2200 });
+          }
         }
 
         if (delay <= 0) {
@@ -5852,12 +5984,17 @@
           // Normalize to 0-360 range
           ascendantDegree = ((ascendantDegree % 360) + 360) % 360;
 
-          const svg = d3
+          const fadeWholeWheel = !!(wheelAnim && wheelAnim.fadeInWheel);
+          const svgRoot = d3
             .select("#chart-wheel-container")
             .append("svg")
             .attr("width", width)
             .attr("height", height)
-            .attr("viewBox", `0 0 ${width} ${height}`)
+            .attr("viewBox", `0 0 ${width} ${height}`);
+          if (fadeWholeWheel) {
+            svgRoot.classed("chart-wheel-fade-in", true);
+          }
+          const svg = svgRoot
             .append("g")
             .attr("transform", `translate(${centerX}, ${centerY})`);
 
@@ -6214,8 +6351,9 @@
           const planetTickInnerRadius =
             tickMid * (1 / 3) + tickInward * (2 / 3);
           const wheelBodies = chartBodies(birthChart);
+          const planetTicksByName = {};
           if (Object.keys(wheelBodies).length) {
-            Object.values(wheelBodies).forEach((planetData) => {
+            Object.entries(wheelBodies).forEach(([planetName, planetData]) => {
               if (
                 planetData &&
                 planetData.degree !== undefined &&
@@ -6225,8 +6363,10 @@
                 const displayDeg = chartToDisplayDegree(planetData.degree);
                 const inner = getPosition(displayDeg, planetTickInnerRadius);
                 const outer = getPosition(displayDeg, zodiacRingInner);
-                svg
+                const tick = svg
                   .append("line")
+                  .attr("class", "planet-tick")
+                  .attr("data-planet", String(planetName).toLowerCase())
                   .attr("x1", inner.x)
                   .attr("y1", inner.y)
                   .attr("x2", outer.x)
@@ -6234,8 +6374,20 @@
                   .attr("stroke", "#cbd5e1")
                   .attr("stroke-width", 2)
                   .attr("opacity", 1);
+                planetTicksByName[String(planetName).toLowerCase()] = tick;
               }
             });
+          }
+
+          function setPlanetTickHover(planetKey, active) {
+            const tick =
+              planetTicksByName[String(planetKey || "").toLowerCase()];
+            if (!tick) return;
+            if (active) {
+              tick.attr("stroke", "#10b981").attr("stroke-width", 3);
+            } else {
+              tick.attr("stroke", "#cbd5e1").attr("stroke-width", 2);
+            }
           }
 
           // Zodiac glyphs: use Unicode symbols + U+FE0E (text presentation) so they render as
@@ -6363,6 +6515,37 @@
           // Shared planet glyph color and registry so aspects can bump planets on hover
           const planetGlyphColor = "#e2e8f0";
           const planetGroupsByName = {};
+          const PLANET_BUBBLE = 1.28;
+          const DEGREE_BUBBLE = 1.35;
+          function bubbleTransform(el, scale) {
+            const x = parseFloat(el.attr("x")) || 0;
+            const y = parseFloat(el.attr("y")) || 0;
+            el.attr(
+              "transform",
+              "translate(" +
+                x +
+                "," +
+                y +
+                ") scale(" +
+                scale +
+                ") translate(" +
+                -x +
+                "," +
+                -y +
+                ")",
+            );
+          }
+          function setPlanetMark(planetKey, active) {
+            const entry =
+              planetGroupsByName[String(planetKey || "").toLowerCase()];
+            if (!entry || !entry.symbol) return;
+            entry.symbol.attr("fill", active ? "#10b981" : planetGlyphColor);
+            bubbleTransform(entry.symbol, active ? PLANET_BUBBLE : 1);
+            if (entry.degreeLabel) {
+              entry.degreeLabel.attr("fill", active ? "#10b981" : "#cbd5e1");
+              bubbleTransform(entry.degreeLabel, active ? DEGREE_BUBBLE : 1);
+            }
+          }
           const deferredAspectHitAppends = [];
 
           // Draw aspect lines FIRST (so they appear behind planets)
@@ -6374,15 +6557,16 @@
               "trine",
               "sextile",
             ];
-            // Base color: light gray/white; hover color varies by aspect type
-            const aspectBaseColor = "#e5e7eb";
-            const aspectHoverStrokeColors = {
-              conjunction: "#ffffff",
-              opposition: "#ef4444", // strong red
-              square: "#f87171", // softer red (not orange)
-              trine: "#3b82f6", // prominent blue
-              sextile: "#60a5fa", // lighter blue
+            // Resting lines use these colors at low opacity; hover raises opacity only.
+            const aspectStrokeColors = {
+              conjunction: "#fbbf24",
+              opposition: "#ef4444",
+              square: "#f87171",
+              trine: "#3b82f6",
+              sextile: "#60a5fa",
             };
+            const aspectRestOpacity = wheelProfile.aspectLineOpacity;
+            const aspectHoverOpacity = wheelProfile.aspectLineOpacityHover ?? 1;
             const planetColorsForAspects = {
               sun: "#FFD700",
               moon: "#C0C0C0",
@@ -6486,9 +6670,7 @@
                 pos2,
               } = item;
               const aspectType = aspect.aspect.toLowerCase();
-              const color = aspectBaseColor;
-              const hoverStroke =
-                aspectHoverStrokeColors[aspectType] || aspectBaseColor;
+              const color = aspectStrokeColors[aspectType] || "#e5e7eb";
 
               // Calculate midpoint for aspect label
               const midX = (pos1.x + pos2.x) / 2;
@@ -6531,10 +6713,10 @@
                 .attr("y2", pos2.y)
                 .attr("stroke", color)
                 .attr("stroke-width", wheelProfile.aspectStroke)
-                .attr("opacity", wheelProfile.aspectLineOpacity)
+                .attr("opacity", aspectRestOpacity)
                 .style("cursor", "pointer");
 
-              // Ticks at each end: default to base aspect color; turn green on hover
+              // Ticks at each end use the same aspect color; hover only raises opacity.
               const aspectTickLen = wheelProfile.aspectTickLen;
               const tick1Inner = getPosition(
                 displayDeg1,
@@ -6560,7 +6742,7 @@
                 .attr("y2", tick1Outer.y)
                 .attr("stroke", color)
                 .attr("stroke-width", wheelProfile.aspectStroke)
-                .attr("opacity", wheelProfile.aspectLineOpacity)
+                .attr("opacity", aspectRestOpacity)
                 .style("pointer-events", "none");
               const tick2 = aspectGroup
                 .append("line")
@@ -6570,7 +6752,7 @@
                 .attr("y2", tick2Outer.y)
                 .attr("stroke", color)
                 .attr("stroke-width", wheelProfile.aspectStroke)
-                .attr("opacity", wheelProfile.aspectLineOpacity)
+                .attr("opacity", aspectRestOpacity)
                 .style("pointer-events", "none");
 
               /** Top-layer hit line (assigned when overlay runs after planets) */
@@ -6578,36 +6760,23 @@
 
               // Helper to bump a planet glyph (used from planet hover and aspect hover)
               function bumpPlanet(planetKey, active) {
-                const entry = planetGroupsByName[planetKey?.toLowerCase()];
-                if (!entry) return;
-                const sym = entry.symbol;
-                if (active) {
-                  sym
-                    .attr("font-size", `${wheelProfile.planetGlyphHi}px`)
-                    .attr("fill", "#10b981");
-                } else {
-                  sym
-                    .attr("font-size", `${wheelProfile.planetGlyph}px`)
-                    .attr("fill", planetGlyphColor);
-                }
+                setPlanetMark(planetKey, active);
               }
 
               // Shared hover handlers so both group, line, and hit-area react the same way
               function handleAspectEnter() {
                 aspectLine
                   .attr("stroke-width", 4)
-                  .attr("opacity", 0.9)
-                  .attr("stroke", hoverStroke)
-                  .transition()
-                  .duration(200);
+                  .attr("opacity", aspectHoverOpacity)
+                  .attr("stroke", color);
                 tick1
-                  .attr("stroke", "#10b981")
+                  .attr("stroke", color)
                   .attr("stroke-width", 3)
-                  .attr("opacity", 0.9);
+                  .attr("opacity", aspectHoverOpacity);
                 tick2
-                  .attr("stroke", "#10b981")
+                  .attr("stroke", color)
                   .attr("stroke-width", 3)
-                  .attr("opacity", 0.9);
+                  .attr("opacity", aspectHoverOpacity);
                 hitArea.attr("stroke-width", ASPECT_HIT_STROKE_HOVER);
                 bumpPlanet(aspect.planet1, true);
                 bumpPlanet(aspect.planet2, true);
@@ -6615,18 +6784,16 @@
               function handleAspectLeave() {
                 aspectLine
                   .attr("stroke-width", wheelProfile.aspectStroke)
-                  .attr("opacity", wheelProfile.aspectLineOpacity)
-                  .attr("stroke", color)
-                  .transition()
-                  .duration(200);
+                  .attr("opacity", aspectRestOpacity)
+                  .attr("stroke", color);
                 tick1
                   .attr("stroke", color)
                   .attr("stroke-width", wheelProfile.aspectStroke)
-                  .attr("opacity", wheelProfile.aspectLineOpacity);
+                  .attr("opacity", aspectRestOpacity);
                 tick2
                   .attr("stroke", color)
                   .attr("stroke-width", wheelProfile.aspectStroke)
-                  .attr("opacity", wheelProfile.aspectLineOpacity);
+                  .attr("opacity", aspectRestOpacity);
                 hitArea.attr("stroke-width", ASPECT_HIT_STROKE_BASE);
                 bumpPlanet(aspect.planet1, false);
                 bumpPlanet(aspect.planet2, false);
@@ -7041,10 +7208,8 @@
           const planetSymbolFont =
             '"Symbola", "Segoe UI Symbol", "Apple Symbols", "Noto Sans Symbols", "Arial Unicode MS", sans-serif';
 
-          // Draw planets (positioned closer to outer edge to fill wheel)
-          // Precompute positions with conjunction spread so overlapping planets don't stack
-          const CONJUNCTION_THRESHOLD_DEG = wheelProfile.conjThreshold;
-          const CONJUNCTION_SPREAD_DEG = wheelProfile.conjSpread;
+          // Draw planets on the usual ring. Nudge only along that ring, and
+          // only as far as needed so neighboring glyphs do not sit on each other.
           if (Object.keys(wheelBodies).length) {
             const planetList = [];
             Object.entries(wheelBodies).forEach(
@@ -7062,45 +7227,38 @@
             );
             planetList.sort((a, b) => a.displayDegree - b.displayDegree);
 
-            // Cluster by angular proximity (conjunctions); assign angle offset so planets don't overlap
-            function angularDist(a, b) {
-              const d = Math.abs((a - b + 360) % 360);
-              return Math.min(d, 360 - d);
-            }
-            const clusters = [];
-            let cluster = planetList.length > 0 ? [planetList[0]] : [];
-            for (let i = 1; i < planetList.length; i++) {
-              const d =
-                (planetList[i].displayDegree -
-                  planetList[i - 1].displayDegree +
-                  360) %
-                360;
-              if (d <= CONJUNCTION_THRESHOLD_DEG) {
-                cluster.push(planetList[i]);
-              } else {
-                if (cluster.length) clusters.push(cluster);
-                cluster = [planetList[i]];
-              }
-            }
-            if (cluster.length) clusters.push(cluster);
-            if (clusters.length > 1 && cluster.length > 0) {
-              const firstDeg = clusters[0][0].displayDegree;
-              const lastDeg = cluster[cluster.length - 1].displayDegree;
-              if (angularDist(firstDeg, lastDeg) <= CONJUNCTION_THRESHOLD_DEG) {
-                clusters[0] = cluster.concat(clusters[0]);
-                clusters.pop();
-              }
-            }
-            clusters.forEach((c) => {
-              const K = c.length;
-              const spread = CONJUNCTION_SPREAD_DEG;
-              const startOffset = -((K - 1) * spread) / 2;
-              c.forEach((p, i) => {
-                p.angleOffset = startOffset + i * spread;
-              });
+            const planetGlyphRadius = houseOuterRadius * wheelProfile.planetRingFrac;
+            const glyphClearPx = wheelProfile.planetGlyph * 1.65;
+            const minSepDeg =
+              (glyphClearPx / Math.max(planetGlyphRadius, 1)) *
+              (180 / Math.PI);
+
+            planetList.forEach(function (p) {
+              p.angleOffset = 0;
             });
 
-            const planetGlyphRadius = houseOuterRadius * wheelProfile.planetRingFrac;
+            function placedDeg(p) {
+              return p.displayDegree + p.angleOffset;
+            }
+
+            const nBodies = planetList.length;
+            for (let pass = 0; pass < 30 && nBodies > 1; pass++) {
+              let moved = false;
+              for (let i = 0; i < nBodies; i++) {
+                const j = (i + 1) % nBodies;
+                const a = planetList[i];
+                const b = planetList[j];
+                let gap = placedDeg(b) - placedDeg(a);
+                if (j === 0) gap += 360;
+                if (gap >= minSepDeg) continue;
+                const push = (minSepDeg - gap) / 2;
+                a.angleOffset -= push;
+                b.angleOffset += push;
+                moved = true;
+              }
+              if (!moved) break;
+            }
+
             planetList.forEach(
               ({ planetName, planetData, displayDegree, angleOffset = 0 }) => {
                 const effectiveDegree = displayDegree + angleOffset;
@@ -7132,6 +7290,7 @@
 
                 const planetSymbol = planetGroup
                   .append("text")
+                  .attr("class", "planet-symbol")
                   .attr("x", pos.x)
                   .attr("y", pos.y)
                   .attr("text-anchor", "middle")
@@ -7150,6 +7309,7 @@
                 const planetDM = formatDegreeDM(planetData.degree);
                 const degreeLabel = planetGroup
                   .append("text")
+                  .attr("class", "planet-degree")
                   .attr("x", pos.x)
                   .attr("y", pos.y + wheelProfile.planetDegLabelOffsetY)
                   .attr("text-anchor", "middle")
@@ -7170,22 +7330,17 @@
                 planetGroupsByName[planetName.toLowerCase()] = {
                   group: planetGroup,
                   symbol: planetSymbol,
+                  degreeLabel: degreeLabel,
                 };
 
                 planetGroup
                   .on("mouseenter", function () {
-                    planetSymbol
-                      .attr("font-size", `${wheelProfile.planetGlyphHi}px`)
-                      .attr("fill", "#10b981")
-                      .transition()
-                      .duration(200);
+                    setPlanetMark(planetName, true);
+                    setPlanetTickHover(planetName, true);
                   })
                   .on("mouseleave", function () {
-                    planetSymbol
-                      .attr("font-size", `${wheelProfile.planetGlyph}px`)
-                      .attr("fill", planetGlyphColor)
-                      .transition()
-                      .duration(200);
+                    setPlanetMark(planetName, false);
+                    setPlanetTickHover(planetName, false);
                   })
                   .on("click", function () {
                     const planetDisplayName =
@@ -7207,14 +7362,12 @@
                   y: pos.y,
                   threshold: wheelProfile.planetHit + 10,
                   hover: function () {
-                    planetSymbol
-                      .attr("font-size", `${wheelProfile.planetGlyphHi}px`)
-                      .attr("fill", "#10b981");
+                    setPlanetMark(planetName, true);
+                    setPlanetTickHover(planetName, true);
                   },
                   unhover: function () {
-                    planetSymbol
-                      .attr("font-size", `${wheelProfile.planetGlyph}px`)
-                      .attr("fill", planetGlyphColor);
+                    setPlanetMark(planetName, false);
+                    setPlanetTickHover(planetName, false);
                   },
                   activate: function () {
                     queryChartElement(planetQuery);

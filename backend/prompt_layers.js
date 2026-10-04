@@ -7,7 +7,8 @@
  * 2. Astrology interpreter rules – how to prioritize chart factors, use web sources, handle aspects
  * 3. Confidence wording – internal confidence scoring and how to phrase (high/medium/low) to build trust
  * 4. Response templates – minimal output shape (paragraphs, no markdown lists); voice left to the model
- * 5. Runtime context – chart data + profile memory + prioritized points + web block (built per request)
+ * 5. Relevant Alan Leo source modules, only when the turn maps to them
+ * 6. Runtime context – chart data + profile memory + prioritized points + web block (built per request)
  */
 
 const { getTraditionalChartRules } = require("./traditional_chart");
@@ -16,17 +17,15 @@ const {
   getPredictionQuestionRules,
 } = require("./prediction_guard");
 const { getChartAnalysisRules } = require("./chart_analysis");
+const { getPromptSection } = require("./prompt_loader");
+const { buildAlanLeoKnowledgeBlock } = require("./knowledge/alan-leo/loader");
 
 // ─── Layer 1: System rules (safety, tone, hard constraints) ─────────────────
 
 function getSystemRules() {
   return (
-    "You are AstroGuide, an astrology assistant. " +
-    "Keep a generally neutral, professional baseline. Beyond that, use your natural, helpful tone—do not follow a canned persona or script. " +
-    "How you sound (within reason) is up to you; prioritize clarity and usefulness.\n\n" +
-    "HARD CONSTRAINTS (non-negotiable): Never ask for birth date, time, or location—use the chart data provided. " +
-    "Describe what the chart suggests and how themes might show up; avoid telling the user what they must do. " +
-    'No directive advice framed as commands: avoid "you should", "you need to", "try to", "you ought to".\n\n' +
+    getPromptSection("core.md", "identity") +
+    "\n\n" +
     getNoPredictionRules()
   );
 }
@@ -204,11 +203,7 @@ function getSensitivityRules(flags) {
 }
 
 function getConfidenceWordingRules() {
-  return (
-    "CONFIDENCE: Internally weigh how strong each point is (orb, angularity, agreement across factors, data quality). " +
-    "Let that shape how direct or tentative you sound—without printing labels like 'high confidence'. " +
-    "Use whatever natural phrasing fits; no fixed script for hedging."
-  );
+  return getPromptSection("core.md", "confidence");
 }
 
 // ─── Layer 4: Response templates (output structure, forbidden vs good) ────────
@@ -218,24 +213,7 @@ function isAdvancedPreferred(mode) {
 }
 
 function getAdvancedVoiceRules() {
-  return (
-    "ADVANCED MODE (expert analytical register — not a formal rewrite of beginner mode):\n" +
-    "Assume the reader already understands standard vocabulary and chart mechanics. " +
-    "Do not routinely define or explain houses, signs, aspects, rulership, angularity, retrogradation, sect, dignities, orbs, applying/separating, or natal vs transiting positions unless the distinction is specifically relevant to this analysis.\n\n" +
-    "BEFORE YOU WRITE, assume: the reader already knows what the components mean individually. Your job is to analyze what their combination does.\n\n" +
-    "ASSUMED KNOWLEDGE: substantial familiarity with astrology and chart interpretation. Do not teach the alphabet.\n" +
-    "TECHNICAL VOCABULARY: use precise terms directly—angular, cadent, applying, separating, dispositor, domicile, detriment, exaltation, fall, reception, house ruler, accidental dignity, essential dignity, aspect pattern, aspect configuration. Do not translate these into conversational substitutes.\n" +
-    "ANALYTICAL DENSITY: more information per sentence. Do not spend several sentences on a concept that one established term can identify.\n" +
-    "SYNTHESIS: do not treat placements as isolated keywords. Analyze how planets, houses, aspects, rulerships, dispositors, angular relationships, and chart structures reinforce, modify, contradict, or condition one another.\n" +
-    "HIERARCHY: do not give every placement equal weight. Prioritize angularity, tight orbs, luminaries, chart ruler, house rulership, and repeated configurations. Name what is major and what is secondary.\n" +
-    "PRECISION: when useful, cite actual geometry—degrees, orb size, applying or separating, house position, rulership links, configurations—rather than generalized descriptions.\n" +
-    "INTERPRETIVE REASONING: show why the reading follows from the chart. Expose the chain (e.g. a 2° applying Mars–Saturn square is among the stronger dynamics; Mars’ house is where initiative mobilizes; Saturn’s house and rulerships are the structures of delay or regulation). Do not stop at a polished conclusion with the mechanics stripped out.\n\n" +
-    "AVOID PEDAGOGICAL FILLER. Do not use: “In astrology…”, “This basically means…”, “Think of it like…”, “In simple terms…”, “You can think of X as…”, “At its core…”, “This doesn’t necessarily mean…”, “What this means for you is…”. " +
-    "Do not repeatedly reassure that placements are neither good nor bad. Discuss constructive and difficult expressions directly when relevant.\n\n" +
-    "TONE: clear, neutral, technical prose—an expert discussing a chart with another knowledgeable practitioner, not a teacher introducing a student. " +
-    "Stay readable. Do not add academic ornament, longer sentences, or fancy vocabulary for their own sake. Complexity comes from the analysis, not the diction.\n" +
-    "Still no event prediction. Still no command-style advice."
-  );
+  return getPromptSection("advanced.md", "voice");
 }
 
 function getThesisTurnRules(preferredMode) {
@@ -324,13 +302,7 @@ function getAspectTurnRules(preferredMode) {
 }
 
 function getResponseTemplates() {
-  return (
-    "OUTPUT SHAPE (UX only—not a voice script):\n" +
-    "Reply in a few coherent paragraphs of plain text. Avoid numbered lists, bullet lists, and markdown-style section headers (###, **Topic:**). " +
-    "Weave multiple chart factors together rather than one rigid paragraph per planet.\n\n" +
-    "The user may tap a follow-up question from the app's chips (e.g. 'Want to talk about…?' or 'Should we stay with…?'). That means they want that thread; answer substantively without awkwardly mirroring the wording.\n\n" +
-    "Otherwise let your wording be natural and helpful, as you would in a normal ChatGPT conversation—no required opening lines, no prescribed emotional register, no example paragraphs to imitate."
-  );
+  return getPromptSection("core.md", "output");
 }
 
 // ─── Layer 5: Runtime context (chart data + question context; built per request) ─
@@ -456,17 +428,13 @@ function buildRuntimeContext(options) {
       " Focus on the 3 strongest reasons and 2 biggest caveats—not a long list of chart facts.";
   }
   if (chartAnalysisMode) {
-    out +=
-      " CHART_ANALYSIS: describe the chart’s structure. Do not translate placements into personality.";
+    out += getPromptSection("chart-analysis.md", "closing");
   } else if (preferredMode === "advanced") {
-    out +=
-      " Advanced mode: analyze combinations, not definitions. Use precise terminology, hierarchy, and chart geometry. No pedagogical filler.";
+    out += getPromptSection("advanced.md", "closing");
   } else if (thesisMode || topicMode) {
-    out +=
-      " Stay in everyday language this turn. Do not use house numbers, aspect names, or planet names unless the user already did.";
+    out += getPromptSection("beginner.md", "turn-closing");
   } else if (preferredMode === "beginner") {
-    out +=
-      " CRITICAL: Reply in plain language only—no astrology jargon (no house numbers, aspect names, or technical terms unless you explain them in one short phrase).";
+    out += getPromptSection("beginner.md", "closing");
   }
   out += "\n";
 
@@ -501,23 +469,12 @@ function buildProfileMemoryBlock(profileMemory, options) {
     profileMemory.priorTopicsSummary &&
     String(profileMemory.priorTopicsSummary).trim();
 
-  const languageLevelBlock = isAdvanced
-    ? "LANGUAGE LEVEL – ADVANCED (you MUST follow this):\n" +
-      "Expert register, not a formal beginner mode. The reader already knows the components. Analyze what their combination does. " +
-      "Use precise terms directly (angular, applying, dispositor, domicile, reception, house ruler, essential/accidental dignity, configuration). " +
-      "Cite degrees, orbs, and applying/separating when they change the weight. Show the interpretive chain. " +
-      "Do not define standard vocabulary. Do not use pedagogical filler (“in simple terms,” “this basically means,” “what this means for you”).\n\n"
-    : chartAnalysis
-      ? "LANGUAGE LEVEL – BEGINNER CHART_ANALYSIS (you MUST follow this):\n" +
-        "Use everyday words for the chart as a system: which planet carries more weight, which connections are tight, which area of the wheel is crowded. " +
-        "Do not translate placements into personality traits. Do not say “you are disciplined,” “you have a lot of drive,” or similar character readings. " +
-        "You may name planets and signs when they are the evidence. Keep sentences readable without turning the chart into a portrait of the person.\n\n"
-      : "LANGUAGE LEVEL – BEGINNER (you MUST follow this):\n" +
-      "This person has chosen plain language. You MUST avoid astrology jargon and use everyday words instead. " +
-      "DO NOT use (or use only rarely and then explain in one short phrase): Ascendant, Midheaven, houses (1st–12th), trine, square, sextile, opposition, conjunction, chart ruler, placement, transit, dignity, aspect, modality, or raw sign names as nouns (e.g. 'your Scorpio'). " +
-      "INSTEAD say: how they come across / first impression (for Ascendant); drive and energy (Mars); how they love and relate (Venus); where they feel pulled in two directions (squares/tensions); where things flow more easily; the part of life (work, relationships, home, etc.) rather than house numbers; their personality traits in plain words. " +
-      "Example: not 'Your Mars in Capricorn in the 10th house' but 'You have a lot of drive and ambition, especially around your career and how you're seen.' " +
-      "Keep sentences in everyday English so someone who has never read astrology content can follow.\n\n";
+  const languageLevelBlock =
+    (isAdvanced
+      ? getPromptSection("advanced.md", "memory")
+      : chartAnalysis
+        ? getPromptSection("chart-analysis.md", "memory-beginner")
+        : getPromptSection("beginner.md", "memory")) + "\n\n";
 
   let block =
     "--- PROFILE MEMORY (use this so the chat feels continuous; reference earlier discussions) ---\n" +
@@ -548,6 +505,9 @@ function buildProfileMemoryBlock(profileMemory, options) {
  * @returns {string} Full system message content
  */
 function composeSystemContent(runtime) {
+  // Order: core behavior, Beginner or Advanced voice, intent turn rules,
+  // relevant Alan Leo modules, then runtime chart facts.
+  // chart-analysis.md replaces the default interpreter only for CHART_ANALYSIS.
   const mode = runtime && runtime.preferredMode;
   const parts =
     runtime && runtime.thesisMode
@@ -605,6 +565,10 @@ function composeSystemContent(runtime) {
   );
   if (sensitivityRules) {
     parts.splice(1, 0, sensitivityRules);
+  }
+  const knowledgeBlock = buildAlanLeoKnowledgeBlock(runtime || {});
+  if (knowledgeBlock) {
+    parts.splice(parts.length - 1, 0, knowledgeBlock);
   }
   return parts.join("\n\n");
 }

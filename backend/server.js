@@ -51,6 +51,9 @@ const {
   formatAspectLensForModel,
 } = require("./chart_architecture");
 const { isChartAnalysisQuestion } = require("./chart_analysis");
+const {
+  structuresFromArchitecture,
+} = require("./knowledge/alan-leo/loader");
 const { calculateNatalChart } = require("./birth_chart_service");
 const {
   isTraditionalChart,
@@ -1095,9 +1098,11 @@ app.post("/api/chat", (req, res) => {
       let thesisText = "";
       let topicLens = "";
       let aspectLens = "";
+      let knowledgeStructures = null;
       try {
         const arch = ensureArchitecture(birthChart);
         if (arch && arch.ok) {
+          knowledgeStructures = structuresFromArchitecture(arch);
           thesisText = formatLockedClaimsForModel(arch, {
             portrait: thesisMode,
           });
@@ -1257,6 +1262,8 @@ app.post("/api/chat", (req, res) => {
         unknownBirthTime: !!(birthChart && birthChart.unknownBirthTime),
         chartSystem,
         predictionMode: isPredictionQuestion(message),
+        question: questionForMode,
+        structures: knowledgeStructures,
       });
 
       const messages = [

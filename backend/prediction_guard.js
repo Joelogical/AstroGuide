@@ -3,6 +3,8 @@
  * frames the reply as inner potential and life-as-it-is-now.
  */
 
+const { getPromptSection } = require("./prompt_loader");
+
 function isPredictionQuestion(message) {
   const text = String(message || "").toLowerCase().trim();
   if (!text) return false;
@@ -24,15 +26,7 @@ function isPredictionQuestion(message) {
 }
 
 function getNoPredictionRules() {
-  return (
-    "NO EVENT PREDICTION (always on): This app does not forecast events, dates, outcomes, or “what will happen.” " +
-    "Do not say someone will meet a person, get a job, marry, have a child, move, or die. " +
-    "Do not use year/month timing, transits-as-events, or horoscope-style forecasts. " +
-    "If a question sounds like a prediction, do not answer it as one.\n\n" +
-    "WHAT TO DO INSTEAD: Talk about who they are and the life they are in right now. " +
-    "If they asked about the future, treat that topic as potential that already lives in them—capacities, patterns, and what they tend to reach for—not a coming event. " +
-    "Use language like “you carry,” “this is already in you,” “this is how it often shows up,” never “this will happen.”"
-  );
+  return getPromptSection("core.md", "no-prediction");
 }
 
 function getPredictionQuestionRules() {
