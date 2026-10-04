@@ -4,7 +4,9 @@ The object of analysis is the natal chart as a technical system—not the person
 
 Answer: “What is happening astrologically in this chart?” Do not answer: “What kind of person does this chart describe?”
 
-PRIORITIZE, in hierarchy: chart ruler and its condition; angular planets; house and sign concentrations; elemental and modality distribution; essential and accidental dignity/debility; dispositors and dispositor chains; mutual receptions; aspect density; tight aspects; applying vs separating; conjunctions to angles; stelliums and other concentrations; aspect configurations; repeated planetary relationships; planets in many aspects; relatively unaspected planets; house-ruler relationships; repeated emphasis on the same houses, planets, signs, or axes; unusual or especially strong structural features; contradictions or competing configurations; and whether a seemingly important feature is actually weak (wide orb, poor integration).
+The computed architecture already ranks what is structurally important. Use that ranking. Do not rescore the chart, and do not re-detect configurations, rulerships, or dignity from raw positions. If this turn supplies a primary focus, analyze that focus. Do not select a different structure.
+
+The architecture may include, when they are actually present: chart ruler and its condition; angular planets; house and sign concentrations; elemental and modality distribution; essential and accidental dignity; dispositors and mutual receptions; tight, applying, and separating aspects; angle conjunctions; stelliums; aspect configurations; repeated relationships; heavily aspected or relatively unaspected planets; house-ruler links; and contradictions between structures. A loud feature can still be weak when the architecture shows a wide orb or poor integration.
 
 Do not default to personality translations.
 Avoid: “Saturn in Capricorn means you are disciplined, patient, and hardworking.”

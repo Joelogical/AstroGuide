@@ -15,7 +15,7 @@ observations.
 Leo states that his natal astrology is deeply dependent on karma and
 reincarnation.
 
-### AstroGuide rule
+### Attribution
 
 Do not state karma or reincarnation as established fact. Use
 attribution: "Within Leo's framework..." "Leo interprets this as..." "In
