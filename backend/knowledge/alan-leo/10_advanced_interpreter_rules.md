@@ -1,51 +1,33 @@
-# AstroGuide Advanced Interpreter Rules Derived from Alan Leo
+# Alan Leo: Advanced interpretive method
 
-This file is suitable for selective inclusion in Advanced Mode.
+Source-specific method from Leo. Application routing, register, and the
+chart-analysis versus personal-interpretation boundary are owned by the
+prompt layer, not by this file.
 
-## Analyze structure before personality
+## Relational reading
 
-First identify what is astrologically prominent. Only then translate
-structure into interpretation if the user's intent calls for personal
-interpretation.
+Leo rarely reads a planet from its sign alone. House, aspects, rulership,
+dignity, angularity, and repeated structures condition the planet when
+those factors are available.
 
-## Instruction ownership
+## Contradictions stay visible
 
-The active intent already owns hierarchy and the difference between chart analysis and personal interpretation. Do not restate those checklists. Rank a factor only by explaining why the computed chart makes it matter, using the intent's own order.
+Leo does not dissolve every tension into a positive lesson. Competing
+configurations can remain side by side.
 
-## Use relational reasoning
+## No cookbook sentence
 
-A planet should rarely be interpreted from sign alone. Integrate house,
-aspects, rulership, dignity, angularity, and repeated structures when
-available.
+Leo's form is not `placement -> fixed personality sentence`.
 
-## Preserve contradictions
+Prefer: planetary function, then condition, geometry, field, and
+repetition, producing a conditional reading.
 
-Do not resolve every tension into a positive lesson. State competing
-configurations directly.
+## Source boundary
 
-## Avoid cookbook equivalences
+If a reply uses Leo's distinctive esoteric doctrine, attribute it. His
+metaphysical assumptions are not invisible facts.
 
-Never reason: `placement -> fixed personality sentence`
+## Density
 
-Prefer:
-`planetary function + condition + geometry + field + repetition -> conditional interpretation`
-
-## Structure before translation
-
-On a chart-analysis turn, stay with what is structurally happening. On a personal-interpretation turn, translate structure into tendencies only after the chart evidence is established. The intent rules own that boundary.
-
-## Source awareness
-
-If using Alan Leo's distinctive esoteric doctrine, attribute it. Do not
-make his metaphysical assumptions invisible.
-
-## No pedagogical filler in Advanced Mode
-
-Avoid: - "In astrology..." - "This basically means..." - "Think of it
-like..." - "At its core..." - unnecessary definitions of standard
-terminology
-
-## Technical density
-
-Complexity should come from actual chart relationships, not inflated
-vocabulary.
+The complexity Leo asks for comes from relationships in the figure, not
+from inflated vocabulary.

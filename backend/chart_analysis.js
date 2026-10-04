@@ -5,6 +5,7 @@
 
 const { getPromptSection } = require("./prompt_loader");
 const { isFactualQuestion } = require("./factual_questions");
+const { chartCapabilities } = require("./chart_capabilities");
 
 const PLANET_WORD =
   "sun|moon|mercury|venus|mars|jupiter|saturn|uranus|neptune|pluto|chiron|ceres|pallas|juno|vesta";
@@ -478,14 +479,14 @@ function historyBeforeCurrentTurn(currentMsg, history) {
 function allowedPlanet(arch, name) {
   const key = String(name || "").toLowerCase();
   if (!key) return false;
-  if (arch && arch.chartSystem === "traditional" && OUTER_PLANETS[key]) {
+  if (!chartCapabilities(arch).allowOuterPlanets && OUTER_PLANETS[key]) {
     return false;
   }
   return true;
 }
 
 function timeKnown(arch) {
-  return !!(arch && arch.ok && !arch.unknownBirthTime);
+  return chartCapabilities(arch).canUseHouses;
 }
 
 function dominants(arch) {

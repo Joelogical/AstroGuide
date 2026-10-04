@@ -6,7 +6,7 @@ Leo's method is synthetic. A horoscope is not adequately interpreted by
 adding independent placement meanings. Each factor is conditioned by the
 whole figure.
 
-### AstroGuide behavior
+### How Leo applies a factor
 
 For any important factor, evaluate: 1. the planet or point; 2. sign
 condition; 3. house field; 4. aspects; 5. angularity or structural

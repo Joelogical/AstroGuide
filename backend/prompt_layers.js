@@ -18,6 +18,7 @@ const {
 } = require("./prediction_guard");
 const { getChartAnalysisRules } = require("./chart_analysis");
 const { getPromptSection } = require("./prompt_loader");
+const { isFactualQuestion } = require("./factual_questions");
 const { buildAlanLeoKnowledgeBlock } = require("./knowledge/alan-leo/loader");
 
 // ─── Layer 1: System rules (safety, tone, hard constraints) ─────────────────
@@ -186,6 +187,13 @@ function isAdvancedPreferred(mode) {
 
 function getAdvancedVoiceRules() {
   return getPromptSection("advanced.md", "voice");
+}
+
+function getFactualTurnRules() {
+  return (
+    "THIS TURN IS A FACTUAL LOOKUP. Answer only the chart fact the user asked for, using DETERMINISTIC CONTEXT. " +
+    "Do not write a natal interpretation, do not add personality, and do not search the web."
+  );
 }
 
 function getThesisTurnRules(preferredMode) {
@@ -476,74 +484,88 @@ function buildProfileMemoryBlock(profileMemory, options) {
  * @param {object} runtime - Same shape as buildRuntimeContext options
  * @returns {string} Full system message content
  */
+function section(label, text) {
+  return "=== " + label + " ===\n" + text;
+}
+
 function composeSystemContent(runtime) {
-  // Order: core behavior, Beginner or Advanced voice, intent turn rules,
-  // relevant Alan Leo modules, then runtime chart facts.
+  // Order: core, capability and mode constraints, register, active intent,
+  // confidence and output shape, source knowledge, then deterministic context.
   // chart-analysis.md replaces the default interpreter only for CHART_ANALYSIS.
   const mode = runtime && runtime.preferredMode;
-  const parts =
+  const factualTurn = !!(runtime && isFactualQuestion(runtime.question));
+  const parts = factualTurn
+    ? [
+        section("CORE", getSystemRules()),
+        section("ACTIVE INTENT", getFactualTurnRules()),
+        section("DETERMINISTIC CONTEXT", buildRuntimeContext(runtime)),
+      ]
+    :
     runtime && runtime.thesisMode
       ? [
-          getSystemRules(),
-          getThesisTurnRules(mode),
-          getResponseTemplates(),
-          buildRuntimeContext(runtime),
+          section("CORE", getSystemRules()),
+          section("ACTIVE INTENT", getThesisTurnRules(mode)),
+          section("OUTPUT", getResponseTemplates()),
+          section("DETERMINISTIC CONTEXT", buildRuntimeContext(runtime)),
         ]
       : runtime && runtime.topicMode
         ? [
-            getSystemRules(),
-            getTopicTurnRules(runtime.topic, mode),
-            getConfidenceWordingRules(),
-            getResponseTemplates(),
-            buildRuntimeContext(runtime),
+            section("CORE", getSystemRules()),
+            section("ACTIVE INTENT", getTopicTurnRules(runtime.topic, mode)),
+            section("CONFIDENCE", getConfidenceWordingRules()),
+            section("OUTPUT", getResponseTemplates()),
+            section("DETERMINISTIC CONTEXT", buildRuntimeContext(runtime)),
           ]
         : runtime && runtime.aspectMode
           ? [
-              getSystemRules(),
-              getAspectTurnRules(mode),
-              getConfidenceWordingRules(),
-              getResponseTemplates(),
-              buildRuntimeContext(runtime),
+              section("CORE", getSystemRules()),
+              section("ACTIVE INTENT", getAspectTurnRules(mode)),
+              section("CONFIDENCE", getConfidenceWordingRules()),
+              section("OUTPUT", getResponseTemplates()),
+              section("DETERMINISTIC CONTEXT", buildRuntimeContext(runtime)),
             ]
           : runtime && runtime.chartAnalysisMode
             ? [
-                getSystemRules(),
-                getChartAnalysisRules(
-                  mode,
-                  runtime && runtime.chartAnalysisProgression,
+                section("CORE", getSystemRules()),
+                section(
+                  "ACTIVE INTENT",
+                  getChartAnalysisRules(
+                    mode,
+                    runtime && runtime.chartAnalysisProgression,
+                  ),
                 ),
-                getConfidenceWordingRules(),
-                getResponseTemplates(),
-                buildRuntimeContext(runtime),
+                section("CONFIDENCE", getConfidenceWordingRules()),
+                section("OUTPUT", getResponseTemplates()),
+                section("DETERMINISTIC CONTEXT", buildRuntimeContext(runtime)),
               ]
           : [
-            getSystemRules(),
-            getAstrologyInterpreterRules(),
-            getConfidenceWordingRules(),
-            getResponseTemplates(),
-            buildRuntimeContext(runtime),
+            section("CORE", getSystemRules()),
+            section("ACTIVE INTENT", getAstrologyInterpreterRules()),
+            section("CONFIDENCE", getConfidenceWordingRules()),
+            section("OUTPUT", getResponseTemplates()),
+            section("DETERMINISTIC CONTEXT", buildRuntimeContext(runtime)),
           ];
   if (isAdvancedPreferred(mode)) {
-    parts.splice(1, 0, getAdvancedVoiceRules());
+    parts.splice(1, 0, section("REGISTER", getAdvancedVoiceRules()));
   }
   if (runtime && runtime.unknownBirthTime) {
-    parts.splice(1, 0, getUnknownBirthTimeRules());
+    parts.splice(1, 0, section("CAPABILITIES", getUnknownBirthTimeRules()));
   }
   if (runtime && runtime.chartSystem === "traditional") {
-    parts.splice(1, 0, getTraditionalChartRules());
+    parts.splice(1, 0, section("MODE", getTraditionalChartRules()));
   }
   if (runtime && runtime.predictionMode) {
-    parts.splice(1, 0, getPredictionQuestionRules());
+    parts.splice(1, 0, section("PREDICTION", getPredictionQuestionRules()));
   }
   const sensitivityRules = getSensitivityRules(
     runtime && runtime.sensitivityFlags,
   );
   if (sensitivityRules) {
-    parts.splice(1, 0, sensitivityRules);
+    parts.splice(1, 0, section("CONSTRAINTS", sensitivityRules));
   }
   const knowledgeBlock = buildAlanLeoKnowledgeBlock(runtime || {});
   if (knowledgeBlock) {
-    parts.splice(parts.length - 1, 0, knowledgeBlock);
+    parts.splice(parts.length - 1, 0, section("SOURCE KNOWLEDGE", knowledgeBlock));
   }
   return parts.join("\n\n");
 }

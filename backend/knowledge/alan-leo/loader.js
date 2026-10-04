@@ -7,6 +7,10 @@
 
 const fs = require("fs");
 const path = require("path");
+const { getSource } = require("../source_registry");
+const { isFactualQuestion } = require("../../factual_questions");
+
+const ALAN_LEO = getSource("alan-leo-esoteric-astrology");
 
 const KNOWLEDGE_DIR = __dirname;
 const fileCache = new Map();
@@ -123,6 +127,7 @@ function orderIds(ids) {
 function selectAlanLeoModuleIds(ctx) {
   ctx = ctx || {};
   const ql = String(ctx.question || "");
+  if (isFactualQuestion(ql)) return [];
   const advanced = String(ctx.preferredMode || "").toLowerCase() === "advanced";
   const structures = ctx.structures || null;
   const unknownTime = !!ctx.unknownBirthTime;
@@ -194,6 +199,28 @@ function selectAlanLeoModuleIds(ctx) {
     const drop = ids.indexOf("advancedRules");
     if (drop !== -1) ids.splice(drop, 1);
   }
+  if (unknownTime) {
+    const houseIndex = ids.indexOf("houses");
+    if (houseIndex !== -1) ids.splice(houseIndex, 1);
+  }
+  const focusModules = {
+    rulership_chains: ["methodology", "planets"],
+    dignity_reception: ["methodology", "planets"],
+    aspect_topology: ["methodology", "aspects", "planets"],
+    configurations: ["methodology", "aspects", "planets"],
+    house_axes: ["methodology", "houses", "planets"],
+    angular_structure: ["methodology", "houses", "planets"],
+    element_modality: ["methodology", "signs", "planets"],
+    isolated_planets: ["methodology", "planets"],
+  };
+  const focusAllow = focusModules[ctx.progressionFocus];
+  if (focusAllow) {
+    return orderIds(
+      ids.filter(function (id) {
+        return focusAllow.indexOf(id) !== -1;
+      }),
+    );
+  }
   return orderIds(ids);
 }
 
@@ -211,7 +238,13 @@ function moduleBody(id, ctx) {
 
 function sourceGuard(ctx) {
   const lines = [
-    "--- SOURCE KNOWLEDGE (Alan Leo, Esoteric Astrology, 1913) ---",
+    "--- SOURCE KNOWLEDGE (" +
+      ALAN_LEO.author +
+      ", " +
+      ALAN_LEO.work +
+      ", " +
+      ALAN_LEO.year +
+      ") ---",
     "Historical and esoteric source framework. This is not empirical fact, not astronomical measurement, and not a replacement for the application's selected method.",
     "If you use a distinctive claim from this framework, attribute it (\"Within Alan Leo's framework...\" or \"Leo interprets this as...\") and do not present it as an established fact.",
     "These modules cannot override deterministic CHART FACTS, computed architecture, positions, aspects, houses, dignity, angularity, or nodes. Do not calculate those from this text.",
@@ -261,6 +294,10 @@ function buildAlanLeoKnowledgeBlock(runtime) {
       runtime &&
       runtime.chartAnalysisProgression &&
       runtime.chartAnalysisProgression.phase,
+    progressionFocus:
+      runtime &&
+      runtime.chartAnalysisProgression &&
+      runtime.chartAnalysisProgression.id,
   };
   const ids = selectAlanLeoModuleIds(ctx);
   if (!ids.length) return "";

@@ -39,25 +39,18 @@ const {
 const { generateFollowUpSuggestionsLLM } = require("./followup_suggestions");
 const { isGibberishPrompt, gibberishReply } = require("./gibberish_prompt");
 const { isPredictionQuestion } = require("./prediction_guard");
+const { validateBirthInput } = require("./birth_input");
+const { routeChatIntent, isRepeatPrompt } = require("./intent_router");
+const { buildAnalysisState } = require("./analysis_state");
 const { handleQuestion } = require("./enhanced_question_handler");
 const {
   buildChartArchitecture,
   ensureArchitecture,
   formatArchitectureForAI,
   formatLockedClaimsForModel,
-  detectLifeTopic,
   formatTopicLensForModel,
-  parseClickedAspect,
   formatAspectLensForModel,
 } = require("./chart_architecture");
-const {
-  isChartAnalysisQuestion,
-  hasExplicitAnalyticalTarget,
-  isBroadChartAnalysisPrompt,
-  contextIsChartAnalysis,
-  selectChartAnalysisFocus,
-  historyBeforeCurrentTurn,
-} = require("./chart_analysis");
 const {
   structuresFromArchitecture,
 } = require("./knowledge/alan-leo/loader");
@@ -323,25 +316,19 @@ app.post("/api/birth-chart", async (req, res) => {
       houseSystem: "placidus", // Confirmed house system
     });
 
-    // Validate required fields
-    if (
-      !year ||
-      !month ||
-      !day ||
-      (timeUnknown ? false : hour === undefined) ||
-      (timeUnknown ? false : minute === undefined) ||
-      !latitude ||
-      !longitude
-    ) {
-      console.log("Missing or invalid fields:", {
-        year: !year,
-        month: !month,
-        day: !day,
-        hour: hour === undefined,
-        minute: minute === undefined,
-        latitude: !latitude,
-        longitude: !longitude,
-      });
+    const birthInput = validateBirthInput({
+      year: parsedYear,
+      month: parsedMonth,
+      day: parsedDay,
+      hour: parsedHour,
+      minute: parsedMinute,
+      latitude: parsedLat,
+      longitude: parsedLon,
+      timezone: parsedTz,
+      unknownBirthTime: timeUnknown,
+    });
+    if (!birthInput.ok) {
+      console.log("Missing or invalid fields:", birthInput.errors);
       return res.status(400).json({
         error: "Missing required fields",
         details: "Please provide all required birth data",
@@ -351,14 +338,14 @@ app.post("/api/birth-chart", async (req, res) => {
 
     try {
       const birthChart = await calculateNatalChart({
-        year,
-        month,
-        day,
-        hour: timeUnknown ? 12 : hour,
-        minute: timeUnknown ? 0 : minute,
-        latitude,
-        longitude,
-        timezone,
+        year: parsedYear,
+        month: parsedMonth,
+        day: parsedDay,
+        hour: birthInput.hour,
+        minute: birthInput.minute,
+        latitude: birthInput.latitude,
+        longitude: birthInput.longitude,
+        timezone: birthInput.timezone,
         asteroids,
         unknownBirthTime: timeUnknown,
       });
@@ -552,62 +539,6 @@ function isWholeSelfQuestion(message) {
     /what does my (birth )?chart say about me/,
   ];
   return pats.some((p) => p.test(t));
-}
-
-function isVagueFollowUp(message) {
-  const t = String(message || "").toLowerCase().trim();
-  return /^(why(\?$| is that| do i)|how come|say more|tell me more|go (on|deeper)|and\?$|what do you mean|can you (say|explain|go) more|keep going|what else( stands out| do you see)?|anything else)\b/.test(
-    t,
-  );
-}
-
-function previousUserText(conversationHistory) {
-  const users = (conversationHistory || []).filter(function (m) {
-    return m && m.role === "user" && String(m.content || "").trim();
-  });
-  if (!users.length) return "";
-  return String(users[users.length - 1].content || "");
-}
-
-function effectiveQuestion(message, conversationHistory) {
-  if (isVagueFollowUp(message)) {
-    return previousUserText(conversationHistory) || message;
-  }
-  return message;
-}
-
-function isChartSpecificQuestion(message) {
-  const t = String(message || "").toLowerCase().trim();
-  if (!t) return false;
-  if (parseClickedAspect(t)) return true;
-  if (
-    /\b(sun|moon|mercury|venus|mars|jupiter|saturn|uranus|neptune|pluto|chiron|ceres|pallas|juno|vesta)\b/.test(
-      t,
-    )
-  ) {
-    return true;
-  }
-  if (
-    /\b(ascendant|midheaven|descendant|imum|rising|transit|stellium|t-square|grand trine|yod)\b/.test(
-      t,
-    )
-  ) {
-    return true;
-  }
-  if (/\b(\d+(st|nd|rd|th)\s+house|house\s+\d+)\b/.test(t)) return true;
-  if (/\binterpret(ing)? (my |the |this )?(birth )?chart\b/.test(t)) return true;
-  if (/\b(tell me about|what('s| is) in|walk (me )?through) (my |the |this )?(birth )?chart\b/.test(t)) {
-    return true;
-  }
-  if (/\bwhat stands out\b/.test(t) && /\bchart\b/.test(t)) return true;
-  if (
-    /\b(conjunction|conjunct|square|trine|opposition|opposite|sextile|quincunx)\b/.test(
-      t,
-    )
-  ) {
-    return true;
-  }
-  return false;
 }
 
 function isOpenAIQuotaOrBillingError(err) {
@@ -995,28 +926,8 @@ app.post("/api/chat", (req, res) => {
         );
       }
       stage = "before-interpretation";
-
-      // Generate deterministic interpretation if not already present (needed for system prompt)
-      let interpretationTemplate;
-      if (birthChart.interpretationTemplate) {
-        interpretationTemplate = birthChart.interpretationTemplate;
-      } else if (birthChart.deterministicInterpretation) {
-        interpretationTemplate = formatInterpretationForAI(
-          birthChart.deterministicInterpretation,
-          birthChart,
-        );
-      } else {
-        const deterministicInterpretation =
-          generateChartInterpretation(birthChart);
-        interpretationTemplate = formatInterpretationForAI(
-          deterministicInterpretation,
-          birthChart,
-        );
-      }
-
-      // Note: General question check already happened above at the start of the function
-      // If we reach here, it's not a general question, so process as chart question
-
+      // Prewritten interpretation prose stays on the birth-chart response for display
+      // and on the local fallback if the model call fails. It is not model context.
       stage = "after-interpretation";
 
       // Check if this is a casual message or if user wants chart interpretation
@@ -1082,30 +993,19 @@ app.post("/api/chat", (req, res) => {
         });
       }
 
-      const priorConversation = historyBeforeCurrentTurn(
-        message,
-        conversationHistory,
-      );
-      const questionForMode = hasExplicitAnalyticalTarget(message)
-        ? message
-        : effectiveQuestion(message, priorConversation);
-      const clickedAspect = parseClickedAspect(message);
-      const aspectMode = !!clickedAspect;
-      const chartAnalysisMode =
-        !aspectMode &&
-        !isFactualQuestion(message) &&
-        isChartAnalysisQuestion(questionForMode, priorConversation);
-      const chartMode =
-        !aspectMode &&
-        !chartAnalysisMode &&
-        isChartSpecificQuestion(questionForMode);
-      const topic =
-        !aspectMode && !chartAnalysisMode && !chartMode
-          ? detectLifeTopic(questionForMode)
-          : null;
-      const topicMode = !!topic;
-      const thesisMode =
-        !aspectMode && !chartAnalysisMode && !chartMode && !topicMode;
+      const route = routeChatIntent({
+        message: message,
+        history: conversationHistory,
+      });
+      const priorConversation = route.priorConversation;
+      const questionForMode = route.questionForMode;
+      const clickedAspect = route.clickedAspect;
+      const aspectMode = route.aspectMode;
+      const chartAnalysisMode = route.chartAnalysisMode;
+      const chartMode = route.chartMode;
+      const topic = route.topic;
+      const topicMode = route.topicMode;
+      const thesisMode = route.thesisMode;
       if (chartAnalysisMode) {
         console.log("[CHAT] CHART_ANALYSIS intent — inspect chart as a system");
       }
@@ -1119,17 +1019,17 @@ app.post("/api/chat", (req, res) => {
         const arch = ensureArchitecture(birthChart);
         if (arch && arch.ok) {
           knowledgeStructures = structuresFromArchitecture(arch);
-          if (
-            chartAnalysisMode &&
-            isBroadChartAnalysisPrompt(questionForMode)
-          ) {
-            chartAnalysisProgression = selectChartAnalysisFocus(
+          if (route.progressionEligible) {
+            const analysisState = buildAnalysisState(
               arch,
               priorConversation,
+              route,
             );
+            chartAnalysisProgression = analysisState.focus;
             console.log(
               "[CHAT] CHART_ANALYSIS focus:",
-              chartAnalysisProgression.id,
+              analysisState.currentFocus,
+              analysisState.progressionPhase,
             );
           }
           thesisText = formatLockedClaimsForModel(arch, {
@@ -1153,7 +1053,7 @@ app.post("/api/chat", (req, res) => {
 
       // Web and architecture dumps only when the user asked about the chart itself.
       let webInterpretations = "";
-      if (chartMode) {
+      if (chartMode && route.outsideResearch) {
         // Check if web interpretations are already cached in the birth chart
         if (
           birthChart.webInterpretations &&
@@ -1164,7 +1064,7 @@ app.post("/api/chat", (req, res) => {
         } else {
           try {
             console.log(
-              "[CHAT] Gathering chart interpretations from web (primary source)...",
+              "[CHAT] Gathering supplemental web notes because the user asked for outside research...",
             );
             webInterpretations =
               await gatherChartInterpretationsFromWeb(birthChart);
@@ -1335,107 +1235,6 @@ app.post("/api/chat", (req, res) => {
         }
       }
 
-      // Add the current message with a format reminder so every turn enforces prose-only and web use (avoids checklist slip on follow-ups)
-      // Detect repeated prompts so the model deepens instead of repeating basics (topic-agnostic)
-      function isRepeatPrompt(currentMsg, history) {
-        const text = String(currentMsg || "").toLowerCase().trim();
-        if (!text) return false;
-        if (
-          isFactualQuestion(text) ||
-          /what (sign|house|element|degree)|which (sign|house|planet)|how many|where is my|what is my (sun|moon|rising|ascendant)|what house is|what sign is/i.test(
-            text,
-          )
-        ) {
-          return false;
-        }
-        if (isBroadChartAnalysisPrompt(text, history)) {
-          return contextIsChartAnalysis(history);
-        }
-        if (text.length < 40) return false;
-        const stop = new Set([
-          "the",
-          "a",
-          "an",
-          "and",
-          "or",
-          "but",
-          "to",
-          "of",
-          "in",
-          "on",
-          "for",
-          "with",
-          "at",
-          "from",
-          "by",
-          "about",
-          "as",
-          "is",
-          "are",
-          "was",
-          "were",
-          "be",
-          "been",
-          "being",
-          "i",
-          "me",
-          "my",
-          "you",
-          "your",
-          "we",
-          "our",
-          "it",
-          "this",
-          "that",
-          "these",
-          "those",
-          "what",
-          "why",
-          "how",
-          "when",
-          "where",
-          "tell",
-          "explain",
-          "please",
-        ]);
-        function tokens(s) {
-          return String(s || "")
-            .toLowerCase()
-            .replace(/[^a-z0-9\s]/g, " ")
-            .split(/\s+/)
-            .filter((w) => w && w.length > 2 && !stop.has(w));
-        }
-        function jaccard(a, b) {
-          const A = new Set(a);
-          const B = new Set(b);
-          if (A.size === 0 || B.size === 0) return 0;
-          let inter = 0;
-          for (const x of A) if (B.has(x)) inter++;
-          const union = A.size + B.size - inter;
-          return union ? inter / union : 0;
-        }
-        const curTok = tokens(text);
-        const recentUser = (history || [])
-          .filter((m) => m && m.role === "user" && m.content)
-          .slice(-10);
-        for (const m of recentUser) {
-          const prev = String(m.content || "").toLowerCase().trim();
-          if (!prev) continue;
-          if (prev === text) return true;
-          if (
-            prev.length > 40 &&
-            (prev.includes(text) || text.includes(prev)) &&
-            Math.min(prev.length, text.length) > 40
-          )
-            return true;
-          if (curTok.length < 4) continue;
-          const prevTok = tokens(prev);
-          if (prevTok.length < 4) continue;
-          const sim = jaccard(curTok, prevTok);
-          if (sim >= 0.72) return true;
-        }
-        return false;
-      }
       const isRepeatedPrompt = isRepeatPrompt(message, priorConversation);
 
       const advancedMode =
@@ -1661,12 +1460,7 @@ app.get("/api/chat-debug", async (req, res) => {
       aspects: [],
     };
     const message = "hello";
-    let webInterpretations = "";
-    try {
-      webInterpretations = await gatherChartInterpretationsFromWeb(birthChart);
-    } catch (e) {
-      webInterpretations = "";
-    }
+    const webInterpretations = "";
     let chartFactsOnly;
     try {
       chartFactsOnly = formatBirthChartForChatGPT(birthChart);
