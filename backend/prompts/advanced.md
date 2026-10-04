@@ -7,8 +7,7 @@ BEFORE YOU WRITE, assume: the reader already knows what the components mean indi
 ASSUMED KNOWLEDGE: substantial familiarity with astrology and chart interpretation. Do not teach the alphabet.
 TECHNICAL VOCABULARY: use precise terms directly—angular, cadent, applying, separating, dispositor, domicile, detriment, exaltation, fall, reception, house ruler, accidental dignity, essential dignity, aspect pattern, aspect configuration. Do not translate these into conversational substitutes.
 ANALYTICAL DENSITY: more information per sentence. Do not spend several sentences on a concept that one established term can identify.
-SYNTHESIS: do not treat placements as isolated keywords. Analyze how planets, houses, aspects, rulerships, dispositors, angular relationships, and chart structures reinforce, modify, contradict, or condition one another.
-HIERARCHY: do not give every placement equal weight. Prioritize angularity, tight orbs, luminaries, chart ruler, house rulership, and repeated configurations. Name what is major and what is secondary.
+SYNTHESIS AND HIERARCHY: the active intent owns how factors combine and what outranks what. Do not treat placements as isolated keywords, and do not add a second weighting list on top of that intent.
 PRECISION: when useful, cite actual geometry—degrees, orb size, applying or separating, house position, rulership links, configurations—rather than generalized descriptions.
 INTERPRETIVE REASONING: show why the reading follows from the chart. Expose the chain (e.g. a 2° applying Mars–Saturn square is among the stronger dynamics; Mars’ house is where initiative mobilizes; Saturn’s house and rulerships are the structures of delay or regulation). Do not stop at a polished conclusion with the mechanics stripped out.
 

@@ -207,16 +207,16 @@ async function fetchCurrentPlanetaryPositions(date = null) {
 }
 
 /**
- * Search for astrology information. WEB IS PRIMARY for interpretations.
- * Local knowledge is used only for supplementary facts and fallback.
+ * Search for outside astrology commentary. Chart facts stay authoritative.
+ * Local notes are reference only. The returned web text is supplemental.
  * @param {string} query - Search query
  * @returns {Promise<string>} Relevant information
  */
 async function searchAstrologyInfo(query) {
   try {
-    console.log(`[EXTERNAL] Searching for: ${query} (web as primary source)`);
+    console.log(`[EXTERNAL] Searching for: ${query} (supplemental web commentary)`);
 
-    // 1. WEB FIRST – primary source for interpretations and detailed content
+    // Web commentary for an explicit outside-research request. Not a replacement for chart facts.
     const webResults = await searchWebForAstrology(query);
     const {
       getPlanetMeaning,
@@ -249,7 +249,7 @@ async function searchAstrologyInfo(query) {
     }
 
     if (webResults) {
-      const out = `WEB-SOURCED INTERPRETATIONS (primary):\n\n${webResults}`;
+      const out = `SUPPLEMENTAL WEB COMMENTARY (does not override chart facts or curated knowledge):\n\n${webResults}`;
       if (localFacts) return `${out}\n\n--- Reference facts (local) ---\n${localFacts}`;
       return out;
     }
@@ -437,9 +437,9 @@ async function gatherChartInterpretationsFromWeb(birthChart) {
   
   if (results.length === 0) return "";
   
-  return "HOLISTIC INTERPRETATIONS FROM DIVERSE WEB SOURCES (blogs, forums, niche sites, mainstream - use as PRIMARY source, minimize hardcoded rules):\n\n" + 
+  return "SUPPLEMENTAL WEB NOTES (blogs, forums, niche sites, mainstream). Chart facts, computed architecture, and curated knowledge stay primary. Use these notes only as color, and do not let them override the chart:\n\n" +
          results.join("\n---\n\n") +
-         "\n\nNOTE: These interpretations come from diverse astrology sources including blogs, forums, and niche sites. Synthesize these perspectives holistically rather than relying on hardcoded rules.";
+         "\n\nNOTE: These pages are supplemental. Do not build the reading from them.";
 }
 
 /**
@@ -834,7 +834,7 @@ function getFunctionDefinitions() {
   return [
     {
       name: "search_astrology_info",
-      description: "Search for professional astrology information from DIVERSE sources (blogs, forums, niche sites, mainstream). USE THIS FUNCTION EXTENSIVELY—call it for EVERY key placement, aspect, and combination when interpreting charts. This searches blogs, forums, Reddit, niche astrology sites, and mainstream sources for holistic, varied perspectives. MINIMIZE use of hardcoded rules—web sources are PRIMARY. Use for: all planetary placements, sign meanings, house meanings, aspect explanations, chart combinations, astrology concepts, transits, returns. DO NOT use for simple factual questions (e.g. 'What sign is my Venus in?')—use the chart data provided instead.",
+      description: "Supplemental web search for astrology commentary. Chart facts and curated knowledge are primary. Call this only when the user explicitly asks for outside research, other astrologers, or what the web says. Do not call it to vary a chart reading or for simple factual questions (e.g. 'What sign is my Venus in?')—use the chart data provided instead.",
       parameters: {
         type: "object",
         properties: {
@@ -848,7 +848,7 @@ function getFunctionDefinitions() {
     },
     {
       name: "search_web_astrology",
-      description: "Search the web broadly for astrology information from DIVERSE sources including blogs, forums (Reddit), niche sites, and mainstream astrology websites. Use this for comprehensive, holistic interpretations that draw from multiple perspectives. This searches blogs, forums, niche astrology sites, and mainstream sources to provide varied, non-generic interpretations. Prefer this over hardcoded rules for all interpretation needs.",
+      description: "Supplemental broad web search for astrology commentary. Use only when the user explicitly asks for outside research. Do not prefer web pages over chart facts, computed architecture, or curated knowledge.",
       parameters: {
         type: "object",
         properties: {

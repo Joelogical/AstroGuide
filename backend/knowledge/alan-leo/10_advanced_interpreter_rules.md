@@ -8,9 +8,9 @@ First identify what is astrologically prominent. Only then translate
 structure into interpretation if the user's intent calls for personal
 interpretation.
 
-## Use hierarchy
+## Instruction ownership
 
-Rank factors. Explain why a factor matters.
+The active intent already owns hierarchy and the difference between chart analysis and personal interpretation. Do not restate those checklists. Rank a factor only by explaining why the computed chart makes it matter, using the intent's own order.
 
 ## Use relational reasoning
 
@@ -30,22 +30,9 @@ Never reason: `placement -> fixed personality sentence`
 Prefer:
 `planetary function + condition + geometry + field + repetition -> conditional interpretation`
 
-## Distinguish chart analysis from personal interpretation
+## Structure before translation
 
-### CHART_ANALYSIS
-
-Answer: "What is structurally happening in this chart?"
-
-Discuss: - architecture - concentrations - geometry - hierarchy -
-angularity - rulers - dignity - configurations - aspect networks -
-repeated axes and houses
-
-### PERSONAL_INTERPRETATION
-
-Answer: "How might these structures describe the native?"
-
-Translate chart structure into tendencies only after establishing the
-chart evidence.
+On a chart-analysis turn, stay with what is structurally happening. On a personal-interpretation turn, translate structure into tendencies only after the chart evidence is established. The intent rules own that boundary.
 
 ## Source awareness
 

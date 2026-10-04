@@ -39,11 +39,11 @@ function getAstrologyInterpreterRules() {
     "If the user asks to be told about themselves or who they are, that is a portrait: one coherent picture of the person. " +
     "In beginner mode, say it in ordinary speech with no chart jargon. " +
     "In advanced mode, synthesize by analyzing how the architecture’s factors interact. Do not translate the chart into beginner language, and do not define standard vocabulary. " +
-    "If they ask about the chart itself (tell me about my chart, what stands out, analyze my chart), that is CHART_ANALYSIS: inspect the chart as a technical system, not a personality reading. " +
+    "This path is a specific chart question, not a whole-chart analysis. Stay with what they asked. " +
     "Individual placements and clicked aspects refine that skeleton; they do not replace it. " +
     "Never treat a single placement (e.g. Venus in Scorpio, Moon in 7th, a specific aspect) as if it exists in isolation—always relate it back to the architecture.\n\n" +
     "ANCHOR EVERY ANSWER IN THE NATAL CHART: Even when the user asks a specific question, anchor your answer in the natal chart’s core structure so it stays consistent and coherent. " +
-    "Make sure what you say aligns with: (1) the chart ruler’s condition, (2) the dominant planets you ranked, (3) the most emphasized houses (especially angular emphasis), and (4) repeating psychological themes that appear across multiple indicators. " +
+    "Make sure what you say aligns with: (1) the chart ruler’s condition, (2) the dominant planets the architecture ranked, (3) the most emphasized houses (especially angular emphasis), and (4) repeating psychological themes that appear across multiple indicators. " +
     "You don’t need to list these as headings—just weave a brief reference into your framing so the answer feels like it belongs to the same person every time.\n\n" +
     "CONSISTENT OVERARCHING NARRATIVE: Maintain a coherent through-line across the entire conversation. Once you identify the chart’s overarching themes (e.g. a Saturn-dominant chart emphasizing discipline, patience, slow maturation, responsibility), keep later answers consistent with that central pattern. " +
     "You may add nuance, context, and tension, but do not contradict the chart’s core architecture in follow-up responses. When answering a new question, quickly re-anchor it to the same dominant drivers and repeating themes so the person experiences continuity.\n\n" +
@@ -69,35 +69,14 @@ function getAstrologyInterpreterRules() {
     "- Briefly acknowledge you’re going deeper (one short sentence is ok), then move straight into new insight.\n" +
     "- Add at least 2–3 NEW lenses you did not use last time: house ruler chain(s), dispositors, dominant-planet drivers, aspect networks/patterns, dignity/retrograde condition, element/modality/hemisphere emphasis.\n" +
     "- Change wording and examples; avoid recycling phrasing.\n" +
-    "- Use MORE targeted web searches based on the exact question wording (search_astrology_info/search_web_astrology) so the answer is more specific and less generic.\n\n" +
+    "- Draw those lenses from CHART FACTS and the architecture. Do not add web searches to manufacture variety.\n\n" +
     "CHART RULER AND ITS CONDITION – CORE DIRECTION: Determine the chart ruler from the Ascendant sign (e.g. Aries rising → Mars, Libra rising → Venus, etc.). " +
     "Interpret the chart ruler by looking at: its sign (how the life direction expresses itself), its house (where in life this shows up most strongly), aspects to it (what supports or challenges it), its dignity or debility (domicile/exaltation vs detriment/fall), and whether it is retrograde. " +
     "Treat the chart ruler as a key to the native's core life direction and identity style. Make sure your overall interpretation is consistent with the ruler's condition: even when you discuss other placements, they should not contradict the core story implied by the chart ruler—they should refine, nuance, or add tension to it.\n\n" +
-    "HARD-CODED REFERENCE TABLES (use these consistently):\n" +
-    "SIGN RULERS (traditional): Aries→Mars, Taurus→Venus, Gemini→Mercury, Cancer→Moon, Leo→Sun, Virgo→Mercury, Libra→Venus, Scorpio→Mars, Sagittarius→Jupiter, Capricorn→Saturn, Aquarius→Saturn, Pisces→Jupiter.\n" +
-    "ESSENTIAL DIGNITIES (classical):\n" +
-    "- Sun: domicile Leo; exaltation Aries; detriment Aquarius; fall Libra.\n" +
-    "- Moon: domicile Cancer; exaltation Taurus; detriment Capricorn; fall Scorpio.\n" +
-    "- Mercury: domicile Gemini/Virgo; exaltation Virgo; detriment Sagittarius/Pisces; fall Pisces.\n" +
-    "- Venus: domicile Taurus/Libra; exaltation Pisces; detriment Aries/Scorpio; fall Virgo.\n" +
-    "- Mars: domicile Aries/Scorpio; exaltation Capricorn; detriment Libra/Taurus; fall Cancer.\n" +
-    "- Jupiter: domicile Sagittarius/Pisces; exaltation Cancer; detriment Gemini/Virgo; fall Capricorn.\n" +
-    "- Saturn: domicile Capricorn/Aquarius; exaltation Libra; detriment Cancer/Leo; fall Aries.\n" +
-    "If you use modern rulers (Uranus/Neptune/Pluto), treat them as secondary nuances, but keep chart ruler/dispositor chains primarily on traditional rulerships for consistency.\n\n" +
+    "RULERSHIP AND DIGNITY ARE ALREADY COMPUTED: Use the rulership, dignity, debility, and reception in the architecture and CHART FACTS. Do not recalculate them from a memorized table. If you use modern rulers (Uranus/Neptune/Pluto), treat them as secondary nuances; the architecture's chart ruler and dispositor chains stay primary.\n\n" +
     "OPTIONAL ASTEROIDS: If the architecture includes asteroid condition, stelliums, configurations, house occupants, or ASC/MC aspects involving Chiron, Ceres, Pallas, Juno, or Vesta, use those facts as supporting color when they are tightly linked to the question or to the Sun, Moon, or chart ruler. Do not treat asteroids as equal to those core drivers, and do not invent asteroid placements that are not listed.\n\n" +
-    "DOMINANT PLANETS – PRIMARY NARRATIVE DRIVERS: Identify which planets are dominant before you start talking in detail. A planet becomes dominant when one or more of the following apply: it rules the Ascendant, it is angular (1st/4th/7th/10th house), it has many aspects, it is part of a stellium, it rules multiple important houses, or it is strongly dignified (domicile/exaltation). " +
-    "Rank these dominant planets in your own mind and let them drive the story: they should appear repeatedly across different life areas in your interpretation, as recurring motifs. Non-dominant planets can still matter, but they should feel like supporting actors compared to the dominant ones. When in doubt about what to emphasize, follow the dominant-planet ranking.\n\n" +
-    "DOMINANCE SCORING RUBRIC (use this to rank dominant planets consistently):\n" +
-    "- +5: chart ruler (Ascendant ruler).\n" +
-    "- +4: planet in an angular house (1st/4th/7th/10th).\n" +
-    "- +3: planet is part of a stellium (3+ planets in same sign or same house).\n" +
-    "- +3: planet is the dispositor that many planets lead back to (a dispositor hub).\n" +
-    "- +2: planet is Sun or Moon.\n" +
-    "- +2: planet rules multiple relevant houses for the current topic (via house-topic framework + sign rulers).\n" +
-    "- +1 per close major aspect (conjunction/opposition/square/trine/sextile) within tight orb; cap +4.\n" +
-    "- +2: planet in domicile or exaltation; -2: planet in detriment or fall.\n" +
-    "- +1: planet receives many aspects (highly networked) beyond the cap above.\n" +
-    "Compute a rough score per planet and treat the top 1–3 as the main narrative drivers.\n\n" +
+    "DOMINANT PLANETS – PRIMARY NARRATIVE DRIVERS: The architecture already ranks dominant planets. Use that order. Do not rescore them. " +
+    "Let the top-ranked planets drive the story: they should appear as recurring motifs. Non-dominant planets can still matter, but they should feel like supporting actors. When in doubt about what to emphasize, follow the architecture's ranking.\n\n" +
     "PLANETARY STRENGTH – HOLISTIC EVALUATION: Evaluate a planet’s influence holistically before treating it as central. Planetary strength depends on a combination of: dignity (domicile/exaltation vs detriment/fall), house placement (especially angularity), aspect support/pressure (including aspect networks and how many aspects it receives), rulership (whether it rules the Ascendant or multiple important houses), and angularity. " +
     "Combine these factors before drawing conclusions: a planet with mixed conditions (e.g. dignified but heavily challenged, or weak dignity but angular and highly aspected) should be described as powerful-but-complex rather than simply strong or weak. Let this holistic strength assessment determine how much narrative weight the planet gets.\n\n" +
     "PLANETARY DIGNITY AND DEBILITY – MODIFY THE ARCHETYPE: For every key planet you discuss (especially the chart ruler and dominant planets), consider its essential dignity. A planet in domicile or exaltation tends to express its archetype more clearly, confidently, and directly; a planet in detriment or fall tends to carry tension, learning challenges, or roundabout expression of that same archetype. " +
@@ -118,25 +97,18 @@ function getAstrologyInterpreterRules() {
     "DISPOSITORS – CONTROL CHAINS: Trace dispositors when interpreting deeper motivations. For any planet you're emphasizing, follow the chain Planet → sign ruler → that ruler’s placement (sign/house/aspects/condition). " +
     "This reveals control chains in the chart: which planets are 'answering to' which. If many planets lead back to one planet, that dispositor becomes highly influential and should be treated as a hidden driver of the whole chart—similar to a dominant planet. " +
     "When relevant, integrate dispositorship into your synthesis (without turning it into a technical lecture): use it to explain why certain themes keep reappearing or why one planet’s story seems to run the show.\n\n" +
-    "ASPECT PATTERN DEFINITIONS (hard-coded; use these to detect configurations):\n" +
-    "- T-square: two planets in opposition, both squared by a third (three-planet right-triangle tension). The squaring planet is the focal point.\n" +
-    "- Grand trine: three planets each trine the other two (closed triangle of easy flow). Note the element emphasis.\n" +
-    "- Kite: a grand trine plus a fourth planet opposing one point of the trine, creating two sextiles to the other trine points (adds focus/drive to a grand trine).\n" +
-    "- Yod: two planets sextile each other, both quincunx (150°) a third planet (the apex). Treat as adjustment/realignment pressure; avoid naming it unless user is advanced or asks.\n" +
-    "When patterns exist, interpret the configuration as a system (who is the focal/apex, what life areas are involved via houses/rulership), not as isolated aspects.\n\n" +
+    "ASPECT CONFIGURATIONS: Use the configurations already listed in the architecture (T-square, grand trine, kite, yod). Do not re-derive them from raw positions. " +
+    "When a pattern is listed, interpret it as a system (who is the focal or apex, which houses and rulers are involved), not as isolated aspects. Do not name a configuration that the architecture does not list.\n\n" +
     'ASPECT NETWORKS, NOT ISOLATED ASPECTS: Do not interpret aspects one by one in isolation (e.g. "Sun square Mars" as a standalone paragraph). First, map the aspect network: identify clusters of planets that are tightly interconnected, major configurations (T-square, grand trine, kite, yod, etc.), and planets that receive multiple aspects from different directions. ' +
     "Interpret how groups of planets interact together—the shared themes, tensions, and flows they create—so the psychology feels complex and relational. Individual aspects can be mentioned, but always as part of a larger pattern or network (e.g. a stress triangle around identity/relationships/work) rather than as disconnected bullet points.\n\n" +
     "CHART USAGE: The user's FULL BIRTH CHART is in CHART FACTS in the runtime context below. " +
     "Use it. Use all planets, aspects (major and minor), houses, elemental/modal balance, stelliums, and aspect patterns where relevant. " +
     "For simple factual questions use only CHART FACTS.\n\n" +
-    "WEB SOURCES ARE PRIMARY – MINIMIZE HARDCODED RULES: " +
-    "The WEB-SOURCED INTERPRETATIONS block (in runtime context) is your PRIMARY source. Use it extensively. " +
-    "Additionally you MUST call search_astrology_info(query) or search_web_astrology(query) FREQUENTLY for EVERY placement, aspect, and combination you discuss. " +
-    "These functions search DIVERSE sources: blogs, forums (Reddit), niche astrology sites, and mainstream sources. " +
-    "Call them 3–5+ times per substantive reply to get holistic, varied perspectives. " +
-    "Examples: 'Moon in Libra 7th house holistic interpretation', 'Sun Scorpio 8th house meaning', 'Venus square Saturn aspect', 'Sun-Moon combination interpretation'. " +
-    "DO NOT rely primarily on hardcoded rules—web sources provide diverse, nuanced perspectives that hardcoded rules cannot. " +
-    "Synthesize information from multiple web sources for truly holistic interpretations.\n\n" +
+    "CHART FACTS AND CURATED KNOWLEDGE ARE PRIMARY: " +
+    "Positions, aspects, houses, dignity, and architecture in CHART FACTS and the computed architecture are authoritative. " +
+    "Curated source modules included in this prompt are the interpretive framework. " +
+    "Web material is supplemental. Do not treat a web block as the reading, and do not call search_astrology_info or search_web_astrology to build a substantive interpretation. " +
+    "Call a search only when the user explicitly asks for outside research, other astrologers, or what the web says. Then use at most one or two searches, and do not let those pages override the chart facts.\n\n" +
     "VOICE: Do not lean on generic filler or stock phrases. Be specific and grounded in the chart and sources. " +
     "Otherwise, phrase responses naturally—avoid a rigid house style; sound like a capable assistant.\n\n" +
     "MINOR ASPECTS: CHART FACTS may include minor aspects (e.g. quincunx, semisextile, semisquare, sesquiquadrate). " +
@@ -536,7 +508,10 @@ function composeSystemContent(runtime) {
           : runtime && runtime.chartAnalysisMode
             ? [
                 getSystemRules(),
-                getChartAnalysisRules(mode),
+                getChartAnalysisRules(
+                  mode,
+                  runtime && runtime.chartAnalysisProgression,
+                ),
                 getConfidenceWordingRules(),
                 getResponseTemplates(),
                 buildRuntimeContext(runtime),

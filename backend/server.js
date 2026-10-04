@@ -50,7 +50,12 @@ const {
   parseClickedAspect,
   formatAspectLensForModel,
 } = require("./chart_architecture");
-const { isChartAnalysisQuestion } = require("./chart_analysis");
+const {
+  isChartAnalysisQuestion,
+  isBroadChartAnalysisPrompt,
+  selectChartAnalysisFocus,
+  historyBeforeCurrentTurn,
+} = require("./chart_analysis");
 const {
   structuresFromArchitecture,
 } = require("./knowledge/alan-leo/loader");
@@ -1076,6 +1081,10 @@ app.post("/api/chat", (req, res) => {
       }
 
       const questionForMode = effectiveQuestion(message, conversationHistory);
+      const priorConversation = historyBeforeCurrentTurn(
+        message,
+        conversationHistory,
+      );
       const clickedAspect = parseClickedAspect(message);
       const aspectMode = !!clickedAspect;
       const chartAnalysisMode =
@@ -1099,10 +1108,24 @@ app.post("/api/chat", (req, res) => {
       let topicLens = "";
       let aspectLens = "";
       let knowledgeStructures = null;
+      let chartAnalysisProgression = null;
       try {
         const arch = ensureArchitecture(birthChart);
         if (arch && arch.ok) {
           knowledgeStructures = structuresFromArchitecture(arch);
+          if (
+            chartAnalysisMode &&
+            isBroadChartAnalysisPrompt(questionForMode)
+          ) {
+            chartAnalysisProgression = selectChartAnalysisFocus(
+              arch,
+              priorConversation,
+            );
+            console.log(
+              "[CHAT] CHART_ANALYSIS focus:",
+              chartAnalysisProgression.id,
+            );
+          }
           thesisText = formatLockedClaimsForModel(arch, {
             portrait: thesisMode,
           });
@@ -1188,10 +1211,10 @@ app.post("/api/chat", (req, res) => {
             "\n[... truncated for length ...]"
           : webInterpretations || "";
       const webSection = webInterpretations
-        ? "--- WEB-SOURCED INTERPRETATIONS (primary for interpretation) ---\n" +
+        ? "--- WEB-SOURCED INTERPRETATIONS (supplemental only; chart facts and curated knowledge stay primary) ---\n" +
           webBlock +
           "\n--- END WEB INTERPRETATIONS ---"
-        : "--- No web interpretations were available for this chart. You may call search_astrology_info() for specific placements (e.g. 'Sun in Leo interpretation') to get interpretation content. ---";
+        : "--- No web interpretations were retrieved. Use CHART FACTS, the architecture, and any curated knowledge in this prompt. Call search_astrology_info only if the user explicitly asks for outside research. ---";
 
       // Log so we can confirm chart data is being sent (Astrology API data is in chartFactsOnly)
       console.log(
@@ -1264,6 +1287,7 @@ app.post("/api/chat", (req, res) => {
         predictionMode: isPredictionQuestion(message),
         question: questionForMode,
         structures: knowledgeStructures,
+        chartAnalysisProgression,
       });
 
       const messages = [
@@ -1309,14 +1333,25 @@ app.post("/api/chat", (req, res) => {
       // Detect repeated prompts so the model deepens instead of repeating basics (topic-agnostic)
       function isRepeatPrompt(currentMsg, history) {
         const text = String(currentMsg || "").toLowerCase().trim();
-        if (text.length < 40) return false;
+        if (!text) return false;
         if (
+          isFactualQuestion(text) ||
           /what (sign|house|element|degree)|which (sign|house|planet)|how many|where is my|what is my (sun|moon|rising|ascendant)|what house is|what sign is/i.test(
             text,
           )
         ) {
           return false;
         }
+        if (isBroadChartAnalysisPrompt(text)) {
+          return (history || []).some(function (entry) {
+            return (
+              entry &&
+              entry.role === "user" &&
+              isBroadChartAnalysisPrompt(entry.content)
+            );
+          });
+        }
+        if (text.length < 40) return false;
         const stop = new Set([
           "the",
           "a",
@@ -1366,8 +1401,8 @@ app.post("/api/chat", (req, res) => {
         function tokens(s) {
           return String(s || "")
             .toLowerCase()
-            .replace(/[^a-z0-9\\s]/g, " ")
-            .split(/\\s+/)
+            .replace(/[^a-z0-9\s]/g, " ")
+            .split(/\s+/)
             .filter((w) => w && w.length > 2 && !stop.has(w));
         }
         function jaccard(a, b) {
@@ -1380,7 +1415,6 @@ app.post("/api/chat", (req, res) => {
           return union ? inter / union : 0;
         }
         const curTok = tokens(text);
-        if (curTok.length < 4) return false;
         const recentUser = (history || [])
           .filter((m) => m && m.role === "user" && m.content)
           .slice(-10);
@@ -1394,6 +1428,7 @@ app.post("/api/chat", (req, res) => {
             Math.min(prev.length, text.length) > 40
           )
             return true;
+          if (curTok.length < 4) continue;
           const prevTok = tokens(prev);
           if (prevTok.length < 4) continue;
           const sim = jaccard(curTok, prevTok);
@@ -1401,15 +1436,23 @@ app.post("/api/chat", (req, res) => {
         }
         return false;
       }
-      const isRepeatedPrompt = isRepeatPrompt(message, conversationHistory);
+      const isRepeatedPrompt = isRepeatPrompt(message, priorConversation);
 
       const advancedMode =
         profileMemory && profileMemory.preferredMode === "advanced";
+      const chartAnalysisNote = chartAnalysisProgression
+        ? chartAnalysisProgression.phase === "progression"
+          ? "\n\n[Repeated broad chart analysis. Do not repeat the overview. Develop only this focus: " +
+            chartAnalysisProgression.label +
+            ". Dominant features are context, not the subject. Use the computed architecture and CHART FACTS. Do not search the web to vary the wording.]"
+          : "\n\n[First broad chart analysis. Give the dominant structural overview. Do not try to exhaust every lens.]"
+        : "";
       const userContent = chartAnalysisMode
         ? message +
           (advancedMode
             ? "\n\n[CHART_ANALYSIS. Inspect the natal chart as a technical system. Hierarchy, geometry, configurations. Do not translate into personality. No pedagogical filler.]"
-            : "\n\n[CHART_ANALYSIS. Describe what is happening in the chart as a system—weights, tight links, crowded areas. Do not turn placements into personality traits.]")
+            : "\n\n[CHART_ANALYSIS. Describe what is happening in the chart as a system—weights, tight links, crowded areas. Do not turn placements into personality traits.]") +
+          chartAnalysisNote
         : thesisMode
         ? message +
           (advancedMode
@@ -1427,9 +1470,9 @@ app.post("/api/chat", (req, res) => {
                 : "\n\n[This is a clicked aspect. Answer that connection. Re-anchor to the internal claims, then stay with these two needs. Do not reprint the portrait. Do not tour the whole chart.]")
         : message +
           (isRepeatedPrompt
-            ? "\n\n[NOTE: The user is repeating a chart question. Do NOT repeat prior basic explanations. Go deeper on that chart question: add new angles (rulership chains, dispositors, aspect networks/patterns, dignity/retrograde, dominant planets/houses, repeating themes). Use MORE targeted web searches (search_astrology_info/search_web_astrology) based on the exact wording of this question so the answer adds new insight instead of rephrasing the same content.]"
+            ? "\n\n[NOTE: The user is repeating a chart question. Do NOT repeat prior basic explanations. Go deeper on that chart question from CHART FACTS and the architecture: add new angles (rulership chains, dispositors, aspect networks/patterns, dignity/retrograde, dominant planets/houses, repeating themes). Do not add web searches to manufacture variety.]"
             : "") +
-          "\n\n[The user asked about the chart. You may name placements and aspects. Reply in plain paragraphs only—no numbers (1. 2. 3.), no ### or **headers**. Weave themes together. Use web search (search_astrology_info) for placements you discuss so the reply stays varied and non-generic.]";
+          "\n\n[The user asked about the chart. You may name placements and aspects. Reply in plain paragraphs only—no numbers (1. 2. 3.), no ### or **headers**. Weave themes together. Chart facts and curated knowledge are primary. Use web search only if the user explicitly asks for outside research.]";
       messages.push({
         role: "user",
         content: userContent,

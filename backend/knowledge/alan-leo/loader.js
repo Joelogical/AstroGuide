@@ -231,6 +231,11 @@ function sourceGuard(ctx) {
       "CHART_ANALYSIS still governs: inspect the chart as a system. Do not turn this source into a personality reading.",
     );
   }
+  if (ctx.progressionPhase === "progression") {
+    lines.push(
+      "This is a later broad chart-analysis turn. Apply these modules only to the assigned focus. Their general hierarchy does not replace that focus. Dominant features are context.",
+    );
+  }
   return lines.join("\n");
 }
 
@@ -249,6 +254,10 @@ function buildAlanLeoKnowledgeBlock(runtime) {
     chartAnalysisMode: !!(runtime && runtime.chartAnalysisMode),
     unknownBirthTime: !!(runtime && runtime.unknownBirthTime),
     structures: (runtime && runtime.structures) || null,
+    progressionPhase:
+      runtime &&
+      runtime.chartAnalysisProgression &&
+      runtime.chartAnalysisProgression.phase,
   };
   const ids = selectAlanLeoModuleIds(ctx);
   if (!ids.length) return "";
