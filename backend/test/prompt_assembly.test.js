@@ -1,5 +1,9 @@
 const assert = require("assert");
-const { composeSystemContent } = require("../prompt_layers");
+const {
+  composeSystemContent,
+  buildGenerationMessages,
+} = require("../prompt_layers");
+const { historyBeforeCurrentTurn } = require("../chart_analysis");
 const { readingConfiguration } = require("../reading_configuration");
 const { timedChart, traditionalChart } = require("./fixtures");
 
@@ -197,6 +201,84 @@ function test() {
   assert.equal(factual.indexOf("# Alan Leo"), -1);
   assert.ok(chart.indexOf("=== SOURCE KNOWLEDGE ===") > 0);
   assert.ok(chart.indexOf("Web pages are supplemental") > 0);
+
+  assert.ok(chart.indexOf("highest-ranked organizing structure") > 0);
+  assert.ok(chart.indexOf("PRIMARY FOCUS") === -1);
+  assert.equal(chart.indexOf("DOMINANT STRUCTURAL OVERVIEW"), -1);
+  assert.equal(chart.indexOf("a few coherent paragraphs"), -1);
+  assert.equal(chart.indexOf("Weave multiple chart factors"), -1);
+  assert.equal(chart.indexOf("3 strongest reasons"), -1);
+  assert.equal(chart.indexOf("2 biggest caveats"), -1);
+  assert.equal(chart.indexOf("frame the whole reading"), -1);
+  assert.equal(chart.indexOf("structurally dominant features"), -1);
+  assert.ok(chart.indexOf("essential dignity") > 0);
+  assert.ok(chart.indexOf("not a formal report") > 0);
+  assert.ok(beginnerChart.indexOf("BEGINNER CHART_ANALYSIS") > 0);
+  assert.equal(beginnerChart.indexOf("not a formal report"), -1);
+
+  const narrow = compose({
+    question: "Tell me about Saturn",
+    chartAnalysisMode: false,
+    thesisMode: false,
+    hasPrioritized: true,
+    prioritizedBlock: "Saturn domicile.",
+  });
+  assert.ok(narrow.indexOf("Saturn domicile.") > 0);
+  assert.ok(narrow.indexOf("Chart ruler: Saturn.") > 0);
+  assert.equal(narrow.indexOf("3 strongest reasons"), -1);
+  assert.equal(narrow.indexOf("2 biggest caveats"), -1);
+  assert.equal(narrow.indexOf("frame the whole reading"), -1);
+  assert.equal(narrow.indexOf("not a reply outline") > 0, true);
+  assert.ok(narrow.indexOf("Do not walk the rest of the chart") > 0);
+
+  const current = "Tell me more";
+  const sentHistory = [
+    { role: "user", content: "Tell me about my chart" },
+    {
+      role: "assistant",
+      content: "Saturn organizes the chart by domicile and rulership.",
+    },
+    { role: "user", content: current },
+    {
+      role: "assistant",
+      content: "### Birth Chart\n**1. Sun",
+    },
+  ];
+  const prior = historyBeforeCurrentTurn(current, sentHistory.slice(0, 3));
+  const annotated = current;
+  const generation = buildGenerationMessages("SYSTEM", prior, annotated);
+  const userTurns = generation.filter(function (entry) {
+    return entry.role === "user";
+  });
+  assert.equal(generation[0].role, "system");
+  assert.equal(userTurns.length, 2);
+  assert.equal(userTurns[userTurns.length - 1].content, annotated);
+  assert.equal(
+    userTurns.filter(function (entry) {
+      return entry.content === current;
+    }).length,
+    1,
+  );
+  const withStale = buildGenerationMessages(
+    "SYSTEM",
+    historyBeforeCurrentTurn("Why Saturn?", [
+      { role: "assistant", content: "### Birth Chart\n**1. Sun" },
+      { role: "user", content: "Why Saturn?" },
+    ]),
+    "Why Saturn?",
+  );
+  assert.equal(
+    withStale.filter(function (entry) {
+      return entry.role === "assistant";
+    }).length,
+    0,
+  );
+  assert.equal(
+    withStale.filter(function (entry) {
+      return entry.role === "user";
+    }).length,
+    1,
+  );
 }
 
 module.exports = test;

@@ -34,14 +34,16 @@ const {
 const { getPrioritizedChartPoints } = require("./chart_signals");
 const {
   buildProfileMemoryBlock,
+  buildGenerationMessages,
   composeSystemContent,
 } = require("./prompt_layers");
 const { generateFollowUpSuggestionsLLM } = require("./followup_suggestions");
 const { isGibberishPrompt, gibberishReply } = require("./gibberish_prompt");
 const { isPredictionQuestion } = require("./prediction_guard");
 const { validateBirthInput } = require("./birth_input");
-const { routeChatIntent, isRepeatPrompt } = require("./intent_router");
+const { routeChatIntent } = require("./intent_router");
 const { buildAnalysisState } = require("./analysis_state");
+const { historyBeforeCurrentTurn } = require("./chart_analysis");
 const { handleQuestion } = require("./enhanced_question_handler");
 const {
   buildChartArchitecture,
@@ -934,30 +936,11 @@ app.post("/api/chat", (req, res) => {
           "Match the user's tone loosely (brief if they're brief). Don't volunteer chart interpretations, aspects, or placements unless they ask.\n" +
           "Keep greetings and small talk short. Avoid astrology jargon unless the user uses it first.";
 
-        const messages = [
-          {
-            role: "system",
-            content: casualSystemContent,
-          },
-        ];
-
-        // Add conversation history
-        if (conversationHistory && conversationHistory.length > 0) {
-          for (const m of conversationHistory) {
-            const content = m.content == null ? "" : String(m.content);
-            const msg = { role: m.role, content };
-            if (m.role === "function" && m.name) msg.name = m.name;
-            if (m.role === "assistant" && m.function_call)
-              msg.function_call = m.function_call;
-            messages.push(msg);
-          }
-        }
-
-        // Add current message
-        messages.push({
-          role: "user",
-          content: message,
-        });
+        const messages = buildGenerationMessages(
+          casualSystemContent,
+          historyBeforeCurrentTurn(message, conversationHistory),
+          message,
+        );
 
         // Make API call
         const functions = getFunctionDefinitions();
@@ -1122,7 +1105,7 @@ app.post("/api/chat", (req, res) => {
         !!birthChart?.birthData,
       );
 
-      // Ranking and weighting: pass only highest-value chart points so the model gives 3 reasons, 2 caveats—not 25 scattered facts
+      // Preselected evidence for this question. It is context, not a reply outline.
       let prioritizedBlock = "";
       if (chartMode) {
         try {
@@ -1189,64 +1172,10 @@ app.post("/api/chat", (req, res) => {
         chartAnalysisProgression,
       });
 
-      const messages = [
-        {
-          role: "system",
-          content: systemContent,
-        },
-      ];
-
-      // Add conversation history if available (sanitize so content is never null)
-      // Skip assistant messages that asked for birth data so the model doesn't repeat that
-      if (conversationHistory && conversationHistory.length > 0) {
-        for (const m of conversationHistory) {
-          const content = m.content == null ? "" : String(m.content);
-          const contentLower = content.toLowerCase();
-          if (m.role === "assistant") {
-            const isAskingForBirthData =
-              contentLower.includes("birth date") ||
-              contentLower.includes("birth time") ||
-              contentLower.includes("birth location") ||
-              contentLower.includes("provide me with those details");
-            const isChecklistFormat =
-              content.includes("###") ||
-              /\*\*\s*\d+\./.test(content) ||
-              content.includes("**1.") ||
-              content.includes("**2.") ||
-              content.includes("Let's delve") ||
-              content.includes("These aspects offer a glimpse") ||
-              content.includes(
-                "If you have specific questions, feel free to share",
-              );
-            if (isAskingForBirthData || isChecklistFormat) continue; // omit so model doesn't repeat checklist style
-          }
-          const msg = { role: m.role, content };
-          if (m.role === "function" && m.name) msg.name = m.name;
-          if (m.role === "assistant" && m.function_call)
-            msg.function_call = m.function_call;
-          messages.push(msg);
-        }
-      }
-
-      const isRepeatedPrompt = isRepeatPrompt(message, priorConversation);
-
       const advancedMode =
         profileMemory && profileMemory.preferredMode === "advanced";
-      const chartAnalysisNote = chartAnalysisProgression
-        ? chartAnalysisProgression.phase === "breadth"
-          ? "\n\n[Repeated broad chart analysis. Primary focus: " +
-            chartAnalysisProgression.label +
-            ". Dominant factors may be mentioned again as supporting context when they participate. Do not reproduce the previous reading, and do not invent a minor factor to sound new.]"
-          : chartAnalysisProgression.phase === "integration"
-            ? "\n\n[Broad chart analysis, major structures already analyzed. Relate those structures. Do not introduce a low-weight leftover to sound different. Dominant facts may recur when they explain the relationship.]"
-            : "\n\n[First broad chart analysis. Give the dominant structural overview. Do not try to exhaust every lens.]"
-        : "";
       const userContent = chartAnalysisMode
-        ? message +
-          (advancedMode
-            ? "\n\n[CHART_ANALYSIS. Inspect the natal chart as a technical system. Hierarchy, geometry, configurations. Do not translate into personality. No pedagogical filler.]"
-            : "\n\n[CHART_ANALYSIS. Describe what is happening in the chart as a system—weights, tight links, crowded areas. Do not turn placements into personality traits.]") +
-          chartAnalysisNote
+        ? message
         : thesisMode
         ? message +
           (advancedMode
@@ -1262,15 +1191,12 @@ app.post("/api/chat", (req, res) => {
               (advancedMode
                 ? "\n\n[Expert aspect cut. Cite type, orb, applying/separating, dignity, houses, rulerships, and any configuration. Show why the contact ranks as it does. Do not define “square” or convert it into an intro metaphor.]"
                 : "\n\n[This is a clicked aspect. Answer that connection. Re-anchor to the internal claims, then stay with these two needs. Do not reprint the portrait. Do not tour the whole chart.]")
-        : message +
-          (isRepeatedPrompt
-            ? "\n\n[NOTE: The user is repeating a chart question. Do NOT repeat prior basic explanations. Go deeper on that chart question from CHART FACTS and the architecture: add new angles (rulership chains, dispositors, aspect networks/patterns, dignity/retrograde, dominant planets/houses, repeating themes). Do not add web searches to manufacture variety.]"
-            : "") +
-          "\n\n[The user asked about the chart. You may name placements and aspects. Reply in plain paragraphs only—no numbers (1. 2. 3.), no ### or **headers**. Weave themes together. Chart facts and curated knowledge are primary. Use web search only if the user explicitly asks for outside research.]";
-      messages.push({
-        role: "user",
-        content: userContent,
-      });
+            : message;
+      const messages = buildGenerationMessages(
+        systemContent,
+        priorConversation,
+        userContent,
+      );
 
       stage = "before-openai";
       const functions = getFunctionDefinitions();

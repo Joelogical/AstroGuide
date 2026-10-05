@@ -6,7 +6,7 @@
  * 1. System rules – safety, tone, hard constraints (who the assistant is, what it must never do)
  * 2. Astrology interpreter rules – how to prioritize chart factors, use web sources, handle aspects
  * 3. Confidence wording – internal confidence scoring and how to phrase (high/medium/low) to build trust
- * 4. Response templates – minimal output shape (paragraphs, no markdown lists); voice left to the model
+ * 4. Response templates – how much to say on this turn; voice left to the model
  * 5. Relevant Alan Leo source modules, only when the turn maps to them
  * 6. Runtime context – chart data + profile memory + prioritized points + web block (built per request)
  */
@@ -36,9 +36,9 @@ function getSystemRules() {
 
 function getAstrologyInterpreterRules() {
   return (
-    "THIS TURN IS A SPECIFIC CHART QUESTION, NOT A WHOLE-CHART ANALYSIS AND NOT A PERSONALITY PORTRAIT. Stay with what they asked. Relate that point to the supplied architecture. Do not walk the whole chart.\n\n" +
-    "THE ARCHITECTURE IS ALREADY COMPUTED. Use the supplied chart ruler, dominance ranking, dignity, reception, dispositors, house-rulership chains, stelliums, configurations, aspect links, element balance, modality balance, and hemisphere emphasis. Do not derive them again from positions, and do not rescore dominance.\n\n" +
-    "HOW TO READ WHAT WAS SUPPLIED: Let the ranked planets carry the answer. Other planets matter when they change that point. Dignity colors expression: domicile or exaltation is more direct; detriment or fall is the same function with more friction. Do not treat a retrograde planet as weaker; its expression is more internalized or cyclical. An angular placement the architecture marks is lived emphasis, including when the chart ruler is angular. A listed stellium is concentrated testimony. A listed configuration is one system: use the focal point and the links the architecture already gives. Read supplied aspect groups as a network, not one paragraph per aspect. When a house chain is supplied, follow house, ruler, the ruler's condition, and the ruler's aspects. Use the supplied element balance as temperament (Fire initiative, Earth practicality, Air perspective, Water feeling) and the supplied modality balance as pace (Cardinal starts, Fixed holds, Mutable adapts). Use supplied hemisphere emphasis as orientation, not as a statistic. If testimony conflicts, name both sides. Do not invent a configuration, ruler, or body the architecture does not list.\n\n" +
+    "THIS TURN IS A SPECIFIC CHART QUESTION, NOT A WHOLE-CHART ANALYSIS AND NOT A PERSONALITY PORTRAIT. Answer what they asked. Use the supplied architecture only where it bears on that question. Do not walk the rest of the chart.\n\n" +
+    "THE ARCHITECTURE IS ALREADY COMPUTED. Chart ruler, dominance, dignity, reception, dispositors, house-rulership chains, stelliums, configurations, aspect links, element balance, modality balance, and hemisphere emphasis are evidence you may cite when the question needs them. Do not derive them again from positions, and do not rescore dominance. Do not treat that list as an outline.\n\n" +
+    "Cite a supplied fact only when it changes the point they asked about. Dignity colors expression: domicile or exaltation is more direct; detriment or fall is the same function with more friction. Do not treat a retrograde planet as weaker. An angular placement, stellium, or configuration means what the architecture already marks. If testimony conflicts, name both sides. Do not invent a configuration, ruler, or body the architecture does not list.\n\n" +
     "ACTIVE BODIES ONLY. Interpret only planets and optional bodies present in CHART FACTS and ACTIVE BODIES. Enabled asteroids are supporting testimony. Do not treat them as equal to the planetary ranking, and do not rescore them.\n\n" +
     "MINOR ASPECTS in CHART FACTS are nuance. Do not make them the subject unless the user asked about them.\n\n" +
     "If they ask the same chart question again, go deeper on that question using the supplied structures. Do not choose a new focus."
@@ -262,7 +262,7 @@ function buildRuntimeContext(options) {
     !aspectMode
   ) {
     out +=
-      "--- CHART ARCHITECTURE (computed; frame the whole reading from this) ---\n" +
+      "--- CHART ARCHITECTURE (computed structural evidence; not a reply outline) ---\n" +
       String(architectureBlock).trim() +
       "\n--- END CHART ARCHITECTURE ---\n\n";
   }
@@ -277,7 +277,7 @@ function buildRuntimeContext(options) {
       "Do not call save_chart_summary this turn. Do not search the web this turn.\n\n";
   } else if (hasSummary) {
     out +=
-      "--- STORED CHART SUMMARY (use this baseline; do not rediscover the user each time) ---\n";
+      "--- STORED CHART SUMMARY (notes already stored for this person; use them only when this question needs them) ---\n";
     const fields = [
       { key: "personalitySummary", label: "Personality summary" },
       { key: "emotionalStyle", label: "Emotional style" },
@@ -296,17 +296,14 @@ function buildRuntimeContext(options) {
     out += "--- END STORED CHART SUMMARY ---\n\n";
   } else if (!topicMode && !aspectMode && !chartAnalysisMode) {
     out +=
-      "No stored chart summary yet. After your first substantive full-chart interpretation (e.g. when they ask about themselves or their chart), call save_chart_summary with: personalitySummary, emotionalStyle, relationshipStyle, workStyle, strengths, blindSpots, recurringLifeThemes, timingTendencies (1-3 sentences each) so we can store it and reuse it in future messages.\n\n";
+      "No stored chart summary yet. This is a storage slot, not a reply outline. If you learn something reusable about this person, you may call save_chart_summary with: personalitySummary, emotionalStyle, relationshipStyle, workStyle, strengths, blindSpots, recurringLifeThemes, timingTendencies (1-3 sentences each). Do not lengthen the reply in order to fill those fields.\n\n";
   }
 
   if (hasPrioritized && prioritizedBlock && !thesisMode && !chartAnalysisMode) {
     out +=
-      "PRIORITIZED CHART POINTS – USE THESE FIRST:\n" +
-      "Base your reply on the PRIORITIZED CHART POINTS below (strengths and caveats). " +
-      "In your response give: (1) the 3 strongest reasons something is likely or how the chart supports the person, and (2) the 2 biggest caveats or tensions. " +
-      "Do NOT list 25 scattered chart facts; focus on the highest-value points.\n\n" +
+      "--- PRIORITIZED CHART POINTS (preselected evidence for this question; not a reply outline) ---\n" +
       prioritizedBlock +
-      "\n\n";
+      "\n--- END PRIORITIZED CHART POINTS ---\n\n";
   }
 
   if (!thesisMode) {
@@ -319,12 +316,7 @@ function buildRuntimeContext(options) {
   }
 
   out +=
-    "\n\nBefore you respond: use plain paragraphs (no numbered lists or ### headers). Keep content specific to the chart and sources; phrase naturally. " +
-    "Do not end with a block of suggested follow-up questions or 'you might ask…' prompts—the app shows those as separate chips.";
-  if (hasPrioritized && !thesisMode && !chartAnalysisMode) {
-    out +=
-      " Focus on the 3 strongest reasons and 2 biggest caveats—not a long list of chart facts.";
-  }
+    "\n\nDo not end with suggested follow-up questions or 'you might ask…' prompts—the app shows those as separate chips.";
   if (chartAnalysisMode) {
     out += getPromptSection("chart-analysis.md", "closing");
   } else if (preferredMode === "advanced") {
@@ -395,7 +387,7 @@ function buildProfileMemoryBlock(profileMemory, options) {
   if (priorSummary) block += "Prior topics summary: " + priorSummary + "\n";
   block +=
     "--- END PROFILE MEMORY ---\n\n" +
-    'Use PROFILE MEMORY so you don\'t repeat basics they already know. When relevant, reference earlier discussions (e.g. "Earlier we discussed your career pattern; this new question about relocation connects strongly to that same 10th/9th house theme."). Call update_profile_memory when they share new themes, goals, or after a substantial interpretation.\n\n';
+    "Use PROFILE MEMORY when it bears on this question, so you do not repeat basics already established. Do not invent earlier discussions that are not recorded here or in the conversation. Do not recap the previous reply. Call update_profile_memory when they share new themes or goals.\n\n";
 
   return block;
 }
@@ -407,6 +399,58 @@ function buildProfileMemoryBlock(profileMemory, options) {
  */
 function section(label, text) {
   return "=== " + label + " ===\n" + text;
+}
+
+function omittedAssistantTurn(content) {
+  const text = content == null ? "" : String(content);
+  const lower = text.toLowerCase();
+  const isAskingForBirthData =
+    lower.includes("birth date") ||
+    lower.includes("birth time") ||
+    lower.includes("birth location") ||
+    lower.includes("provide me with those details");
+  const isChecklistFormat =
+    text.includes("###") ||
+    /\*\*\s*\d+\./.test(text) ||
+    text.includes("**1.") ||
+    text.includes("**2.") ||
+    text.includes("Let's delve") ||
+    text.includes("These aspects offer a glimpse") ||
+    text.includes("If you have specific questions, feel free to share");
+  return isAskingForBirthData || isChecklistFormat;
+}
+
+/**
+ * System prompt, prior turns, then the current user turn once.
+ * history must already exclude the current user message.
+ * @param {string} systemContent
+ * @param {Array} history
+ * @param {string} userContent
+ * @returns {Array}
+ */
+function buildGenerationMessages(systemContent, history, userContent) {
+  const messages = [
+    {
+      role: "system",
+      content: systemContent,
+    },
+  ];
+  (history || []).forEach(function (entry) {
+    if (!entry) return;
+    const content = entry.content == null ? "" : String(entry.content);
+    if (entry.role === "assistant" && omittedAssistantTurn(content)) return;
+    const msg = { role: entry.role, content: content };
+    if (entry.role === "function" && entry.name) msg.name = entry.name;
+    if (entry.role === "assistant" && entry.function_call) {
+      msg.function_call = entry.function_call;
+    }
+    messages.push(msg);
+  });
+  messages.push({
+    role: "user",
+    content: userContent,
+  });
+  return messages;
 }
 
 function composeSystemContent(runtime) {
@@ -508,5 +552,6 @@ module.exports = {
   getResponseTemplates,
   buildRuntimeContext,
   buildProfileMemoryBlock,
+  buildGenerationMessages,
   composeSystemContent,
 };
