@@ -13,6 +13,8 @@
   --input-bg: #0d1422;
   --message-user: #203657;
   --message-assistant: #151e2e;
+  --scrollbar-thumb: color-mix(in srgb, var(--text-secondary) 42%, var(--surface));
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--text-secondary) 58%, var(--surface));
 }
 
 * {
