@@ -88,8 +88,11 @@ function test() {
     structures: { planets: ["saturn"], aspects: true },
   });
   assert.ok(chartAnalysis.indexOf("Horoscope as an integrated system") !== -1);
+  assert.ok(chartAnalysis.indexOf("Do not assign equal weight") !== -1);
   assert.equal(chartAnalysis.indexOf("A final synthesis should state"), -1);
   assert.equal(chartAnalysis.indexOf("## Whole-chart conclusion"), -1);
+  assert.equal(chartAnalysis.indexOf("How Leo applies a factor"), -1);
+  assert.equal(chartAnalysis.indexOf("Prioritize, when available"), -1);
 
   const synthesis = buildAlanLeoKnowledgeBlock({
     question: "Tell me about myself",
@@ -98,6 +101,8 @@ function test() {
     structures: { planets: ["saturn"] },
   });
   assert.ok(synthesis.indexOf("A final synthesis should state") !== -1);
+  assert.ok(synthesis.indexOf("How Leo applies a factor") !== -1);
+  assert.ok(synthesis.indexOf("Prioritize, when available") !== -1);
   assert.ok(synthesis.indexOf("Horoscope as an integrated system") !== -1);
 }
 

@@ -242,13 +242,28 @@ function selectAlanLeoModuleIds(ctx) {
   return orderIds(ids);
 }
 
+function cutThrough(text, startMarker, endMarker) {
+  const start = text.indexOf(startMarker);
+  if (start === -1) return text;
+  const end = endMarker
+    ? text.indexOf(endMarker, start + startMarker.length)
+    : -1;
+  if (end === -1) return text.slice(0, start).replace(/\s+$/, "");
+  return (
+    text.slice(0, start).replace(/\s+$/, "") +
+    "\n" +
+    text.slice(end).replace(/^\n/, "")
+  );
+}
+
 function methodologyForTurn(ctx) {
   const text = readKnowledgeFile(MODULE_FILES.methodology);
   if (!ctx || !ctx.chartAnalysisMode) return text;
-  const marker = "\n## Whole-chart conclusion";
-  const at = text.indexOf(marker);
-  if (at === -1) return text;
-  return text.slice(0, at).replace(/\s+$/, "");
+  let out = text;
+  out = cutThrough(out, "\n### How Leo applies a factor", "\n## Hierarchy");
+  out = cutThrough(out, "\nPrioritize, when available:", "\n## Aspects modify");
+  out = cutThrough(out, "\n## Whole-chart conclusion");
+  return out.replace(/\n{3,}/g, "\n\n").replace(/\s+$/, "");
 }
 
 function moduleBody(id, ctx) {

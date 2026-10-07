@@ -254,6 +254,26 @@ function isChartAnalysisQuestion(message, history) {
   return false;
 }
 
+/**
+ * Keep the user's words, then name the focus already chosen for a later
+ * broad chart-analysis turn. The first overview stays the raw question.
+ * @param {string} message
+ * @param {object|null} progression
+ * @returns {string}
+ */
+function chartAnalysisGenerationContent(message, progression) {
+  const text = String(message || "");
+  const phase = progression && progression.phase;
+  const label = progression && progression.label;
+  if (!label || (phase !== "breadth" && phase !== "integration")) return text;
+  return (
+    text +
+    "\n\n[Continue the existing chart analysis on this focus: " +
+    label +
+    ". Treat the request as a request to develop that focus. Do not ask the user to choose a different life area, planet, placement, or aspect.]"
+  );
+}
+
 function getChartAnalysisRules(preferredMode, progression) {
   const advanced = String(preferredMode || "").toLowerCase() === "advanced";
   let text =
@@ -869,6 +889,7 @@ module.exports = {
   isBroadChartAnalysisPrompt,
   isChartAnalysisQuestion,
   getChartAnalysisRules,
+  chartAnalysisGenerationContent,
   selectChartAnalysisFocus,
   historyBeforeCurrentTurn,
 };

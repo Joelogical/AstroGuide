@@ -46,6 +46,7 @@ const { buildAnalysisState } = require("./analysis_state");
 const {
   historyBeforeCurrentTurn,
   continuesEstablishedChartAnalysis,
+  chartAnalysisGenerationContent,
 } = require("./chart_analysis");
 const { handleQuestion } = require("./enhanced_question_handler");
 const {
@@ -1183,7 +1184,7 @@ app.post("/api/chat", (req, res) => {
       const advancedMode =
         profileMemory && profileMemory.preferredMode === "advanced";
       const userContent = chartAnalysisMode
-        ? message
+        ? chartAnalysisGenerationContent(message, chartAnalysisProgression)
         : thesisMode
         ? message +
           (advancedMode

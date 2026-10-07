@@ -6,6 +6,7 @@ const { ensureArchitecture, formatArchitectureForAI } = require("../chart_archit
 const {
   selectChartAnalysisFocus,
   continuesEstablishedChartAnalysis,
+  chartAnalysisGenerationContent,
 } = require("../chart_analysis");
 const { formatBirthChartForChatGPT } = require("../chatgpt_template");
 const { composeSystemContent } = require("../prompt_layers");
@@ -224,6 +225,33 @@ function test() {
   assert.equal(focusA.phase, "overview");
   assert.notEqual(focusB.phase, "overview");
   assert.ok(focusB.phase === "breadth" || focusB.phase === "integration");
+  assert.ok(focusB.label);
+  const more = "tell me more";
+  const delivered = chartAnalysisGenerationContent(more, focusB);
+  assert.equal(delivered.indexOf(more), 0);
+  assert.ok(delivered.indexOf(focusB.label) > more.length);
+  assert.ok(
+    delivered.indexOf(
+      "Do not ask the user to choose a different life area, planet, placement, or aspect.",
+    ) > 0,
+  );
+  assert.equal(chartAnalysisGenerationContent("tell me about my chart", focusA), "tell me about my chart");
+  const exactHistory = [
+    { role: "user", content: "tell me about my chart" },
+    { role: "assistant", content: assistant },
+    { role: "user", content: more },
+  ];
+  const exactRoute = routeChatIntent({ message: more, history: exactHistory });
+  assert.equal(continuesEstablishedChartAnalysis(more, exactHistory), true);
+  assert.equal(exactRoute.primaryIntent, "CHART_ANALYSIS");
+  assert.equal(exactRoute.inheritedIntent, true);
+  assert.equal(exactRoute.progressionEligible, true);
+  const exactFocus = selectChartAnalysisFocus(archB, exactRoute.priorConversation);
+  assert.notEqual(exactFocus.phase, "overview");
+  assert.ok(exactFocus.label);
+  const exactDelivered = chartAnalysisGenerationContent(more, exactFocus);
+  assert.equal(exactDelivered.indexOf(more), 0);
+  assert.ok(exactDelivered.indexOf(exactFocus.label) > more.length);
 
   function analysisPrompt(reading, route, focus, facts) {
     return composeSystemContent({
@@ -258,6 +286,10 @@ function test() {
   assert.equal(promptB.indexOf("CASUAL MESSAGES"), -1);
   assert.equal(promptA.indexOf("A final synthesis should state"), -1);
   assert.equal(promptB.indexOf("A final synthesis should state"), -1);
+  assert.equal(promptA.indexOf("How Leo applies a factor"), -1);
+  assert.equal(promptB.indexOf("How Leo applies a factor"), -1);
+  assert.equal(promptA.indexOf("Prioritize, when available"), -1);
+  assert.equal(promptB.indexOf("Prioritize, when available"), -1);
   assert.equal(promptA.indexOf("skeleton of the reading"), -1);
   assert.equal(promptB.indexOf("skeleton of the reading"), -1);
   assert.ok(promptA.indexOf("=== REGISTER ===") > 0);
