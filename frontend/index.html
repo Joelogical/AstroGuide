@@ -6258,6 +6258,14 @@
             };
           }
 
+          // Resting wheel ink. Neutral layers only; hover handlers still override these.
+          const chartText = "#DCE5F0";
+          const chartOuterBoundary = "#B3C1D2";
+          const chartMajorAxis = "#C2CEDD";
+          const chartZodiacBoundary = "#8493A7";
+          const chartHouseCusp = "#66768C";
+          const chartTick = "#596A80";
+
           // House wheel shading using two solid bands split at the aspect-line radius:
           // - Outer band (aspectLineRadius → houseOuterRadius): lighter gray
           // - Inner band (innerRadius → aspectLineRadius): darker gray
@@ -6282,7 +6290,7 @@
             .append("circle")
             .attr("r", innerRadius)
             .attr("fill", "#0b1120") // lighter than pure black, so the edge reads more clearly
-            .attr("stroke", "#ffffff") // same color as AC/DC/MC/IC base lines
+            .attr("stroke", chartOuterBoundary)
             .attr("stroke-width", 2.5)
             .attr("opacity", 1);
 
@@ -6330,7 +6338,7 @@
               .attr("y1", inner.y)
               .attr("x2", outer.x)
               .attr("y2", outer.y)
-              .attr("stroke", "#94a3b8")
+              .attr("stroke", chartTick)
               .attr("stroke-width", strokeW)
               .attr("opacity", opacity);
           }
@@ -6347,7 +6355,7 @@
               .attr("y1", innerPos.y)
               .attr("x2", outerPos.x)
               .attr("y2", outerPos.y)
-              .attr("stroke", "#cbd5e1")
+              .attr("stroke", chartZodiacBoundary)
               .attr("stroke-width", 1.5)
               .attr("opacity", 0.85);
           }
@@ -6357,7 +6365,7 @@
             .append("circle")
             .attr("r", totalRadius)
             .attr("fill", "none")
-            .attr("stroke", "#cbd5e1")
+            .attr("stroke", chartOuterBoundary)
             .attr("stroke-width", 2);
 
           // Planet ticks on zodiac – short line at each planet’s degree (no label)
@@ -6419,8 +6427,8 @@
                 .on("mouseleave", function () {
                   houseLine
                     .attr("stroke-width", 1.5)
-                    .attr("opacity", 0.6)
-                    .attr("stroke", "#cbd5e1");
+                    .attr("opacity", 1)
+                    .attr("stroke", chartHouseCusp);
                 })
                 .on("click", function () {
                   if (timeUnknown) return;
@@ -6454,9 +6462,9 @@
                 .attr("y1", innerPos.y)
                 .attr("x2", pos.x)
                 .attr("y2", pos.y)
-                .attr("stroke", "#cbd5e1")
+                .attr("stroke", chartHouseCusp)
                 .attr("stroke-width", 1.5)
-                .attr("opacity", 0.6)
+                .attr("opacity", 1)
                 .attr("class", "house-line")
                 .style("cursor", "pointer")
                 .on("mouseenter", function () {
@@ -6468,8 +6476,8 @@
                 .on("mouseleave", function () {
                   d3.select(this)
                     .attr("stroke-width", 1.5)
-                    .attr("opacity", 0.6)
-                    .attr("stroke", "#cbd5e1");
+                    .attr("opacity", 1)
+                    .attr("stroke", chartHouseCusp);
                 })
                 .on("click", function () {
                   if (timeUnknown) return;
@@ -6504,7 +6512,7 @@
                 .attr("y", labelPos.y)
                 .attr("text-anchor", "middle")
                 .attr("dominant-baseline", "middle")
-                .attr("fill", "#e2e8f0")
+                .attr("fill", chartText)
                 .attr("font-size", `${wheelProfile.houseNum}px`)
                 .attr("font-weight", "200")
                 .text(house.number);
@@ -6524,12 +6532,12 @@
                 .on("mouseleave", function () {
                   houseText
                     .attr("font-size", `${wheelProfile.houseNum}px`)
-                    .attr("fill", "#e2e8f0")
+                    .attr("fill", chartText)
                     .attr("font-weight", "200");
                   houseLine
                     .attr("stroke-width", 1.5)
-                    .attr("opacity", 0.6)
-                    .attr("stroke", "#cbd5e1");
+                    .attr("opacity", 1)
+                    .attr("stroke", chartHouseCusp);
                 })
                 .on("click", function () {
                   if (timeUnknown) return;
@@ -6582,7 +6590,7 @@
                   .attr("y1", inner.y)
                   .attr("x2", outer.x)
                   .attr("y2", outer.y)
-                  .attr("stroke", "#cbd5e1")
+                  .attr("stroke", chartTick)
                   .attr("stroke-width", 2)
                   .attr("opacity", 1);
                 planetTicksByName[String(planetName).toLowerCase()] = tick;
@@ -6597,7 +6605,7 @@
             if (active) {
               tick.attr("stroke", "#10b981").attr("stroke-width", 3);
             } else {
-              tick.attr("stroke", "#cbd5e1").attr("stroke-width", 2);
+              tick.attr("stroke", chartTick).attr("stroke-width", 2);
             }
           }
 
@@ -6689,7 +6697,7 @@
               .attr("y", pos.y)
               .attr("text-anchor", "middle")
               .attr("dominant-baseline", "middle")
-              .attr("fill", "#e2e8f0")
+              .attr("fill", chartText)
               .attr("font-size", `${wheelProfile.zodiacGlyph}px`)
               .attr("font-weight", "normal")
               .attr("font-family", symbolFont)
@@ -6703,7 +6711,7 @@
               })
               .on("mouseleave", function () {
                 textEl
-                  .attr("fill", "#e2e8f0")
+                  .attr("fill", chartText)
                   .attr("font-size", `${wheelProfile.zodiacGlyph}px`);
               })
               .on("click", function () {
@@ -6724,7 +6732,7 @@
           }
 
           // Shared planet glyph color and registry so aspects can bump planets on hover
-          const planetGlyphColor = "#e2e8f0";
+          const planetGlyphColor = chartText;
           const planetGroupsByName = {};
           const PLANET_BUBBLE = 1.28;
           const DEGREE_BUBBLE = 1.35;
@@ -6753,7 +6761,7 @@
             entry.symbol.attr("fill", active ? "#10b981" : planetGlyphColor);
             bubbleTransform(entry.symbol, active ? PLANET_BUBBLE : 1);
             if (entry.degreeLabel) {
-              entry.degreeLabel.attr("fill", active ? "#10b981" : "#cbd5e1");
+              entry.degreeLabel.attr("fill", active ? "#10b981" : chartOuterBoundary);
               bubbleTransform(entry.degreeLabel, active ? DEGREE_BUBBLE : 1);
             }
           }
@@ -7102,7 +7110,7 @@
                 .attr("stroke", "transparent")
                 .attr("stroke-width", wheelProfile.angleLineHit)
                 .attr("opacity", 0);
-              const angleLineColor = "#cbd5e1";
+              const angleLineColor = chartMajorAxis;
               const visLine = g
                 .append("line")
                 .attr("x1", innerPos.x)
@@ -7267,7 +7275,7 @@
               innerAcPos,
               acPos,
               angleLabelRadiusHorizon,
-              "#cbd5e1",
+              chartText,
               "AC",
               `Ascendant${ascSign ? ` ${ascSign}` : ""}`,
               "ac-group",
@@ -7294,7 +7302,7 @@
               innerDcPos,
               dcPos,
               angleLabelRadiusHorizon,
-              "#cbd5e1",
+              chartText,
               "DC",
               `Descendant${dcSign ? ` ${dcSign}` : ""}`,
               "dc-group",
@@ -7320,7 +7328,7 @@
                 innerMcPos,
                 mcPos,
                 angleLabelRadius,
-                "#cbd5e1",
+                chartText,
                 "MC",
                 `Midheaven${mcSign ? ` ${mcSign}` : ""}`,
                 "mc-group",
@@ -7349,7 +7357,7 @@
                 innerIcPos,
                 icPos,
                 angleLabelRadius,
-                "#cbd5e1",
+                chartText,
                 "IC",
                 `Imum Coeli${icSign ? ` ${icSign}` : ""}`,
                 "ic-group",
@@ -7525,7 +7533,7 @@
                   .attr("y", pos.y + wheelProfile.planetDegLabelOffsetY)
                   .attr("text-anchor", "middle")
                   .attr("dominant-baseline", "middle")
-                  .attr("fill", "#cbd5e1")
+                  .attr("fill", chartOuterBoundary)
                   .attr("font-size", "10px")
                   .attr("font-weight", "normal");
                 degreeLabel.append("tspan").text(planetDM.main);
