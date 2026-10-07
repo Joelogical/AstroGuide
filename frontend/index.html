@@ -3455,7 +3455,7 @@
         html += "</tbody></table>";
         if (timeUnknown) {
           html +=
-            '<p class="chart-ref-label chart-ref-label-follow">ANGLES & HOUSES</p><div class="chart-angles"><div class="chart-angle is-angle"><span class="chart-angle-key">AC</span><span class="chart-angle-val">0° Aries 0′00″</span></div><div class="chart-angle is-angle"><span class="chart-angle-key">MC</span><span class="chart-angle-val">display only</span></div><div class="chart-angle"><span class="chart-angle-val">Houses unused</span></div></div>';
+            '<p class="chart-ref-label chart-ref-label-follow">ANGLES & HOUSES</p><table class="chart-table"><tbody><tr class="house-cusps-row"><td class="col-planet">AC: 0° Aries 0′00″</td><td class="col-planet">Houses unused</td><td class="col-planet">MC: display only</td></tr></tbody></table>';
           container.innerHTML = html;
           return;
         }
@@ -3466,28 +3466,30 @@
         // House cusps block – only AC (1), 2, 3, and MC (10), 11, 12, like astro.com.
         // Opposite houses are implied and not repeated.
         html +=
-          '<p class="chart-ref-label chart-ref-label-follow">ANGLES & HOUSES</p><div class="chart-angles">';
-        function angleItem(num, emphasized) {
-          const h = houseByNumber[num];
-          const label = num === 1 ? "AC" : num === 10 ? "MC" : String(num);
-          const value = h
-            ? formatLongitude(h.degree, h.sign, false)
-            : "—";
-          html +=
-            '<div class="chart-angle' +
-            (emphasized ? " is-angle" : "") +
-            '"><span class="chart-angle-key">' +
-            label +
-            '</span><span class="chart-angle-val">' +
-            value +
-            "</span></div>";
+          '<p class="chart-ref-label chart-ref-label-follow">ANGLES & HOUSES</p><table class="chart-table"><tbody>';
+        function cuspLabel(num) {
+          if (num === 1) return "AC";
+          if (num === 10) return "MC";
+          return String(num);
         }
-        angleItem(1, true);
-        angleItem(10, true);
-        [2, 3, 11, 12].forEach(function (n) {
-          angleItem(n, false);
+        function cuspCellContent(num) {
+          const h = houseByNumber[num];
+          if (!h) return cuspLabel(num) + ": —";
+          return (
+            cuspLabel(num) + ": " + formatLongitude(h.degree, h.sign, false)
+          );
+        }
+        html += '<tr class="house-cusps-row">';
+        [1, 2, 3].forEach(function (n) {
+          html += '<td class="col-planet">' + cuspCellContent(n) + "</td>";
         });
-        html += "</div>";
+        html += "</tr>";
+        html += '<tr class="house-cusps-row">';
+        [10, 11, 12].forEach(function (n) {
+          html += '<td class="col-planet">' + cuspCellContent(n) + "</td>";
+        });
+        html += "</tr>";
+        html += "</tbody></table>";
         container.innerHTML = html;
       }
       function clearChartTable() {
