@@ -364,6 +364,10 @@
         </div>
       </div>
       <div class="chart-sidebar">
+        <div class="chart-identity" id="chart-identity" hidden>
+          <h2 class="chart-identity-name" id="chart-identity-name"></h2>
+          <p class="chart-identity-meta" id="chart-identity-meta"></p>
+        </div>
         <div id="chart-wheel-container" class="chart-wheel-container"></div>
         <details class="chart-table-details" id="chart-table-details">
           <summary class="chart-table-summary">
@@ -848,6 +852,70 @@
         font-size: 0.75em;
         margin: 0;
       }
+      .chart-identity {
+        padding: 0 2px 8px;
+        border-bottom: 1px solid var(--border);
+        background: transparent;
+      }
+      .chart-identity-name {
+        margin: 0;
+        font-size: 1.2rem;
+        font-weight: 600;
+        line-height: 1.2;
+        letter-spacing: -0.02em;
+        color: var(--text);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .chart-identity-meta {
+        margin: 3px 0 0;
+        font-size: 0.82rem;
+        line-height: 1.3;
+        color: var(--text-secondary);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .chart-ref-label {
+        margin: 0 0 8px;
+        font-size: 0.68rem;
+        font-weight: 600;
+        letter-spacing: 0.12em;
+        line-height: 1.2;
+        color: var(--text-secondary);
+      }
+      .chart-ref-label-follow {
+        margin-top: 18px;
+      }
+      .chart-angles {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 6px 28px;
+      }
+      .chart-angle {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        min-width: 0;
+      }
+      .chart-angle-key {
+        flex: 0 0 2rem;
+        font-size: 0.82rem;
+        color: var(--text-muted);
+        font-variant-numeric: tabular-nums;
+      }
+      .chart-angle-val {
+        font-size: 0.875rem;
+        color: var(--text);
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+      .chart-angle.is-angle .chart-angle-key,
+      .chart-angle.is-angle .chart-angle-val {
+        color: var(--text);
+        font-weight: 650;
+      }
       .chart-wheel-container {
         padding: 20px;
         background: var(--surface);
@@ -863,8 +931,8 @@
         font-style: italic;
       }
       .chart-table-details {
-        border-radius: 12px;
-        background: var(--surface);
+        border-radius: 0;
+        background: transparent;
         color: var(--text);
       }
       .chart-table-details:has(.chart-table-container:empty) {
@@ -910,9 +978,9 @@
           background: transparent;
         }
         .chart-table-container {
-          padding: 16px;
-          background: var(--surface);
-          border-radius: 12px;
+          padding: 2px 2px 0;
+          background: transparent;
+          border-radius: 0;
         }
       }
       .chart-table {
@@ -923,29 +991,34 @@
       .chart-table th {
         text-align: left;
         font-weight: 600;
-        color: var(--text-secondary);
-        padding: 6px 10px 6px 0;
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        padding: 0 0 6px 12px;
         border-bottom: 1px solid var(--border);
       }
       .chart-table td {
-        padding: 6px 10px 6px 0;
-        border-bottom: 1px solid var(--border);
+        padding: 4px 0 4px 12px;
+        border-bottom: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
         color: var(--text);
       }
       .chart-table .col-planet {
+        padding-left: 0;
         white-space: nowrap;
         font-family:
           "Symbola", "Segoe UI Symbol", "Apple Symbols", "Noto Sans Symbols",
           "Arial Unicode MS", sans-serif;
       }
       .chart-table .col-longitude {
-        color: var(--accent);
+        color: var(--text);
         text-align: right;
         white-space: nowrap;
+        font-variant-numeric: tabular-nums;
       }
       .chart-table .col-house {
-        text-align: center;
+        text-align: right;
         color: var(--text-secondary);
+        font-variant-numeric: tabular-nums;
+        width: 4.5rem;
       }
       .chart-table .chart-table-section-title {
         font-weight: 600;
@@ -2176,6 +2249,7 @@
         if (!listEl || !nameEl) return;
         const active = profiles.find((p) => p.id === activeId) || profiles[0];
         nameEl.textContent = active ? active.name : "—";
+        renderChartIdentity();
         listEl.innerHTML = "";
         profiles.forEach((p) => {
           const row = document.createElement("div");
@@ -3255,6 +3329,71 @@
         }
         return bodies;
       }
+      function formatProfileBirthDate(iso) {
+        const match = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!match) return "";
+        const year = Number(match[1]);
+        const month = Number(match[2]);
+        const day = Number(match[3]);
+        const months = [
+          "January",
+          "February",
+          "March",
+          "April",
+          "May",
+          "June",
+          "July",
+          "August",
+          "September",
+          "October",
+          "November",
+          "December",
+        ];
+        if (month < 1 || month > 12 || day < 1 || day > 31) return "";
+        return months[month - 1] + " " + day + ", " + year;
+      }
+      function formatProfileBirthTime(profile) {
+        if (!profile || profileHasUnknownBirthTime(profile)) return "";
+        const match = String(profile.birthTime || "")
+          .trim()
+          .match(/^(\d{1,2}):(\d{2})/);
+        if (!match) return "";
+        let hour = Number(match[1]);
+        const minute = Number(match[2]);
+        if (hour > 23 || minute > 59) return "";
+        const suffix = hour >= 12 ? "PM" : "AM";
+        hour = hour % 12;
+        if (hour === 0) hour = 12;
+        return hour + ":" + String(minute).padStart(2, "0") + " " + suffix;
+      }
+      function renderChartIdentity() {
+        const root = document.getElementById("chart-identity");
+        const nameEl = document.getElementById("chart-identity-name");
+        const metaEl = document.getElementById("chart-identity-meta");
+        if (!root || !nameEl || !metaEl) return;
+        const profile = getActiveProfile();
+        const name = profile ? String(profile.name || "").trim() : "";
+        const parts = [];
+        if (profile) {
+          const date = formatProfileBirthDate(profile.birthDate);
+          const time = formatProfileBirthTime(profile);
+          const place = String(profile.birthPlace || "").trim();
+          if (date) parts.push(date);
+          if (time) parts.push(time);
+          if (place) parts.push(place);
+        }
+        if (!name && !parts.length) {
+          root.hidden = true;
+          nameEl.textContent = "";
+          metaEl.textContent = "";
+          return;
+        }
+        root.hidden = false;
+        nameEl.hidden = !name;
+        nameEl.textContent = name;
+        metaEl.hidden = !parts.length;
+        metaEl.textContent = parts.join(" · ");
+      }
       function formatLongitude(degree, sign, isRetrograde) {
         if (degree === undefined || degree === null || isNaN(degree))
           return "—";
@@ -3263,13 +3402,12 @@
         const minFrac = (degInSign - d) * 60;
         const m = Math.floor(minFrac);
         const s = Math.round((minFrac - m) * 60);
-        const signAbbr =
-          sign && CHART_TABLE_SIGN_ABBR[sign]
-            ? CHART_TABLE_SIGN_ABBR[sign]
-            : "?";
-        let out =
-          d + " " + signAbbr + " " + m + "'" + (s < 10 ? "0" : "") + s + '"';
-        if (isRetrograde) out += " r";
+        const signName =
+          sign && CHART_TABLE_SIGN_ABBR[sign] ? sign : sign || "?";
+        const minStr = m < 10 ? "0" + m : String(m);
+        const secStr = s < 10 ? "0" + s : String(s);
+        let out = d + "° " + signName + " " + minStr + "′" + secStr + "″";
+        if (isRetrograde) out += " ℞";
         return out;
       }
       function renderChartTable(birthChart) {
@@ -3292,7 +3430,7 @@
             '<p class="asteroid-hint">Birth time unknown — houses and rising sign are placeholders (Ascendant shown at 0° Aries).</p>';
         }
         html +=
-          '<table class="chart-table"><thead><tr><th class="col-planet">Planet</th><th class="col-longitude">Longitude</th><th class="col-house">H</th></tr></thead><tbody>';
+          '<p class="chart-ref-label">POSITIONS</p><table class="chart-table"><thead><tr><th class="col-planet">Planet</th><th class="col-longitude">Longitude</th><th class="col-house">House</th></tr></thead><tbody>';
         CHART_TABLE_PLANET_ORDER.forEach(function (key) {
           const p = planets[key];
           if (!p || p.degree === undefined) return;
@@ -3317,7 +3455,7 @@
         html += "</tbody></table>";
         if (timeUnknown) {
           html +=
-            '<table class="chart-table"><tbody><tr class="house-cusps-row"><td class="col-planet">AC: 0 Ari 0\'00"</td><td class="col-planet">Houses unused</td><td class="col-planet">MC: display only</td></tr></tbody></table>';
+            '<p class="chart-ref-label chart-ref-label-follow">ANGLES & HOUSES</p><div class="chart-angles"><div class="chart-angle is-angle"><span class="chart-angle-key">AC</span><span class="chart-angle-val">0° Aries 0′00″</span></div><div class="chart-angle is-angle"><span class="chart-angle-key">MC</span><span class="chart-angle-val">display only</span></div><div class="chart-angle"><span class="chart-angle-val">Houses unused</span></div></div>';
           container.innerHTML = html;
           return;
         }
@@ -3327,32 +3465,29 @@
         });
         // House cusps block – only AC (1), 2, 3, and MC (10), 11, 12, like astro.com.
         // Opposite houses are implied and not repeated.
-        html += '<table class="chart-table"><tbody>';
-        function cuspLabel(num) {
-          if (num === 1) return "AC";
-          if (num === 10) return "MC";
-          return String(num);
-        }
-        function cuspCellContent(num) {
+        html +=
+          '<p class="chart-ref-label chart-ref-label-follow">ANGLES & HOUSES</p><div class="chart-angles">';
+        function angleItem(num, emphasized) {
           const h = houseByNumber[num];
-          if (!h) return cuspLabel(num) + ": —";
-          return (
-            cuspLabel(num) + ": " + formatLongitude(h.degree, h.sign, false)
-          );
+          const label = num === 1 ? "AC" : num === 10 ? "MC" : String(num);
+          const value = h
+            ? formatLongitude(h.degree, h.sign, false)
+            : "—";
+          html +=
+            '<div class="chart-angle' +
+            (emphasized ? " is-angle" : "") +
+            '"><span class="chart-angle-key">' +
+            label +
+            '</span><span class="chart-angle-val">' +
+            value +
+            "</span></div>";
         }
-        // First row: AC (1), 2, 3
-        html += '<tr class="house-cusps-row">';
-        [1, 2, 3].forEach(function (n) {
-          html += '<td class="col-planet">' + cuspCellContent(n) + "</td>";
+        angleItem(1, true);
+        angleItem(10, true);
+        [2, 3, 11, 12].forEach(function (n) {
+          angleItem(n, false);
         });
-        html += "</tr>";
-        // Second row: MC (10), 11, 12
-        html += '<tr class="house-cusps-row">';
-        [10, 11, 12].forEach(function (n) {
-          html += '<td class="col-planet">' + cuspCellContent(n) + "</td>";
-        });
-        html += "</tr>";
-        html += "</tbody></table>";
+        html += "</div>";
         container.innerHTML = html;
       }
       function clearChartTable() {
