@@ -3,7 +3,10 @@ const fs = require("fs");
 const path = require("path");
 const { resolveChatReading } = require("../reading_configuration");
 const { ensureArchitecture, formatArchitectureForAI } = require("../chart_architecture");
-const { selectChartAnalysisFocus } = require("../chart_analysis");
+const {
+  selectChartAnalysisFocus,
+  continuesEstablishedChartAnalysis,
+} = require("../chart_analysis");
 const { formatBirthChartForChatGPT } = require("../chatgpt_template");
 const { composeSystemContent } = require("../prompt_layers");
 const { selectAlanLeoModuleIds } = require("../knowledge/alan-leo/loader");
@@ -175,6 +178,95 @@ function test() {
   assert.ok(unknown.arch.asteroidConditions.chiron);
   assert.ok(unknown.prompt.indexOf("=== CAPABILITIES ===") > 0);
   assert.equal(unknown.prompt.indexOf("Juno:"), -1);
+
+  const sequenceChart = timedChart();
+  const turn1 = "Tell me about my chart.";
+  const turn2 = "Tell me more.";
+  const assistant =
+    "Saturn in Capricorn organizes the classical planets through rulership and the lights. The Sun and Moon oppose one another. Mars squares that opposition and gives the figure a T-square.";
+  const history2 = [
+    { role: "user", content: turn1 },
+    { role: "assistant", content: assistant },
+    { role: "user", content: turn2 },
+  ];
+  assert.equal(continuesEstablishedChartAnalysis(turn2, [{ role: "user", content: turn2 }]), false);
+  assert.equal(continuesEstablishedChartAnalysis("hi", history2), false);
+  assert.equal(continuesEstablishedChartAnalysis(turn2, history2), true);
+
+  const routeA = routeChatIntent({ message: turn1, history: [{ role: "user", content: turn1 }] });
+  const routeB = routeChatIntent({ message: turn2, history: history2 });
+  assert.equal(routeA.primaryIntent, "CHART_ANALYSIS");
+  assert.equal(routeA.progressionEligible, true);
+  assert.equal(routeB.primaryIntent, "CHART_ANALYSIS");
+  assert.equal(routeB.inheritedIntent, true);
+  assert.equal(routeB.progressionEligible, true);
+
+  const readingA = resolveChatReading(frontendPayload(sequenceChart, { message: turn1, register: "advanced" }));
+  const readingB = resolveChatReading(frontendPayload(sequenceChart, { message: turn2, register: "advanced", history: history2 }));
+  assert.equal(readingA.readingConfig.canUseHouses, true);
+  assert.equal(readingB.readingConfig.canUseHouses, readingA.readingConfig.canUseHouses);
+  assert.equal(readingB.readingConfig.canUseAscendant, readingA.readingConfig.canUseAscendant);
+  assert.deepEqual(readingB.readingChart.planets, readingA.readingChart.planets);
+  const factsA = formatBirthChartForChatGPT(readingA.readingChart);
+  const factsB = formatBirthChartForChatGPT(readingB.readingChart);
+  assert.equal(factsA, factsB);
+  const archA = ensureArchitecture(readingA.readingChart);
+  const archB = ensureArchitecture(readingB.readingChart);
+  assert.deepEqual(archA.dominantPlanets, archB.dominantPlanets);
+  assert.deepEqual(archA.planetConditions, archB.planetConditions);
+  const evidence = formatArchitectureForAI(archA);
+  assert.equal(evidence.indexOf("skeleton of the reading"), -1);
+  assert.ok(evidence.indexOf("authoritative structural evidence") > 0);
+  assert.equal(formatArchitectureForAI(archB), evidence);
+
+  const focusA = selectChartAnalysisFocus(archA, routeA.priorConversation);
+  const focusB = selectChartAnalysisFocus(archB, routeB.priorConversation);
+  assert.equal(focusA.phase, "overview");
+  assert.notEqual(focusB.phase, "overview");
+  assert.ok(focusB.phase === "breadth" || focusB.phase === "integration");
+
+  function analysisPrompt(reading, route, focus, facts) {
+    return composeSystemContent({
+      preferredMode: "advanced",
+      question: route.questionForMode,
+      chartAnalysisMode: route.chartAnalysisMode,
+      thesisMode: route.thesisMode,
+      chartSystem: reading.chartSystem,
+      chartFactsOnly: facts,
+      architectureBlock: formatArchitectureForAI(ensureArchitecture(reading.readingChart)),
+      readingConfig: reading.readingConfig,
+      unknownBirthTime: reading.readingConfig.unknownBirthTime,
+      chartAnalysisProgression: focus,
+      structures: {
+        planets: (ensureArchitecture(reading.readingChart).dominantPlanets || []).map(function (item) {
+          return item.planet;
+        }),
+      },
+    });
+  }
+  const promptA = analysisPrompt(readingA, routeA, focusA, factsA);
+  const promptB = analysisPrompt(readingB, routeB, focusB, factsB);
+  assert.ok(promptA.indexOf(factsA) > 0);
+  assert.ok(promptB.indexOf(factsB) > 0);
+  assert.ok(promptA.indexOf("authoritative structural evidence") > 0);
+  assert.ok(promptB.indexOf("authoritative structural evidence") > 0);
+  assert.ok(promptA.indexOf("=== ACTIVE BODIES ===") > 0);
+  assert.ok(promptB.indexOf("=== ACTIVE BODIES ===") > 0);
+  assert.ok(promptA.indexOf("Never ask for birth date") > 0);
+  assert.ok(promptB.indexOf("Never ask for birth date") > 0);
+  assert.equal(promptA.indexOf("CASUAL MESSAGES"), -1);
+  assert.equal(promptB.indexOf("CASUAL MESSAGES"), -1);
+  assert.equal(promptA.indexOf("A final synthesis should state"), -1);
+  assert.equal(promptB.indexOf("A final synthesis should state"), -1);
+  assert.equal(promptA.indexOf("skeleton of the reading"), -1);
+  assert.equal(promptB.indexOf("skeleton of the reading"), -1);
+  assert.ok(promptA.indexOf("=== REGISTER ===") > 0);
+  assert.ok(promptB.indexOf("=== REGISTER ===") > 0);
+  assert.ok(promptA.indexOf("highest-ranked organizing structure") > 0);
+  assert.ok(promptB.indexOf("THIS IS A LATER BROAD CHART_ANALYSIS") > 0 || promptB.indexOf("THE MAJOR UNEXPLORED STRUCTURES") > 0);
+  assert.ok(promptB.indexOf("PRIMARY FOCUS:") > 0);
+  assert.ok(promptA.indexOf("Do not rescore") > 0);
+  assert.ok(promptB.indexOf("Do not rescore") > 0);
 }
 
 module.exports = test;

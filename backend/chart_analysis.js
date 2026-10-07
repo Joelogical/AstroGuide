@@ -97,6 +97,19 @@ function isOpenContinuation(message) {
   );
 }
 
+/**
+ * An existing open continuation of chart analysis.
+ * A fresh continuation does not invent that context.
+ * @param {string} message
+ * @param {Array} history client history, which may already include message
+ */
+function continuesEstablishedChartAnalysis(message, history) {
+  return (
+    isOpenContinuation(message) &&
+    contextIsChartAnalysis(historyBeforeCurrentTurn(message, history))
+  );
+}
+
 function isInherentChartAnalysisQuestion(message) {
   if (isFactualQuestion(message)) return false;
   if (
@@ -851,6 +864,7 @@ function selectChartAnalysisFocus(arch, history) {
 module.exports = {
   hasExplicitAnalyticalTarget,
   isOpenContinuation,
+  continuesEstablishedChartAnalysis,
   contextIsChartAnalysis,
   isBroadChartAnalysisPrompt,
   isChartAnalysisQuestion,

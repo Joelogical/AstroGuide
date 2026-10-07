@@ -242,7 +242,17 @@ function selectAlanLeoModuleIds(ctx) {
   return orderIds(ids);
 }
 
+function methodologyForTurn(ctx) {
+  const text = readKnowledgeFile(MODULE_FILES.methodology);
+  if (!ctx || !ctx.chartAnalysisMode) return text;
+  const marker = "\n## Whole-chart conclusion";
+  const at = text.indexOf(marker);
+  if (at === -1) return text;
+  return text.slice(0, at).replace(/\s+$/, "");
+}
+
 function moduleBody(id, ctx) {
+  if (id === "methodology") return methodologyForTurn(ctx);
   if (id === "planets") {
     const named = planetNamesIn(ctx.question || "").filter(function (name) {
       return bodyAllowed(name, ctx);

@@ -203,6 +203,10 @@ function test() {
   assert.ok(chart.indexOf("Web pages are supplemental") > 0);
 
   assert.ok(chart.indexOf("highest-ranked organizing structure") > 0);
+  assert.equal(chart.indexOf("A final synthesis should state"), -1);
+  assert.equal(chart.indexOf("skeleton of the reading"), -1);
+  assert.ok(chart.indexOf("Horoscope as an integrated system") > 0);
+  assert.ok(synthesis.indexOf("A final synthesis should state") > 0);
   assert.ok(chart.indexOf("PRIMARY FOCUS") === -1);
   assert.equal(chart.indexOf("DOMINANT STRUCTURAL OVERVIEW"), -1);
   assert.equal(chart.indexOf("a few coherent paragraphs"), -1);

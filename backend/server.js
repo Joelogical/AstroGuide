@@ -43,7 +43,10 @@ const { isPredictionQuestion } = require("./prediction_guard");
 const { validateBirthInput } = require("./birth_input");
 const { routeChatIntent } = require("./intent_router");
 const { buildAnalysisState } = require("./analysis_state");
-const { historyBeforeCurrentTurn } = require("./chart_analysis");
+const {
+  historyBeforeCurrentTurn,
+  continuesEstablishedChartAnalysis,
+} = require("./chart_analysis");
 const { handleQuestion } = require("./enhanced_question_handler");
 const {
   buildChartArchitecture,
@@ -616,7 +619,8 @@ function buildLocalChatReply(message, birthChart, conversationHistory) {
   }
   if (
     isCasualMessage(message) &&
-    !wantsChartInterpretation(message)
+    !wantsChartInterpretation(message) &&
+    !continuesEstablishedChartAnalysis(message, conversationHistory)
   ) {
     return "Hi — I'm here. Ask about a planet, house, or how the chart fits together.";
   }
@@ -929,7 +933,11 @@ app.post("/api/chat", (req, res) => {
       const wantsInterpretation = wantsChartInterpretation(message);
 
       // For casual messages, use a simpler system prompt that doesn't push chart information
-      if (isCasual && !wantsInterpretation) {
+      if (
+        isCasual &&
+        !wantsInterpretation &&
+        !continuesEstablishedChartAnalysis(message, conversationHistory)
+      ) {
         const casualSystemContent =
           "You are AstroGuide. Stay generally neutral and professional; otherwise respond in a natural, helpful way—no fixed persona script.\n\n" +
           "CASUAL MESSAGES:\n" +

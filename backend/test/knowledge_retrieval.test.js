@@ -80,6 +80,25 @@ function test() {
   assert.ok(block.indexOf("Alan Leo, Esoteric Astrology, 1913") !== -1);
   assert.ok(block.indexOf("Aspect Framework") !== -1);
   assert.equal(block.indexOf("Houses and Angles"), -1);
+
+  const chartAnalysis = buildAlanLeoKnowledgeBlock({
+    question: "Tell me about my chart",
+    chartAnalysisMode: true,
+    preferredMode: "advanced",
+    structures: { planets: ["saturn"], aspects: true },
+  });
+  assert.ok(chartAnalysis.indexOf("Horoscope as an integrated system") !== -1);
+  assert.equal(chartAnalysis.indexOf("A final synthesis should state"), -1);
+  assert.equal(chartAnalysis.indexOf("## Whole-chart conclusion"), -1);
+
+  const synthesis = buildAlanLeoKnowledgeBlock({
+    question: "Tell me about myself",
+    thesisMode: true,
+    preferredMode: "advanced",
+    structures: { planets: ["saturn"] },
+  });
+  assert.ok(synthesis.indexOf("A final synthesis should state") !== -1);
+  assert.ok(synthesis.indexOf("Horoscope as an integrated system") !== -1);
 }
 
 module.exports = test;

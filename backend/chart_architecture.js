@@ -1312,7 +1312,9 @@ function formatArchitectureForAI(architecture) {
   if (!architecture || !architecture.ok) return "";
   const unknownTime = isUnknownBirthTime(architecture);
   const lines = [];
-  lines.push("Use this computed architecture as the skeleton of the reading.");
+  lines.push(
+    "This computed architecture is authoritative structural evidence. Use only what this question and any supplied focus need. Do not rescore it or reconstruct it.",
+  );
   lines.push("Individual placements refine it; they do not replace it.");
   lines.push("");
   if (architecture.chartSystem === "traditional") {
