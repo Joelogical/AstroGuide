@@ -229,7 +229,9 @@ function test() {
   assert.ok(beginnerPrompt.indexOf(facts) > 0);
   assert.ok(advancedPrompt.indexOf(facts) > 0);
   assert.ok(advancedPrompt.indexOf("=== REGISTER ===") > 0);
-  assert.equal(beginnerPrompt.indexOf("=== REGISTER ==="), -1);
+  assert.ok(beginnerPrompt.indexOf("=== REGISTER ===") > 0);
+  assert.ok(beginnerPrompt.indexOf("BEGINNER REGISTER") > 0);
+  assert.equal(beginnerPrompt.indexOf("ADVANCED MODE (expert analytical register"), -1);
   assert.ok(beginnerPrompt.indexOf("Active asteroids: none") > 0);
   assert.ok(advancedPrompt.indexOf("Active asteroids: none") > 0);
 

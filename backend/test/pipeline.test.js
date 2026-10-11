@@ -2,7 +2,11 @@ const assert = require("assert");
 const fs = require("fs");
 const path = require("path");
 const { resolveChatReading } = require("../reading_configuration");
-const { ensureArchitecture, formatArchitectureForAI } = require("../chart_architecture");
+const {
+  ensureArchitecture,
+  formatArchitectureForAI,
+  formatAspectLensForModel,
+} = require("../chart_architecture");
 const {
   selectChartAnalysisFocus,
   continuesEstablishedChartAnalysis,
@@ -103,7 +107,10 @@ function test() {
   assert.deepEqual(advanced.reading.readingConfig.activeAsteroids, ["chiron", "juno"]);
   assert.equal(beginner.arch.planetConditions.uranus.sign, "Aquarius");
   assert.ok(advanced.prompt.indexOf("=== REGISTER ===") > 0);
-  assert.equal(beginner.prompt.indexOf("=== REGISTER ==="), -1);
+  assert.ok(beginner.prompt.indexOf("=== REGISTER ===") > 0);
+  assert.ok(beginner.prompt.indexOf("BEGINNER REGISTER") > 0);
+  assert.equal(beginner.prompt.indexOf("ADVANCED MODE (expert analytical register"), -1);
+  assert.ok(beginner.prompt.indexOf("=== REGISTER ===") < beginner.prompt.indexOf("=== ACTIVE INTENT ==="));
   assert.ok(beginner.prompt.indexOf("Chiron") > 0);
   assert.ok(beginner.prompt.indexOf("Juno") > 0);
   assert.ok(advanced.prompt.indexOf("Juno") > 0);
@@ -299,6 +306,123 @@ function test() {
   assert.ok(promptB.indexOf("PRIMARY FOCUS:") > 0);
   assert.ok(promptA.indexOf("Do not rescore") > 0);
   assert.ok(promptB.indexOf("Do not rescore") > 0);
+
+  const replies = [
+    "Saturn organizes this chart from Capricorn. The lights oppose one another and Mars squares that axis into a T-square.",
+    "The aspect network is dense around Mars. Jupiter is applying to the opposition while Saturn is separating from the Sun. Topology favors that square pattern.",
+    "Angular structure is carried by Saturn on the first house. Aspects to the Ascendant and Midheaven stay quiet beside that angular planet.",
+  ];
+  let multiHistory = [{ role: "user", content: turn1 }];
+  const multiRoute1 = routeChatIntent({
+    message: turn1,
+    history: multiHistory,
+  });
+  const multiFocus1 = selectChartAnalysisFocus(
+    archA,
+    multiRoute1.priorConversation,
+  );
+  assert.equal(multiRoute1.progressionEligible, true);
+  assert.equal(multiFocus1.phase, "overview");
+  assert.equal(
+    analysisPrompt(readingA, multiRoute1, multiFocus1, factsA).indexOf(
+      "PRIMARY FOCUS:",
+    ),
+    -1,
+  );
+
+  for (let i = 0; i < 3; i++) {
+    multiHistory = multiHistory.concat([
+      { role: "assistant", content: replies[i] },
+      { role: "user", content: turn2 },
+    ]);
+    const multiRoute = routeChatIntent({
+      message: turn2,
+      history: multiHistory,
+    });
+    assert.equal(multiRoute.primaryIntent, "CHART_ANALYSIS");
+    assert.equal(multiRoute.progressionEligible, true);
+    const multiFocus = selectChartAnalysisFocus(
+      archA,
+      multiRoute.priorConversation,
+    );
+    assert.ok(multiFocus && multiFocus.id);
+    assert.notEqual(multiFocus.phase, "overview");
+    const multiPrompt = analysisPrompt(
+      readingA,
+      multiRoute,
+      multiFocus,
+      factsA,
+    );
+    assert.ok(
+      multiPrompt.indexOf("PRIMARY FOCUS:") > 0,
+      "continuation " + (i + 1) + " prompt must include PRIMARY FOCUS",
+    );
+    assert.ok(multiPrompt.indexOf(multiFocus.label) > 0);
+    const deliveredFocus = chartAnalysisGenerationContent(turn2, multiFocus);
+    assert.equal(deliveredFocus.indexOf(turn2), 0);
+    assert.ok(deliveredFocus.indexOf(multiFocus.label) > turn2.length);
+  }
+
+  const aspectChart = timedChart();
+  const aspectArch = ensureArchitecture(aspectChart);
+  const aspectFacts = formatBirthChartForChatGPT(aspectChart);
+  const aspectPrior = [
+    { role: "user", content: "Mars square Saturn" },
+    { role: "assistant", content: "Mars square Saturn is the tight frictional contact." },
+  ];
+  function aspectRoute(message) {
+    return routeChatIntent({
+      message: message,
+      history: aspectPrior.concat([{ role: "user", content: message }]),
+    });
+  }
+  const whyRoute = aspectRoute("why is that difficult?");
+  const moreRoute = aspectRoute("Tell me more");
+  assert.equal(whyRoute.primaryIntent, "ASPECT");
+  assert.equal(moreRoute.primaryIntent, "ASPECT");
+  assert.equal(whyRoute.asked, "why is that difficult?");
+  assert.equal(moreRoute.asked, "Tell me more");
+  assert.deepEqual(whyRoute.clickedAspect, moreRoute.clickedAspect);
+  const aspectLens = formatAspectLensForModel(
+    aspectArch,
+    whyRoute.clickedAspect,
+    aspectChart,
+  );
+  assert.ok(aspectLens.indexOf("Clicked:") > 0);
+  assert.ok(aspectLens.indexOf("Mars") > 0);
+  assert.ok(aspectLens.indexOf("Saturn") > 0);
+  assert.ok(/square/i.test(aspectLens));
+  function aspectPrompt(register, route) {
+    const reading = resolveChatReading(frontendPayload(aspectChart, {
+      message: route.asked,
+      register: register,
+      history: aspectPrior,
+    }));
+    return composeSystemContent({
+      preferredMode: register,
+      question: route.questionForMode,
+      aspectMode: route.aspectMode,
+      aspectLens: aspectLens,
+      chartFactsOnly: aspectFacts,
+      readingConfig: reading.readingConfig,
+      chartSystem: reading.chartSystem,
+    });
+  }
+  const beginnerAspect = aspectPrompt("beginner", whyRoute);
+  const advancedAspect = aspectPrompt("advanced", whyRoute);
+  assert.ok(beginnerAspect.indexOf("=== REGISTER ===") > 0);
+  assert.ok(beginnerAspect.indexOf("BEGINNER REGISTER") > 0);
+  assert.equal(beginnerAspect.indexOf("ADVANCED MODE (expert analytical register"), -1);
+  assert.ok(beginnerAspect.indexOf("=== REGISTER ===") < beginnerAspect.indexOf("=== ACTIVE INTENT ==="));
+  assert.ok(advancedAspect.indexOf("=== REGISTER ===") > 0);
+  assert.ok(advancedAspect.indexOf("ADVANCED MODE (expert analytical register") > 0);
+  assert.ok(advancedAspect.indexOf("=== REGISTER ===") < advancedAspect.indexOf("=== ACTIVE INTENT ==="));
+  assert.ok(beginnerAspect.indexOf("CLICKED ASPECT") > 0);
+  assert.ok(advancedAspect.indexOf("CLICKED ASPECT") > 0);
+  assert.ok(beginnerAspect.indexOf("Clicked:") > 0);
+  assert.ok(advancedAspect.indexOf("Clicked:") > 0);
+  assert.equal(whyRoute.primaryIntent, moreRoute.primaryIntent);
+  assert.equal(whyRoute.asked.indexOf("why is that difficult?"), 0);
 }
 
 module.exports = test;

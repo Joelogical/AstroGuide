@@ -89,16 +89,15 @@ const aspectInterpretationTemplates = {
  * These guide how the AI should interpret the chart holistically
  */
 const holisticInstructions = [
-  "CRITICAL: Interpret the chart as a UNIFIED WHOLE, not separate sections. The chart sections below are organizational tools for your reference—DO NOT address them separately in your response.",
-  "Start with the CORE PERSONALITY SYNTHESIS - this is the foundation that ties everything together.",
-  "Use ASPECT-DRIVEN narrative - weave together placements that aspect each other into a cohesive story.",
-  "DO NOT structure your response by sections (Identity/Emotions, Mind/Communication, etc.). Instead, synthesize these themes into a unified narrative about the person.",
-  "Avoid listing placements or aspects separately. Instead, show how they interconnect and create a cohesive personality pattern.",
-  "Use planet significance scores to emphasize heavily aspected planets, but weave them into the unified narrative, not as separate points.",
-  "Include BOTH positive and negative qualities throughout, integrated naturally into the holistic interpretation.",
-  "Show relationships between chart pieces—how they work together as one system, not as isolated components.",
-  "Think of the chart as a single, interconnected web. Your interpretation should reflect this unity, not break it into parts.",
-  "Unless the user specifically asks about a particular section or theme, address the chart holistically as one integrated whole.",
+  "The sections below are internal working context. Read them as one chart before you decide what matters. Do not treat them as an outline, and do not address them as separate sections in the reply.",
+  "Weigh the core relationships — luminaries, chart ruler when birth time is known, and the connections among them — when judging what organizes the chart. That weighing is internal.",
+  "Use aspect relationships to see how placements condition one another. Bring a relationship into the reply only when it changes the point you are making.",
+  "The reply is selective. Present the relationships that answer the question. Do not narrate every interconnection, and do not cover the chart just because the context is complete.",
+  "Do not list placements or aspects as an inventory. When two factors belong in the answer, show how they work together.",
+  "Use planet significance internally to tell a heavily aspected planet from a minor one. Mention a planet when it carries the point, not because it scored.",
+  "Include constructive and difficult qualities when they are part of the point, integrated into the explanation.",
+  "A broad reading still selects the organizing relationships. It does not become a tour of every theme. A specific question stays on that question.",
+  "A request to continue deepens the subject already opened. It does not restart the chart or summarize every section.",
 ];
 
 /**
