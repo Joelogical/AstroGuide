@@ -369,18 +369,14 @@ function extractKeyThemes(interpretation) {
 function formatInterpretationForAI(interpretation, birthChart) {
   let template = `BIRTH CHART INTERPRETATION TEMPLATE\n`;
   template += `=====================================\n\n`;
-  template += `⚠️ CRITICAL INSTRUCTIONS FOR HOLISTIC INTERPRETATION:\n`;
-  template += `\n`;
-  template += `🚫 NEVER DO THIS (PLANET-BY-PLANET BREAKDOWN):\n`;
+  template += `Read the sections below as one chart. That reading is internal.\n`;
+  template += `The reply presents only the relationships that answer the question.\n\n`;
+  template += `Do not write a planet-by-planet breakdown:\n`;
   template += `- "Your Sun in Gemini... [paragraph about Sun]"\n`;
   template += `- "Your Moon in Virgo... [paragraph about Moon]"\n`;
   template += `- "Your Mercury... [paragraph about Mercury]"\n`;
-  template += `This creates a fragmented, checklist-style response. DO NOT structure your response this way.\n\n`;
-  template += `✅ INSTEAD DO THIS (UNIFIED SYNTHESIS):\n`;
-  template += `- Weave multiple placements together in each paragraph\n`;
-  template += `- Show how Sun, Moon, Mercury, Venus, etc. all interconnect\n`;
-  template += `- Create a unified narrative, not separate paragraphs for each planet\n`;
-  template += `- Each paragraph should integrate 2-3+ chart elements\n\n`;
+  template += `That checklist treats every placement as equal. Do not structure the reply that way.\n\n`;
+  template += `When more than one factor belongs in the answer, show how they condition each other. Do not force unrelated factors into the same paragraph to prove the chart was considered.\n\n`;
   holisticInstructions.forEach((instruction, index) => {
     template += `${index + 1}. ${instruction}\n`;
   });

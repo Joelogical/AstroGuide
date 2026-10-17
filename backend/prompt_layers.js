@@ -36,9 +36,10 @@ function getSystemRules() {
 
 function getAstrologyInterpreterRules() {
   return (
-    "THIS TURN IS A SPECIFIC CHART QUESTION, NOT A WHOLE-CHART ANALYSIS AND NOT A PERSONALITY PORTRAIT. Answer what they asked. Use the supplied architecture only where it bears on that question. Do not walk the rest of the chart.\n\n" +
+    "THIS TURN IS A SPECIFIC CHART QUESTION, NOT A WHOLE-CHART ANALYSIS AND NOT A PERSONALITY PORTRAIT. Answer what they asked.\n\n" +
+    "INTERNAL ANALYSIS AND EXTERNAL EXPLANATION: Weigh the supplied architecture as one chart before you choose what to say. That weighing stays internal. The reply presents only the factors that change the answer. Do not walk the rest of the chart.\n\n" +
     "THE ARCHITECTURE IS ALREADY COMPUTED. Chart ruler, dominance, dignity, reception, dispositors, house-rulership chains, stelliums, configurations, aspect links, element balance, modality balance, and hemisphere emphasis are evidence you may cite when the question needs them. Do not derive them again from positions, and do not rescore dominance. Do not treat that list as an outline.\n\n" +
-    "Cite a supplied fact only when it changes the point they asked about. Dignity colors expression: domicile or exaltation is more direct; detriment or fall is the same function with more friction. Do not treat a retrograde planet as weaker. An angular placement, stellium, or configuration means what the architecture already marks. If testimony conflicts, name both sides. Do not invent a configuration, ruler, or body the architecture does not list.\n\n" +
+    "Cite a supplied fact only when it changes the point they asked about. Dignity colors expression: domicile or exaltation is more direct; detriment or fall is the same function with more friction. The active register decides whether those terms are spoken with a gloss or used as working vocabulary. Do not treat a retrograde planet as weaker. An angular placement, stellium, or configuration means what the architecture already marks. If testimony conflicts, name both sides. Do not invent a configuration, ruler, or body the architecture does not list.\n\n" +
     "ACTIVE BODIES ONLY. Interpret only planets and optional bodies present in CHART FACTS and ACTIVE BODIES. Enabled asteroids are supporting testimony. Do not treat them as equal to the planetary ranking, and do not rescore them.\n\n" +
     "MINOR ASPECTS in CHART FACTS are nuance. Do not make them the subject unless the user asked about them.\n\n" +
     "If they ask the same chart question again, go deeper on that question using the supplied structures. Do not choose a new focus."
@@ -106,11 +107,21 @@ function getAdvancedVoiceRules() {
   return getPromptSection("advanced.md", "voice");
 }
 
+function getBeginnerVoiceRules() {
+  return getPromptSection("beginner.md", "voice");
+}
+
+function getRegisterRules(mode) {
+  return isAdvancedPreferred(mode)
+    ? getAdvancedVoiceRules()
+    : getBeginnerVoiceRules();
+}
+
 function getFactualTurnRules() {
   return (
     "THIS TURN IS A FACTUAL LOOKUP. Answer only the chart fact the user asked for, using DETERMINISTIC CONTEXT. " +
     "Do not write a natal interpretation, do not add personality, and do not search the web. " +
-    "Beginner: plain words. Advanced: technical terms are fine; do not define them and do not expand into a reading."
+    "Beginner: plain words, with a short gloss only if the fact's name would otherwise be opaque. Advanced: technical terms are fine; do not define them and do not expand into a reading."
   );
 }
 
@@ -119,27 +130,23 @@ function getThesisTurnRules(preferredMode) {
     return (
       "THIS TURN IS A SYNTHESIS OF THE PERSON FOR AN EXPERT READER.\n" +
       "They asked who they are or what they are like. One coherent analysis of how the architecture’s factors interact—not a placement list and not a beginner paraphrase. " +
-      "Use the supplied architecture ranking; do not rescore it. Cite the chart ruler, angularity, tight aspects, luminaries, dispositors, and listed configurations. Cite geometry when it changes the weight. " +
+      "Use the supplied architecture ranking; do not rescore it. Weigh the whole architecture internally, then lead with the primary evidence: chart ruler, angularity, tight aspects, luminaries, dispositors, and listed configurations. Cite orbs, rulerships, dignities, and house relationships when they change the weight. Name a secondary factor only when it modifies that evidence. " +
       "INTERNAL CLAIMS are constraints only—do not paste them. Show the interpretive chain from those structures.\n\n" +
-      "Do not write one paragraph per planet. Do not define standard terms. Do not flatten mechanics into “you want safety / you want to act.”\n" +
+      "Do not write one paragraph per planet. Do not define standard terms unless they asked you to. Do not make the reply longer in order to sound advanced. Do not flatten mechanics into “you want safety / you want to act.”\n" +
+      "If they ask to hear more, deepen this synthesis. Do not open a new survey of the chart.\n" +
       "Do not call search_astrology_info, search_web_astrology, or save_chart_summary this turn."
     );
   }
   return (
     "THIS TURN IS A GENERAL CONVERSATION ABOUT THE PERSON, NOT A CHART TOUR.\n" +
     "They asked something like who they are, what they're like, or a broad follow-up. " +
-    "Answer in kind: natural, conversational, second person. " +
-    "Save planets, houses, signs, aspects, and other chart language for later, when they ask about the chart itself or tap a technical chip.\n\n" +
+    "Answer that question in the beginner register: ordinary language, conceptually substantive, and selective.\n\n" +
     "INTERNAL CLAIMS are for you only. Do not paste them, quote them, or open with a summary of them. " +
-    "Write the whole reply yourself: two or three short paragraphs of ordinary speech. " +
-    "Cover the claims by saying how this person actually lives—work, closeness, timing, privacy, stress. " +
-    "Every sentence should be something a friend could understand with no astrology. " +
-    "Name the tension in plain terms (for example: you want safety and you also want to move before you feel ready). " +
+    "Use the supplied architecture internally. Say the pattern that organizes this person — how the relevant needs meet in work, closeness, timing, privacy, or stress. " +
+    "You may introduce a chart term when it carries the idea, with a short plain gloss the first time. Do not inventory placements. " +
     "Do not use riddles or leftover jargon: no 'live in the pull', 'engines', 'night chart', 'first quarter', 'steered by', or 'the real story'.\n\n" +
-    "If they asked this kind of question before, go deeper on lived habits and feelings—not by naming new placements.\n" +
-    "Do not write a Sun paragraph, a Moon paragraph, and an aspects paragraph. " +
-    "Do not name planets, houses, signs, aspects, or technical condition unless a word is already in the user's question. " +
-    "Do not use the house-topic map (career / relationships / identity). " +
+    "If they ask to hear more, go further into the same pattern. Do not restart the portrait and do not summarize the whole chart.\n" +
+    "Do not write one paragraph per planet. Do not use the house-topic map as an outline. " +
     "Do not call search_astrology_info, search_web_astrology, or save_chart_summary this turn."
   );
 }
@@ -151,9 +158,11 @@ function getTopicTurnRules(topic, preferredMode) {
       "THIS TURN IS A LIFE-AREA QUESTION FOR AN EXPERT READER.\n" +
       "The user asked about " +
       area +
-      ". Stay on that area. Use TOPIC LENS as working data: house, house ruler, essential/accidental dignity, reception, and the aspects that condition them. " +
-      "Show how those factors reinforce or contradict each other. Prioritize the strongest links. Cite orb and applying/separating when it matters. " +
-      "Do not define houses or rulers. Do not reprint a beginner portrait. Do not walk the whole chart.\n\n" +
+      ". Stay on that area. Weigh TOPIC LENS with the rest of the supplied chart, then speak only to this area. " +
+      "Use house, house ruler, essential dignity, accidental dignity, reception, and the aspects that condition them when they change the point. " +
+      "Lead with the primary link. Name a secondary factor only when it modifies that link. Cite orb and applying/separating when it matters. " +
+      "Do not define houses or rulers unless they asked you to. If they asked for a simpler explanation, drop dignity, orb, and rulership terms for this turn. Do not make the reply longer in order to sound advanced. Do not reprint a beginner portrait. Do not walk the whole chart.\n\n" +
+      "If they ask to hear more, deepen this area. Do not open a new survey of the chart.\n\n" +
       "Web is color only. At most one search if you need a phrase. Do not build the answer from blogs. " +
       "Do not call save_chart_summary this turn."
     );
@@ -162,13 +171,13 @@ function getTopicTurnRules(topic, preferredMode) {
     "THIS TURN IS A LIFE-AREA QUESTION, NOT A TOUR AND NOT A NEW PORTRAIT.\n" +
     "The user asked about " +
     area +
-    ". Answer that question.\n\n" +
-    "Open by tying the answer to the same through-line in INTERNAL CLAIMS (one or two sentences). Then stay in this life area. " +
-    "Use TOPIC LENS internally. Do not name planets, houses, signs, or aspects unless the user already used those words. " +
-    "Do not reprint the self-portrait. Do not walk the whole chart. Do not invent a second personality.\n\n" +
-    "Same voice as a conversation: concrete, second person, something a friend could understand. " +
-    "No riddles or leftover jargon: no 'live in the pull', 'engines', 'night chart', 'first quarter', or 'steered by'. " +
-    "Do not lead with house numbers unless the user asked for them.\n\n" +
+    ". Answer that question in the beginner register.\n\n" +
+    "Use TOPIC LENS internally, together with the rest of the supplied chart, to see what actually bears on this area. Say that in ordinary language. " +
+    "Do not open by defining what the area means in astrology. Do not copy an unglossed technical phrase out of TOPIC LENS. " +
+    "You may name a planet, sign, or house when it carries the point, with a short gloss if the word is likely to be new. Do not lead with a house-number lecture. " +
+    "Do not reprint a self-portrait. Do not walk the whole chart. Do not invent a second personality.\n\n" +
+    "If they ask to hear more, deepen this area. Do not start a new reading.\n" +
+    "No riddles or leftover jargon: no 'live in the pull', 'engines', 'night chart', 'first quarter', or 'steered by'.\n\n" +
     "Web is color only. At most one search if you need a phrase. Do not build the answer from blogs. " +
     "Do not call save_chart_summary this turn."
   );
@@ -178,21 +187,24 @@ function getAspectTurnRules(preferredMode) {
   if (isAdvancedPreferred(preferredMode)) {
     return (
       "THIS TURN IS A CLICKED ASPECT FOR AN EXPERT READER.\n" +
-      "Stay with that pair. Use ASPECT LENS as geometry: aspect type, orb, applying/separating, dignity of each end, houses, rulerships, and any larger configuration. " +
+      "Stay with that pair. Weigh ASPECT LENS against the rest of the supplied chart, then stay with this contact. " +
+      "Use aspect type, orb, applying/separating, dignity of each end, houses, rulerships, and any larger configuration when they change the weight. " +
+      "Lead with the primary reason this contact matters. Name a secondary factor only when it modifies that reason. " +
       "Show why this contact ranks as it does, and how each planet’s house and rulerships channel the dynamic. " +
-      "Do not define “square” or “orb.” Do not convert the contact into an introductory tension metaphor. Do not walk the rest of the chart.\n\n" +
+      "Do not define “square” or “orb” unless they asked you to. If they asked for a simpler explanation, drop orb, dignity, and rulership terms for this turn. Do not convert the contact into an introductory tension metaphor. Do not make the reply longer in order to sound advanced. Do not walk the rest of the chart.\n\n" +
+      "If they ask to hear more, deepen this contact. Do not restart it and do not summarize the chart.\n\n" +
       "Web is color only. At most one search if you need a phrase. Do not build the answer from blogs. " +
       "Do not call save_chart_summary this turn."
     );
   }
   return (
     "THIS TURN IS A CLICKED ASPECT, NOT A TOUR AND NOT A NEW PORTRAIT.\n" +
-    "The user pointed at one connection on the wheel. Answer that connection.\n\n" +
-    "Open by tying it to the same through-line in INTERNAL CLAIMS (one or two sentences). Then stay with what these two needs do together in lived life. " +
-    "Use ASPECT LENS. You may name the two planets and the aspect once, then talk in ordinary speech. " +
-    "Do not reprint the self-portrait. Do not walk the rest of the chart. Do not invent a second personality.\n\n" +
-    "If this pair sits in a larger stress pattern, say the lived tension—do not lecture the geometry. " +
-    "Same voice as the portrait: concrete, second person, something a friend could understand. " +
+    "The user pointed at one connection on the wheel. Answer that connection in the beginner register.\n\n" +
+    "Use ASPECT LENS internally, and notice where the rest of the chart changes its meaning. Explain what these two functions do together. " +
+    "You may name the two planets and the kind of connection, and gloss an unfamiliar word once. " +
+    "Do not reprint a self-portrait. Do not walk the rest of the chart. Do not invent a second personality.\n\n" +
+    "If this pair sits in a larger pattern, say how that pattern changes the connection. Do not lecture the geometry. " +
+    "If they ask to hear more, go further into this same connection. Do not restart it and do not summarize the chart.\n" +
     "No riddles or leftover jargon: no 'live in the pull', 'engines', 'night chart', 'first quarter', or 'steered by'.\n\n" +
     "Web is color only. At most one search if you need a phrase. Do not build the answer from blogs. " +
     "Do not call save_chart_summary this turn."
@@ -258,8 +270,7 @@ function buildRuntimeContext(options) {
     architectureBlock &&
     String(architectureBlock).trim() &&
     !thesisMode &&
-    !topicMode &&
-    !aspectMode
+    !topicMode
   ) {
     out +=
       "--- CHART ARCHITECTURE (computed structural evidence; not a reply outline) ---\n" +
@@ -510,8 +521,8 @@ function composeSystemContent(runtime) {
             section("OUTPUT", getResponseTemplates()),
             section("DETERMINISTIC CONTEXT", buildRuntimeContext(runtime)),
           ];
-  if (isAdvancedPreferred(mode) && !factualTurn) {
-    parts.splice(1, 0, section("REGISTER", getAdvancedVoiceRules()));
+  if (!factualTurn) {
+    parts.splice(1, 0, section("REGISTER", getRegisterRules(mode)));
   }
   if (runtime && runtime.unknownBirthTime) {
     parts.splice(1, 0, section("CAPABILITIES", getUnknownBirthTimeRules()));
@@ -532,6 +543,10 @@ function composeSystemContent(runtime) {
   if (knowledgeBlock) {
     parts.splice(parts.length - 1, 0, section("SOURCE KNOWLEDGE", knowledgeBlock));
   }
+  const depth = runtime && runtime.interpretiveDepth;
+  if (depth && depth.directive) {
+    parts.splice(parts.length - 1, 0, section("INTERPRETIVE DEPTH", depth.directive));
+  }
   return parts.join("\n\n");
 }
 
@@ -543,6 +558,8 @@ module.exports = {
   getAspectTurnRules,
   getChartAnalysisRules,
   getAdvancedVoiceRules,
+  getBeginnerVoiceRules,
+  getRegisterRules,
   getUnknownBirthTimeRules,
   getTraditionalChartRules,
   getSensitivityRules,

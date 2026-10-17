@@ -94,7 +94,9 @@ function test() {
     question: "Tell me about my chart",
   });
   assert.ok(beginnerChart.indexOf("BEGINNER CHART_ANALYSIS") > 0);
-  assert.equal(beginnerChart.indexOf("=== REGISTER ==="), -1);
+  assert.ok(beginnerChart.indexOf("=== REGISTER ===") > 0);
+  assert.ok(beginnerChart.indexOf("BEGINNER REGISTER") > 0);
+  assert.equal(beginnerChart.indexOf("ADVANCED MODE (expert analytical register"), -1);
   assert.ok(chart.indexOf("ADVANCED CHART_ANALYSIS") > 0);
   assert.ok(chart.indexOf("Do not rescore") > 0);
   assert.ok(chart.indexOf("If this turn supplies a primary focus") > 0);
@@ -155,7 +157,10 @@ function test() {
   assert.ok(beginnerSame.indexOf(sharedFacts) > 0);
   assert.ok(advancedSame.indexOf(sharedFacts) > 0);
   assert.ok(advancedSame.indexOf("=== REGISTER ===") > 0);
-  assert.equal(beginnerSame.indexOf("=== REGISTER ==="), -1);
+  assert.ok(advancedSame.indexOf("ADVANCED MODE (expert analytical register") > 0);
+  assert.ok(beginnerSame.indexOf("=== REGISTER ===") > 0);
+  assert.ok(beginnerSame.indexOf("BEGINNER REGISTER") > 0);
+  assert.equal(beginnerSame.indexOf("ADVANCED MODE (expert analytical register"), -1);
 
   const traditionalBodies = compose({
     chartAnalysisMode: true,

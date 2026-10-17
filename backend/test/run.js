@@ -8,6 +8,12 @@ const tests = [
   ["./swiss.test", require("./swiss.test")],
   ["./configuration.test", require("./configuration.test")],
   ["./pipeline.test", require("./pipeline.test")],
+  ["./conversation_state.test", require("./conversation_state.test")],
+  ["./aspect_angles.test", require("./aspect_angles.test")],
+  ["./profile_lifecycle.test", require("./profile_lifecycle.test")],
+  ["./interpretive_depth.test", require("./interpretive_depth.test")],
+  ["./register_evaluation.test", require("./register_evaluation.test")],
+  ["./integration_assignments.test", require("./integration_assignments.test")],
 ];
 
 async function main() {

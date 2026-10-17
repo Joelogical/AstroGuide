@@ -19,26 +19,163 @@ const {
   contextIsChartAnalysis,
 } = require("./chart_analysis");
 
+/**
+ * Trailing punctuation is not part of a short continuation or acknowledgement.
+ * "why?", "and?", "thanks!", and "ok." classify as the word itself.
+ */
+function normalizeUtterance(message) {
+  return String(message || "")
+    .toLowerCase()
+    .replace(/[\u2019\u2018']/g, "")
+    .replace(/[\u201c\u201d"]/g, "")
+    .replace(/[!?.]+/g, "")
+    .replace(/[,;:]+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function isVagueFollowUp(message) {
-  const t = String(message || "").toLowerCase().trim();
-  return /^(why(\?$| is that| do i)|how come|say more|tell me more|go (on|deeper)|and\?$|what do you mean|can you (say|explain|go) more|keep going|what else( stands out| do you see)?|anything else)\b/.test(
+  const t = normalizeUtterance(message);
+  if (!t) return false;
+  if (/^(why|and)$/.test(t)) return true;
+  if (/^why is that\b/.test(t)) return true;
+  if (/^why do i\b/.test(t)) return true;
+  return /^(how come|say more|tell me more|say that again|repeat|explain that|go on|go deeper|what do you mean|can you say more|can you explain more|can you go more|can you repeat|can you clarify|keep going|what else|what else stands out|what else do you see|anything else)\b/.test(
     t,
   );
 }
 
-function previousUserText(conversationHistory) {
-  const users = (conversationHistory || []).filter(function (entry) {
-    return entry && entry.role === "user" && String(entry.content || "").trim();
-  });
-  if (!users.length) return "";
-  return String(users[users.length - 1].content || "");
+/**
+ * A named planet, angle, house, aspect, sign, or whole-chart request.
+ * A life area alone does not replace the chart subject already in play.
+ */
+function hasAuthoritativeChartSelection(message) {
+  if (parseClickedAspect(message)) return true;
+  if (isChartSpecificQuestion(message)) return true;
+  const t = normalizeUtterance(message);
+  return /\b(aries|taurus|gemini|cancer|leo|virgo|libra|scorpio|sagittarius|capricorn|aquarius|pisces)\b/.test(
+    t,
+  );
 }
 
-function effectiveQuestion(message, conversationHistory) {
-  if (isVagueFollowUp(message)) {
-    return previousUserText(conversationHistory) || message;
+/**
+ * Repair of the previous answer: ask what it meant, or reject it.
+ * These stay on the current chart subject.
+ */
+function isClarificationOrDisagreement(message) {
+  const t = normalizeUtterance(message);
+  if (!t || hasAuthoritativeChartSelection(message)) return false;
+  return /^(what do you mean|what does that mean|can you clarify|could you clarify|please clarify|i dont understand|i do not understand|i dont get it|huh|come again|say that again|can you rephrase|i disagree|i dont agree|i do not agree|thats wrong|thats not right|that is wrong|that is not right|thats incorrect|i dont think so|that doesnt make sense|that does not make sense|no thats wrong|no thats not right)$/.test(
+    t,
+  );
+}
+
+/**
+ * "How does that affect my relationships?" points at the subject in play.
+ * Naming a planet, house, or aspect is a new selection and is not this case.
+ */
+function refersToEstablishedSubject(message) {
+  const t = normalizeUtterance(message);
+  if (!t || hasAuthoritativeChartSelection(message)) return false;
+  if (/\b(that|this)\b/.test(t)) return true;
+  return (
+    /\bit\b/.test(t) &&
+    /\b(affect|affects|mean|means|change|changes|relate|relates|matter|matters|fit|fits)\b/.test(
+      t,
+    )
+  );
+}
+
+function namesLifeArea(message) {
+  const t = normalizeUtterance(message);
+  return /\b(career|job|work|relationships?|love|money|finances?|family|home|friends?|health|purpose)\b/.test(
+    t,
+  );
+}
+
+function isContextOnlyFollowUp(message) {
+  if (isFactualQuestion(message)) return false;
+  if (hasAuthoritativeChartSelection(message)) return false;
+  if (isAcknowledgement(message)) return false;
+  if (isClarificationOrDisagreement(message)) return true;
+  if (refersToEstablishedSubject(message)) return true;
+  if (namesLifeArea(message)) return false;
+  return isVagueFollowUp(message);
+}
+
+function userTexts(conversationHistory) {
+  return (conversationHistory || [])
+    .filter(function (entry) {
+      return entry && entry.role === "user" && String(entry.content || "").trim();
+    })
+    .map(function (entry) {
+      return String(entry.content || "").trim();
+    });
+}
+
+function isAcknowledgement(message) {
+  const text = normalizeUtterance(message);
+  return (
+    /^(hi|hello|hey|hiya|howdy|greetings|sup|yo|whats up)$/.test(text) ||
+    /^(thanks|thank you|thx|ty|appreciate it)$/.test(text) ||
+    /^(ok|okay|k|sure|yep|yeah|yes|no|nope|alright|got it)$/.test(text) ||
+    /^(cool|nice|awesome|great|good|fine)$/.test(text)
+  );
+}
+
+/**
+ * Walk recent user lines.
+ * A chart subject is usable. A factual or unrelated line blocks stored context.
+ * Vague follow-ups and bare acknowledgements are skipped.
+ */
+function historySubjectResolution(conversationHistory) {
+  const users = userTexts(conversationHistory);
+  for (let i = users.length - 1; i >= 0; i--) {
+    const text = users[i];
+    if (isContextOnlyFollowUp(text) || isAcknowledgement(text)) continue;
+    if (isInheritableChartSubject(text)) return { subject: text, blocked: false };
+    return { subject: "", blocked: true };
   }
-  return message;
+  return { subject: "", blocked: false };
+}
+
+function isInheritableChartSubject(text) {
+  if (!text || isFactualQuestion(text) || isContextOnlyFollowUp(text)) return false;
+  if (parseClickedAspect(text)) return true;
+  if (isChartSpecificQuestion(text)) return true;
+  if (isChartAnalysisQuestion(text)) return true;
+  return false;
+}
+
+function storedSubject(validatedState) {
+  const subject =
+    validatedState && typeof validatedState.subject === "string"
+      ? validatedState.subject.trim()
+      : "";
+  if (!isInheritableChartSubject(subject)) return "";
+  return subject;
+}
+
+function effectiveQuestion(message, conversationHistory, validatedState) {
+  if (!isContextOnlyFollowUp(message)) return message;
+  const found = historySubjectResolution(conversationHistory);
+  if (found.subject) return found.subject;
+  if (found.blocked) return message;
+  return storedSubject(validatedState) || message;
+}
+
+/**
+ * A short continuation of a planet, house, angle, aspect, or broad chart
+ * question. History wins. Stored state is used only when history has no
+ * subject and is not blocked by a recent factual or unrelated line.
+ */
+function continuesEstablishedChartSubject(message, history, validatedState) {
+  if (!isContextOnlyFollowUp(message)) return false;
+  const prior = historyBeforeCurrentTurn(message, history);
+  const found = historySubjectResolution(prior);
+  if (found.subject) return true;
+  if (found.blocked) return false;
+  return !!storedSubject(validatedState);
 }
 
 function isChartSpecificQuestion(message) {
@@ -106,16 +243,19 @@ function routeChatIntent(input) {
   const message = input && input.message;
   const history = (input && input.history) || [];
   const priorConversation = historyBeforeCurrentTurn(message, history);
-  const explicit = hasExplicitAnalyticalTarget(message);
-  const questionForMode = explicit
+  const authoritative = hasAuthoritativeChartSelection(message);
+  const validatedState = input && input.validatedState;
+  const questionForMode = authoritative
     ? message
-    : effectiveQuestion(message, priorConversation);
+    : effectiveQuestion(message, priorConversation, validatedState);
   const inheritedIntent =
-    !explicit &&
-    isVagueFollowUp(message) &&
+    !authoritative &&
+    isContextOnlyFollowUp(message) &&
     questionForMode !== message;
   const factual = isFactualQuestion(message);
-  const clickedAspect = parseClickedAspect(message);
+  const clickedAspect =
+    parseClickedAspect(message) ||
+    (isContextOnlyFollowUp(message) ? parseClickedAspect(questionForMode) : null);
   const aspectMode = !!clickedAspect;
   const chartAnalysisMode =
     !aspectMode &&
@@ -144,9 +284,11 @@ function routeChatIntent(input) {
     explicitSubject: explicitSubjectOf(message),
     inheritedIntent: inheritedIntent,
     progressionEligible: !!(
-      chartAnalysisMode && isBroadChartAnalysisPrompt(questionForMode)
+      chartAnalysisMode &&
+      isBroadChartAnalysisPrompt(questionForMode, priorConversation)
     ),
     factual: factual,
+    asked: String(message || ""),
     questionForMode: questionForMode,
     priorConversation: priorConversation,
     topic: topic,
@@ -158,6 +300,79 @@ function routeChatIntent(input) {
     thesisMode: thesisMode,
     outsideResearch: userRequestsOutsideResearch(message),
   };
+}
+
+const CASUAL_ASTRO_WORDS = [
+  "chart",
+  "birth",
+  "astrology",
+  "sign",
+  "planet",
+  "sun",
+  "moon",
+  "mercury",
+  "venus",
+  "mars",
+  "jupiter",
+  "saturn",
+  "uranus",
+  "neptune",
+  "pluto",
+  "aries",
+  "taurus",
+  "gemini",
+  "cancer",
+  "leo",
+  "virgo",
+  "libra",
+  "scorpio",
+  "sagittarius",
+  "capricorn",
+  "aquarius",
+  "pisces",
+  "aspect",
+  "house",
+  "ascendant",
+  "midheaven",
+  "transit",
+  "interpretation",
+  "rising",
+];
+
+function mentionsAstrology(message) {
+  const text = normalizeUtterance(message);
+  return CASUAL_ASTRO_WORDS.some(function (word) {
+    return text.indexOf(word) !== -1;
+  });
+}
+
+function isSubstantiveAstrologyTurn(message, history, validatedState) {
+  if (isFactualQuestion(message)) return true;
+  if (isPredictionQuestion(message)) return true;
+  if (parseClickedAspect(message)) return true;
+  if (isChartSpecificQuestion(message)) return true;
+  if (hasExplicitAnalyticalTarget(message)) return true;
+  if (detectLifeTopic(message)) return true;
+  if (isChartAnalysisQuestion(message, history)) return true;
+  if (isClarificationOrDisagreement(message)) return true;
+  if (isVagueFollowUp(message) || refersToEstablishedSubject(message)) {
+    return continuesEstablishedChartSubject(message, history, validatedState);
+  }
+  return false;
+}
+
+/**
+ * Early gate for greetings and small talk.
+ * Chart questions, life-area questions, and prediction questions stay in routing.
+ * A short continuation stays in routing when a chart subject is already established.
+ */
+function isEarlyCasualGate(message, history, validatedState) {
+  const raw = String(message || "").trim();
+  if (!raw) return false;
+  if (isAcknowledgement(raw)) return true;
+  if (isSubstantiveAstrologyTurn(raw, history, validatedState)) return false;
+  const text = normalizeUtterance(raw);
+  return text.length < 20 && !mentionsAstrology(raw);
 }
 
 function isRepeatPrompt(currentMsg, history) {
@@ -271,5 +486,8 @@ module.exports = {
   isRepeatPrompt,
   isVagueFollowUp,
   isChartSpecificQuestion,
+  continuesEstablishedChartSubject,
+  isClarificationOrDisagreement,
+  isEarlyCasualGate,
   userRequestsOutsideResearch,
 };

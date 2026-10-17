@@ -77,6 +77,30 @@
       <div class="chat-container">
         <div class="chat-header">
           <h1 class="app-title">AstroGuide</h1>
+          <div
+            class="layout-toggle"
+            role="group"
+            aria-label="Arrange chat and chart"
+          >
+            <button
+              type="button"
+              class="layout-toggle-btn"
+              id="layout-side-btn"
+              aria-pressed="false"
+              title="Chat and wheel side by side"
+            >
+              Side by side
+            </button>
+            <button
+              type="button"
+              class="layout-toggle-btn"
+              id="layout-stack-btn"
+              aria-pressed="false"
+              title="Chat above the wheel"
+            >
+              Chat above
+            </button>
+          </div>
           <div class="profile-switcher chat-header-controls">
             <div class="profile-menu">
             <button
@@ -1031,14 +1055,79 @@
         border-bottom-color: var(--border);
         font-size: 0.8rem;
       }
+      .layout-toggle {
+        display: inline-flex;
+        flex-shrink: 0;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        overflow: hidden;
+      }
+      .layout-toggle-btn {
+        padding: 5px 8px;
+        background: transparent;
+        border: 0;
+        color: var(--text-secondary);
+        font-size: 0.75rem;
+        line-height: 1.2;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .layout-toggle-btn + .layout-toggle-btn {
+        border-left: 1px solid var(--border);
+      }
+      .layout-toggle-btn:hover {
+        color: var(--text);
+        background: color-mix(in srgb, var(--text) 8%, transparent);
+      }
+      .layout-toggle-btn[aria-pressed="true"] {
+        background: var(--surface-raised);
+        color: var(--text);
+      }
+      .main-container.layout-side {
+        flex-direction: row;
+        align-items: flex-start;
+      }
+      .main-container.layout-side .chat-container {
+        flex: 1 1 320px;
+        max-width: none;
+        align-self: stretch;
+        min-height: calc(100vh - 32px);
+        max-height: calc(100vh - 32px);
+      }
+      .main-container.layout-side .chart-sidebar {
+        flex: 1 1 420px;
+        width: min(850px, 48vw);
+        max-width: none;
+        margin: 0;
+        position: sticky;
+        top: 16px;
+        max-height: calc(100vh - 32px);
+      }
+      .main-container.layout-stack {
+        flex-direction: column;
+      }
+      .main-container.layout-stack .chat-container {
+        flex: 0 0 auto;
+        width: 100%;
+        max-width: none;
+        min-height: min(62vh, 680px);
+        max-height: min(72vh, 820px);
+      }
+      .main-container.layout-stack .chart-sidebar {
+        width: 100%;
+        max-width: 850px;
+        margin: 12px auto 0;
+        position: static;
+        max-height: none;
+      }
       @media (max-width: 1400px) {
-        .main-container {
+        .main-container:not(.layout-side) {
           flex-direction: column;
         }
-        .chat-container {
+        .main-container:not(.layout-side) .chat-container {
           max-width: none;
         }
-        .chart-sidebar {
+        .main-container:not(.layout-side) .chart-sidebar {
           width: 100%;
           max-width: 850px;
           margin: 20px auto 0;
@@ -1079,6 +1168,19 @@
           overflow-y: auto !important;
           overflow-x: hidden;
           -webkit-overflow-scrolling: touch;
+        }
+        .layout-toggle {
+          display: none;
+        }
+        .main-container.layout-side,
+        .main-container.layout-stack {
+          flex-direction: column;
+        }
+        .main-container.layout-side .chat-container,
+        .main-container.layout-stack .chat-container {
+          min-height: 0;
+          max-height: none;
+          width: auto;
         }
         .mobile-nav-tabs {
           display: flex;
@@ -1966,7 +2068,90 @@
 
     </style>
 
+    <script src="profile_lifecycle.js"></script>
     <script>
+      const LAYOUT_STORAGE_KEY = "astroguideWorkspaceLayout";
+      function workspaceLayoutMode() {
+        const main = document.getElementById("main-container");
+        if (!main) return "";
+        if (main.classList.contains("layout-side")) return "side";
+        if (main.classList.contains("layout-stack")) return "stack";
+        return "";
+      }
+      function automaticWorkspaceLayout() {
+        return window.matchMedia("(min-width: 1400px)").matches
+          ? "side"
+          : "stack";
+      }
+      function syncLayoutToggle(mode) {
+        const sideBtn = document.getElementById("layout-side-btn");
+        const stackBtn = document.getElementById("layout-stack-btn");
+        if (sideBtn) {
+          sideBtn.setAttribute("aria-pressed", mode === "side" ? "true" : "false");
+        }
+        if (stackBtn) {
+          stackBtn.setAttribute(
+            "aria-pressed",
+            mode === "stack" ? "true" : "false",
+          );
+        }
+      }
+      function applyWorkspaceLayout(mode, persist) {
+        const main = document.getElementById("main-container");
+        if (!main) return;
+        main.classList.remove("layout-side", "layout-stack");
+        if (mode === "side") main.classList.add("layout-side");
+        if (mode === "stack") main.classList.add("layout-stack");
+        syncLayoutToggle(mode || automaticWorkspaceLayout());
+        if (!persist) return;
+        try {
+          if (mode === "side" || mode === "stack") {
+            localStorage.setItem(LAYOUT_STORAGE_KEY, mode);
+          }
+        } catch (err) {}
+      }
+      function refreshWheelForLayout() {
+        requestAnimationFrame(function () {
+          requestAnimationFrame(function () {
+            if (typeof getActiveProfile !== "function") return;
+            if (typeof renderChartWheel !== "function") return;
+            const profile = getActiveProfile();
+            if (profile && profile.birthChartData) {
+              renderChartWheel(profile.birthChartData);
+            }
+          });
+        });
+      }
+      (function initWorkspaceLayout() {
+        let saved = "";
+        try {
+          saved = localStorage.getItem(LAYOUT_STORAGE_KEY) || "";
+        } catch (err) {}
+        if (saved === "side" || saved === "stack") {
+          applyWorkspaceLayout(saved, false);
+        } else {
+          syncLayoutToggle(automaticWorkspaceLayout());
+        }
+        const sideBtn = document.getElementById("layout-side-btn");
+        const stackBtn = document.getElementById("layout-stack-btn");
+        if (sideBtn) {
+          sideBtn.addEventListener("click", function () {
+            applyWorkspaceLayout("side", true);
+            refreshWheelForLayout();
+          });
+        }
+        if (stackBtn) {
+          stackBtn.addEventListener("click", function () {
+            applyWorkspaceLayout("stack", true);
+            refreshWheelForLayout();
+          });
+        }
+        window.addEventListener("resize", function () {
+          if (workspaceLayoutMode()) return;
+          syncLayoutToggle(automaticWorkspaceLayout());
+        });
+      })();
+
       const messageInput = document.getElementById("message-input");
       const sendButton = document.getElementById("send-button");
       const chatMessages = document.getElementById("chat-messages");
@@ -1998,6 +2183,10 @@
       let pendingChipTimer = null;
       let pendingChipEaseTimer = null;
       let pendingChipScrollHandler = null;
+      let conversationRenderEpoch = 0;
+      let spinnerSerial = 0;
+      let spinnerOwner = 0;
+      const profileWriteGeneration = Object.create(null);
       let feedScrollAnim = null;
       let pendingTrimAfterScroll = false;
       let sendMotionWaiters = [];
@@ -2054,15 +2243,63 @@
         return profiles.length ? profiles[0] : null;
       }
 
-      function saveActiveProfileChart(birthChartData) {
+      function profileById(profileId) {
+        if (!profileId) return null;
+        return getChartProfiles().find((x) => x.id === profileId) || null;
+      }
+
+      function currentProfileWriteGeneration(profileId) {
+        return profileWriteGeneration[profileId] || 0;
+      }
+
+      function invalidateProfileWrites(profileId) {
+        if (!profileId) return 0;
+        profileWriteGeneration[profileId] =
+          currentProfileWriteGeneration(profileId) + 1;
+        return profileWriteGeneration[profileId];
+      }
+
+      function chartKeyForProfile(profile) {
+        if (!profile || !profile.birthChartData) return "";
+        return chartKeyFromChart(
+          withChartSystem(profile.birthChartData, profileChartSystem(profile)),
+        );
+      }
+
+      function inFlightTargetFor(profileId, generation, chartKey) {
+        const profile = profileById(profileId);
+        return inFlightWriteTarget({
+          profileId: profileId,
+          profileExists: !!profile,
+          generation: generation,
+          currentGeneration: currentProfileWriteGeneration(profileId),
+          activeProfileId: getActiveProfileId(),
+          requestChartKey: chartKey || "",
+          profileChartKey: chartKeyForProfile(profile),
+        });
+      }
+
+      function conversationOfProfile(profileId) {
         const profiles = getChartProfiles();
-        const id = getActiveProfileId();
+        const idx = profiles.findIndex((x) => x.id === profileId);
+        if (idx === -1) return [];
+        if (!Array.isArray(profiles[idx].conversationHistory)) {
+          profiles[idx].conversationHistory = [];
+          setChartProfiles(profiles);
+          return [];
+        }
+        return profiles[idx].conversationHistory;
+      }
+
+      function saveActiveProfileChart(birthChartData, profileId) {
+        const profiles = getChartProfiles();
+        const id = profileId || getActiveProfileId();
         const idx = profiles.findIndex((x) => x.id === id);
         if (idx === -1) return;
         profiles[idx].birthChartData = birthChartData;
         setChartProfiles(profiles);
-        // Automatically render the chart wheel when chart data is saved
-        if (birthChartData) {
+        // Render the wheel only for the profile that is currently on screen.
+        if (birthChartData && getActiveProfileId() === id) {
           const hadWheel = !!document.querySelector(
             "#chart-wheel-container svg",
           );
@@ -2073,28 +2310,42 @@
         }
       }
 
-      function saveActiveProfileChartSummary(summary) {
+      function saveActiveProfileChartSummary(summary, profileId) {
         if (!summary || typeof summary !== "object") return;
         const profiles = getChartProfiles();
-        const id = getActiveProfileId();
+        const id = profileId || getActiveProfileId();
         const idx = profiles.findIndex((x) => x.id === id);
         if (idx === -1) return;
         profiles[idx].chartSummary = summary;
         setChartProfiles(profiles);
       }
 
-      function saveActiveProfileConversation(history) {
+      function saveActiveProfileConversation(history, profileId) {
         const profiles = getChartProfiles();
-        const id = getActiveProfileId();
+        const id = profileId || getActiveProfileId();
         const idx = profiles.findIndex((x) => x.id === id);
         if (idx === -1) return;
         profiles[idx].conversationHistory = history;
         setChartProfiles(profiles);
       }
 
-      function saveActiveProfilePendingFollowUps(list) {
+      function saveActiveProfileRoutingState(state, profileId) {
         const profiles = getChartProfiles();
-        const id = getActiveProfileId();
+        const id = profileId || getActiveProfileId();
+        const idx = profiles.findIndex((x) => x.id === id);
+        if (idx === -1) return;
+        profiles[idx].routingState =
+          state && typeof state === "object" ? state : null;
+        setChartProfiles(profiles);
+      }
+
+      function clearActiveProfileRoutingState() {
+        saveActiveProfileRoutingState(null);
+      }
+
+      function saveActiveProfilePendingFollowUps(list, profileId) {
+        const profiles = getChartProfiles();
+        const id = profileId || getActiveProfileId();
         const idx = profiles.findIndex((x) => x.id === id);
         if (idx === -1) return;
         profiles[idx].pendingFollowUps = Array.isArray(list)
@@ -2152,10 +2403,10 @@
         return p.memory;
       }
 
-      function mergeMemoryUpdate(update) {
+      function mergeMemoryUpdate(update, profileId) {
         if (!update || typeof update !== "object") return;
         const profiles = getChartProfiles();
-        const id = getActiveProfileId();
+        const id = profileId || getActiveProfileId();
         const idx = profiles.findIndex((x) => x.id === id);
         if (idx === -1) return;
         const mem = profiles[idx].memory || getDefaultProfileMemory();
@@ -2413,6 +2664,7 @@
       }
 
       function renderConversation(profile, options) {
+        conversationRenderEpoch += 1;
         const container = document.getElementById("chat-messages");
         if (!container) return;
         const restore = !!(options && options.restore);
@@ -2524,6 +2776,8 @@
       }
 
       function applyProfileSwitch(profileId, wheelAnim) {
+        cancelPendingChipReveal();
+        hideSpinner();
         const profiles = getChartProfiles();
         const current = getActiveProfile();
 
@@ -4082,6 +4336,35 @@
           ? String(opts.message || "").trim()
           : messageInput.value.trim();
         if (message) {
+          const requestProfileId = getActiveProfileId();
+          const seededProfile = profileById(requestProfileId);
+          const requestGeneration = invalidateProfileWrites(requestProfileId);
+          const domEpochAtSend = conversationRenderEpoch;
+          let requestChartKey = "";
+          let spinOwner = 0;
+          function showSpin() {
+            if (getActiveProfileId() !== requestProfileId) return;
+            if (!spinOwner) {
+              spinOwner = ++spinnerSerial;
+              spinnerOwner = spinOwner;
+            }
+            if (spinOwner !== spinnerOwner) return;
+            showSpinner();
+          }
+          function hideSpin() {
+            if (!spinOwner || spinOwner !== spinnerOwner) return;
+            hideSpinner();
+          }
+          async function say(text) {
+            if (getActiveProfileId() !== requestProfileId) return;
+            if (
+              currentProfileWriteGeneration(requestProfileId) !==
+              requestGeneration
+            ) {
+              return;
+            }
+            await queueBotMessage(text);
+          }
           console.log("[HANDLE] User sent message:", message);
           chatMessages
             .querySelectorAll(".follow-up-suggestions")
@@ -4097,7 +4380,7 @@
           }
           cancelPendingChipReveal();
           cancelFeedScrollAnim({ flush: false });
-          saveActiveProfilePendingFollowUps([]);
+          saveActiveProfilePendingFollowUps([], requestProfileId);
           if (fromChip) {
             appendChosenFollowUpChip(message);
           } else {
@@ -4110,14 +4393,14 @@
           const userData = JSON.parse(localStorage.getItem("userData"));
 
           if (!userData) {
-            await queueBotMessage(
+            await say(
               "Error: No user data found. Please log in or create an account first.",
             );
             return;
           }
 
           // Use active profile for chart and birth details
-          const activeProfile = getActiveProfile();
+          const activeProfile = seededProfile;
           let birthChartData = activeProfile
             ? activeProfile.birthChartData
             : null;
@@ -4135,16 +4418,16 @@
           if (!birthChartData) {
             // Automatically fetch birth chart on first message for this profile
             const loadingMessage = "Let me take a look at this birth chart...";
-            await queueBotMessage(loadingMessage);
+            await say(loadingMessage);
             console.log("[SPINNER] Showing spinner after loading message");
-            showSpinner();
+            showSpin();
 
             if (
               !profileBirthDate ||
               !profileBirthPlace ||
               (!timeUnknown && !profileBirthTime)
             ) {
-              await queueBotMessage(
+              await say(
                 "This profile is missing birth date, time, or place. Add a profile with full birth data or use the default profile.",
               );
               return;
@@ -4153,9 +4436,9 @@
             try {
               const { chartData, resolvedLocation } =
                 await fetchBirthChartForProfile(activeProfile);
-              saveActiveProfileChart(chartData);
+              saveActiveProfileChart(chartData, requestProfileId);
               birthChartData = chartData;
-              await queueBotMessage(
+              await say(
                 `I've calculated your birth chart using ${resolvedLocation}! Let me answer your question...`,
               );
             } catch (error) {
@@ -4163,10 +4446,10 @@
               const errorMessage =
                 error.message ||
                 "I'm having trouble calculating your birth chart right now.";
-              await queueBotMessage("Error: " + errorMessage);
+              await say("Error: " + errorMessage);
               return;
             } finally {
-              hideSpinner();
+              hideSpin();
             }
           }
 
@@ -4177,16 +4460,18 @@
             let factualSpinnerTimer = null;
             if (!treatAsFactual) {
               console.log("[SPINNER] Showing spinner for chat follow-up");
-              showSpinner();
+              showSpin();
             } else {
               factualSpinnerTimer = setTimeout(function () {
                 factualSpinnerTimer = null;
-                showSpinner();
+                showSpin();
               }, 700);
             }
             const sentAt = performance.now();
             // Get conversation history for the active profile
-            let conversationHistory = getActiveProfileConversation().slice();
+            let conversationHistory = conversationOfProfile(
+              requestProfileId,
+            ).slice();
 
             // If user is repeating a prompt/topic, show a brief "thinking" cue (deeper answer + more specific sources)
             function isRepeatPrompt(currentMsg, history) {
@@ -4278,11 +4563,11 @@
               return false;
             }
             if (isRepeatPrompt(message, conversationHistory)) {
-              await queueBotMessage(
+              await say(
                 "Give me a second—I'm going to think about this from a deeper angle and pull more specific sources.",
               );
-              // queueBotMessage() hides the spinner while it renders; re-show spinner so the user sees ongoing work during the API call
-              showSpinner();
+              // say() hides the spinner while it renders; re-show spinner so the user sees ongoing work during the API call
+              showSpin();
             }
 
             // Add the user's message to the conversation history
@@ -4293,10 +4578,16 @@
             });
 
             try {
+              const profileForRequest =
+                profileById(requestProfileId) || seededProfile;
+              const sentChart = Object.assign({}, birthChartData, {
+                chartSystem: profileChartSystem(profileForRequest),
+              });
+              requestChartKey = chartKeyFromChart(sentChart);
               // Send the question along with the birth chart data and conversation history to the backend
               console.log("[API] Sending chat follow-up:", {
                 message,
-                birthChart: birthChartData,
+                birthChart: sentChart,
                 conversationHistory,
               });
               const response = await fetch(apiUrl("/api/chat"), {
@@ -4306,15 +4597,21 @@
                 },
                 body: JSON.stringify({
                   message: message,
-                  birthChart: Object.assign({}, birthChartData, {
-                    chartSystem: profileChartSystem(),
-                  }),
-                  chartSystem: profileChartSystem(),
+                  birthChart: sentChart,
+                  chartSystem: profileChartSystem(profileForRequest),
                   conversationHistory: conversationHistory,
-                  profileMemory: getActiveProfileMemory(),
+                  routingState:
+                    (profileForRequest && profileForRequest.routingState) ||
+                    null,
+                  profileMemory:
+                    profileForRequest &&
+                    profileForRequest.memory &&
+                    typeof profileForRequest.memory === "object"
+                      ? profileForRequest.memory
+                      : getDefaultProfileMemory(),
                   chartSummary:
-                    getActiveProfile() && getActiveProfile().chartSummary
-                      ? getActiveProfile().chartSummary
+                    profileForRequest && profileForRequest.chartSummary
+                      ? profileForRequest.chartSummary
                       : null,
                 }),
               });
@@ -4324,12 +4621,29 @@
                 clearTimeout(factualSpinnerTimer);
                 factualSpinnerTimer = null;
               }
+              const target = inFlightTargetFor(
+                requestProfileId,
+                requestGeneration,
+                requestChartKey,
+              );
               console.log("[API] Received chat response:", data);
-              if (data.memoryUpdate) {
-                mergeMemoryUpdate(data.memoryUpdate);
+              if (
+                target.write &&
+                Object.prototype.hasOwnProperty.call(data, "routingState")
+              ) {
+                saveActiveProfileRoutingState(
+                  data.routingState,
+                  requestProfileId,
+                );
               }
-              if (data.chartSummaryUpdate) {
-                saveActiveProfileChartSummary(data.chartSummaryUpdate);
+              if (target.write && data.memoryUpdate) {
+                mergeMemoryUpdate(data.memoryUpdate, requestProfileId);
+              }
+              if (target.write && data.chartSummaryUpdate) {
+                saveActiveProfileChartSummary(
+                  data.chartSummaryUpdate,
+                  requestProfileId,
+                );
               }
               console.log(
                 "[API] Raw chat response:",
@@ -4349,10 +4663,10 @@
                     String(errMsg),
                   );
                 if (quotaError) {
-                  await queueBotMessage(
+                  await say(
                     "I couldn't generate that reading just now. Try again in a moment, or ask a more specific question about a planet, house, or aspect.",
                   );
-                  hideSpinner();
+                  hideSpin();
                   return;
                 }
                 const stageHint =
@@ -4365,7 +4679,7 @@
                 console.log("[API] error payload:", data);
                 const errPrefix =
                   response.status === 405 ? "Setup" : "Server error";
-                await queueBotMessage(
+                await say(
                   errPrefix +
                     " (" +
                     response.status +
@@ -4378,7 +4692,12 @@
                         stackPreview +
                         " — Check backend/.env and server terminal for details."),
                 );
-                hideSpinner();
+                hideSpin();
+                return;
+              }
+
+              if (!target.write) {
+                hideSpin();
                 return;
               }
 
@@ -4393,8 +4712,11 @@
                 conversationHistory = conversationHistory.slice(-10);
               }
 
-              // Save the updated conversation history to the active profile
-              saveActiveProfileConversation(conversationHistory);
+              // Save the reply on the profile that asked, even if the user has switched away.
+              saveActiveProfileConversation(
+                conversationHistory,
+                requestProfileId,
+              );
 
               if (data.isFactual || treatAsFactual) {
                 const wait = Math.max(
@@ -4407,7 +4729,6 @@
                   });
                 }
               }
-              await queueBotMessage(data.response);
               const followUps =
                 Array.isArray(data.followUpSuggestions) &&
                 data.followUpSuggestions.length
@@ -4415,11 +4736,28 @@
                   : data.followUpQuestion
                     ? [data.followUpQuestion]
                     : [];
-              appendFollowUpSuggestionChips(followUps);
+              if (
+                target.render &&
+                conversationRenderEpoch === domEpochAtSend
+              ) {
+                await say(data.response);
+                appendFollowUpSuggestionChips(followUps);
+              } else if (target.render) {
+                saveActiveProfilePendingFollowUps(
+                  followUps,
+                  requestProfileId,
+                );
+                renderConversation(profileById(requestProfileId));
+              } else {
+                saveActiveProfilePendingFollowUps(
+                  followUps,
+                  requestProfileId,
+                );
+              }
             } catch (error) {
               console.error("Error:", error);
               const openedAsFile = location.protocol === "file:";
-              await queueBotMessage(
+              await say(
                 openedAsFile || isWrongDevOrigin()
                   ? "This tab is not the AstroGuide server, so chat cannot reach /api/chat. Open http://127.0.0.1:3000/index.html (after npm start) instead of the HTML file or Live Server."
                   : "I'm having trouble processing your question right now. Could you try rephrasing it?",
@@ -4430,10 +4768,10 @@
                 factualSpinnerTimer = null;
               }
               console.log("[SPINNER] Hiding spinner after chat follow-up");
-              hideSpinner();
+              hideSpin();
             }
           } else {
-            await queueBotMessage(
+            await say(
               "No chart for this profile yet. Send a message to calculate the chart, or add a profile with birth date, time, and place.",
             );
           }
@@ -4548,11 +4886,28 @@
         });
       }
 
+      function resetActiveProfileConversation() {
+        const id = getActiveProfileId();
+        if (!id) return;
+        invalidateProfileWrites(id);
+        cancelPendingChipReveal();
+        const patch = clearedConversationPatch();
+        saveActiveProfileConversation(patch.conversationHistory, id);
+        saveActiveProfileRoutingState(patch.routingState, id);
+        saveActiveProfilePendingFollowUps(patch.pendingFollowUps, id);
+        if (chatMessages) {
+          chatMessages
+            .querySelectorAll(".follow-up-suggestions")
+            .forEach(function (el) {
+              el.remove();
+            });
+        }
+      }
+
       // Add a function to clear conversation history for the active profile only
       function clearConversationHistory() {
         if (getActiveProfile()) {
-          saveActiveProfileConversation([]);
-          saveActiveProfilePendingFollowUps([]);
+          resetActiveProfileConversation();
           renderConversation(getActiveProfile());
         }
         addMessage(
@@ -5598,6 +5953,7 @@
               const idx = profiles.findIndex((p) => p.id === idBeingEdited);
               let prevChart = null;
               let prevSystem = "modern";
+              let identityChanged = false;
               if (idx !== -1) {
                 const profile = profiles[idx];
                 prevChart = profile.birthChartData;
@@ -5607,9 +5963,24 @@
                 profile.birthTime = birthTime;
                 profile.birthTimeUnknown = timeUnknown;
                 profile.birthPlace = birthPlace;
-                profile.chartSystem = selectedChartSystem;
                 profile.selectedAsteroids = selectedAsteroids;
-                profile.birthChartData = birthChartData;
+                const applied = applyProfileIdentitySave(
+                  profile,
+                  prevChart,
+                  birthChartData,
+                  selectedChartSystem,
+                );
+                identityChanged = applied.decision.identityChanged;
+                profile.chartSystem = applied.profile.chartSystem;
+                profile.birthChartData = applied.profile.birthChartData;
+                profile.conversationHistory =
+                  applied.profile.conversationHistory;
+                profile.routingState = applied.profile.routingState;
+                profile.pendingFollowUps = applied.profile.pendingFollowUps;
+                if (applied.decision.clearChartSummary) {
+                  profile.chartSummary = null;
+                }
+                if (identityChanged) invalidateProfileWrites(idBeingEdited);
                 setChartProfiles(profiles);
               }
               document
@@ -5626,6 +5997,10 @@
               renderProfileDropdown();
               const active = getActiveProfile();
               if (active && active.id === idBeingEdited) {
+                if (identityChanged) {
+                  cancelPendingChipReveal();
+                  renderConversation(getActiveProfile());
+                }
                 applyActiveChartDisplayChange(
                   prevChart,
                   birthChartData,
@@ -5648,6 +6023,7 @@
               selectedAsteroids,
               birthChartData,
               conversationHistory: [],
+              routingState: null,
               memory: {
                 preferredMode: "beginner",
                 lifeThemesDiscussed: [],
@@ -5688,7 +6064,7 @@
           "Are you sure you want to clear this chat? This only clears the conversation for the current profile.",
         );
         if (!confirmed) return;
-        saveActiveProfileConversation([]);
+        resetActiveProfileConversation();
         renderConversation(getActiveProfile());
       });
 
@@ -6734,6 +7110,7 @@
           // Shared planet glyph color and registry so aspects can bump planets on hover
           const planetGlyphColor = chartText;
           const planetGroupsByName = {};
+          const angleHighlightByName = {};
           const PLANET_BUBBLE = 1.28;
           const DEGREE_BUBBLE = 1.35;
           function bubbleTransform(el, scale) {
@@ -6755,20 +7132,112 @@
             );
           }
           function setPlanetMark(planetKey, active) {
-            const entry =
-              planetGroupsByName[String(planetKey || "").toLowerCase()];
-            if (!entry || !entry.symbol) return;
-            entry.symbol.attr("fill", active ? "#10b981" : planetGlyphColor);
-            bubbleTransform(entry.symbol, active ? PLANET_BUBBLE : 1);
-            if (entry.degreeLabel) {
-              entry.degreeLabel.attr("fill", active ? "#10b981" : chartOuterBoundary);
-              bubbleTransform(entry.degreeLabel, active ? DEGREE_BUBBLE : 1);
+            const key = String(planetKey || "").toLowerCase();
+            const entry = planetGroupsByName[key];
+            if (entry && entry.symbol) {
+              entry.symbol.attr("fill", active ? "#10b981" : planetGlyphColor);
+              bubbleTransform(entry.symbol, active ? PLANET_BUBBLE : 1);
+              if (entry.degreeLabel) {
+                entry.degreeLabel.attr(
+                  "fill",
+                  active ? "#10b981" : chartOuterBoundary,
+                );
+                bubbleTransform(entry.degreeLabel, active ? DEGREE_BUBBLE : 1);
+              }
+            }
+            const angleMark = angleHighlightByName[key];
+            if (angleMark) {
+              if (active) angleMark.enter();
+              else angleMark.leave();
             }
           }
           const deferredAspectHitAppends = [];
 
+          function anglePoint(name) {
+            if (timeUnknown || !birthChart.angles) return null;
+            const key = String(name || "").toLowerCase();
+            const point =
+              key === "ascendant" || key === "asc" || key === "ac"
+                ? birthChart.angles.ascendant
+                : key === "midheaven" || key === "mc"
+                  ? birthChart.angles.midheaven
+                  : null;
+            if (
+              !point ||
+              point.degree === undefined ||
+              point.degree === null ||
+              isNaN(point.degree)
+            ) {
+              return null;
+            }
+            return point;
+          }
+          function aspectEndpoint(name) {
+            const body = wheelBodies[String(name || "").toLowerCase()];
+            if (
+              body &&
+              body.degree !== undefined &&
+              body.degree !== null &&
+              !isNaN(body.degree)
+            ) {
+              return body;
+            }
+            return anglePoint(name);
+          }
+          function aspectPairKey(planet1, planet2, aspectName) {
+            return (
+              [String(planet1 || "").toLowerCase(), String(planet2 || "").toLowerCase()]
+                .sort()
+                .join("|") +
+              "|" +
+              String(aspectName || "").toLowerCase()
+            );
+          }
+          // ASC/MC aspects already live on architecture.angleAspects. Feed them
+          // through the same line list instead of calculating them again.
+          function aspectsForWheel() {
+            const list = Array.isArray(birthChart.aspects)
+              ? birthChart.aspects.slice()
+              : [];
+            if (timeUnknown) return list;
+            const arch = isTraditionalDisplay()
+              ? birthChart.architectureTraditional || birthChart.architecture
+              : birthChart.architecture;
+            const angleAspects =
+              arch && Array.isArray(arch.angleAspects) ? arch.angleAspects : [];
+            const seen = new Set(
+              list.map(function (aspect) {
+                return aspectPairKey(
+                  aspect && aspect.planet1,
+                  aspect && aspect.planet2,
+                  aspect && aspect.aspect,
+                );
+              }),
+            );
+            angleAspects.forEach(function (aspect) {
+              if (!aspect || !aspect.planet || !aspect.angle || !aspect.aspect) {
+                return;
+              }
+              const key = aspectPairKey(
+                aspect.planet,
+                aspect.angle,
+                aspect.aspect,
+              );
+              if (seen.has(key)) return;
+              seen.add(key);
+              list.push({
+                planet1: aspect.planet,
+                planet2: aspect.angle,
+                aspect: aspect.aspect,
+                orb: aspect.orb,
+              });
+            });
+            return list;
+          }
+          const wheelAspects = aspectsForWheel();
+
           // Draw aspect lines FIRST (so they appear behind planets)
-          if (birthChart.aspects && Array.isArray(birthChart.aspects)) {
+          if (wheelAspects.length) {
             const majorAspects = [
               "conjunction",
               "opposition",
@@ -6812,7 +7281,7 @@
 
             // Build list, sort by chord length (short segments drawn first in DOM; overlay hit lines are appended later in reverse so shorter aspects stack on top for picking)
             const aspectDrawList = [];
-            birthChart.aspects.forEach((aspect) => {
+            wheelAspects.forEach((aspect) => {
               if (
                 !aspect ||
                 !aspect.aspect ||
@@ -6844,8 +7313,8 @@
                   return;
                 }
               }
-              const planet1 = wheelBodies[aspect.planet1?.toLowerCase()];
-              const planet2 = wheelBodies[aspect.planet2?.toLowerCase()];
+              const planet1 = aspectEndpoint(aspect.planet1);
+              const planet2 = aspectEndpoint(aspect.planet2);
               if (
                 !planet1 ||
                 !planet2 ||
@@ -7250,6 +7719,18 @@
                   if (!timeUnknown) queryChartElement(queryText);
                 },
               });
+              const angleHover = {
+                enter: handleAngleEnter,
+                leave: handleAngleLeave,
+              };
+              if (groupClass === "ac-group") {
+                angleHighlightByName.ascendant = angleHover;
+                angleHighlightByName.asc = angleHover;
+                angleHighlightByName.ac = angleHover;
+              } else if (groupClass === "mc-group") {
+                angleHighlightByName.midheaven = angleHover;
+                angleHighlightByName.mc = angleHover;
+              }
             }
 
             // Angle labels outside the wheel (past zodiac ring); AC/DC further out with degree below

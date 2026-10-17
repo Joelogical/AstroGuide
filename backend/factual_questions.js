@@ -2,12 +2,22 @@
 // This handles questions that have direct, factual answers from the chart data
 
 /**
- * Check if a question is a factual question that can be answered deterministically
- * @param {string} message - The user's message
- * @returns {boolean} True if the question can be answered deterministically
+ * A reading of a placement asks why it is hard, what it means, or how it feels.
+ * That is not a request for the sign, house, or degree.
  */
+function isInterpretiveQuestion(message) {
+  const text = String(message || "").toLowerCase();
+  if (/\bwhy\b/.test(text)) return true;
+  if (/\bhow\b/.test(text) && !/\bhow many\b/.test(text)) return true;
+  if (/\b(mean|means|meaning)\b/.test(text)) return true;
+  return /\b(difficult|difficulty|challenge|challenging|affect|affects|feel|feels|interpret|explain)\b/.test(
+    text,
+  );
+}
+
 function isFactualQuestion(message) {
-  const lowerMessage = message.toLowerCase().trim();
+  if (isInterpretiveQuestion(message)) return false;
+  const lowerMessage = String(message || "").toLowerCase().trim();
 
   // Patterns that indicate factual questions
   const factualPatterns = [
@@ -40,6 +50,7 @@ function isFactualQuestion(message) {
  * @returns {string|null} The answer if it's a factual question, null otherwise
  */
 function answerFactualQuestion(message, birthChart) {
+  if (!isFactualQuestion(message)) return null;
   const lowerMessage = message.toLowerCase().trim();
 
   // Extract planets in a specific house

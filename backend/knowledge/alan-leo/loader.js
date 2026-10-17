@@ -303,7 +303,7 @@ function sourceGuard(ctx) {
     );
   } else {
     lines.push(
-      "Beginner language rules still govern the wording. Apply this synthesis anyway: let the luminaries, the chart ruler, angular planets, the closest connections, and repeated patterns lead. Read each planet as a function and each connection as a relationship between functions, in everyday words. Do not name Alan Leo unless the user asked about that framework, and do not add technical or esoteric vocabulary the user did not use.",
+      "Beginner register still governs the wording. Apply this synthesis anyway: let the luminaries, the chart ruler, angular planets, the closest connections, and repeated patterns lead. Read each planet as a function and each connection as a relationship between functions. Explain an unfamiliar term in a short phrase the first time you need it. Do not name Alan Leo unless the user asked about that framework, and do not add esoteric vocabulary.",
     );
   }
   if (ctx.chartAnalysisMode) {

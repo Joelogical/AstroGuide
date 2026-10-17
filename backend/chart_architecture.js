@@ -1718,15 +1718,49 @@ function normalizeAspectName(name) {
   return t;
 }
 
+const ASPECT_POINT =
+  "sun|moon|mercury|venus|mars|jupiter|saturn|uranus|neptune|pluto|chiron|ceres|pallas|juno|vesta|ascendant|asc|ac|midheaven|mc";
+
+const ANGLE_CLAIM = {
+  ascendant: "how you meet the world and start things",
+  midheaven: "career, reputation, and how the public sees you",
+};
+
+function canonicalAspectPoint(name) {
+  const t = String(name || "").toLowerCase();
+  if (t === "asc" || t === "ac" || t === "ascendant") return "ascendant";
+  if (t === "mc" || t === "midheaven") return "midheaven";
+  return t;
+}
+
+function isAnglePoint(name) {
+  const key = canonicalAspectPoint(name);
+  return key === "ascendant" || key === "midheaven";
+}
+
+function angleBody(birthChart, name) {
+  const angles = birthChart && birthChart.angles;
+  if (!angles) return null;
+  const key = canonicalAspectPoint(name);
+  if (key === "ascendant") return angles.ascendant || null;
+  if (key === "midheaven") return angles.midheaven || null;
+  return null;
+}
+
 function parseClickedAspect(message) {
   const t = String(message || "").toLowerCase();
-  const planets =
-    "sun|moon|mercury|venus|mars|jupiter|saturn|uranus|neptune|pluto|chiron|ceres|pallas|juno|vesta";
+  const points = ASPECT_POINT;
   const aspects =
     "conjunction|conjunct|square|trine|opposition|opposite|sextile|quincunx|semisquare|sesquiquadrate";
   let m = t.match(
     new RegExp(
-      "\\b(" + planets + ")\\s+(" + aspects + ")\\s+(?:to |with )?(" + planets + ")\\b",
+      "\\b(" +
+        points +
+        ")\\s+(" +
+        aspects +
+        ")\\s+(?:to |with )?(?:the |my )?(" +
+        points +
+        ")\\b",
     ),
   );
   if (!m) {
@@ -1734,17 +1768,27 @@ function parseClickedAspect(message) {
       new RegExp(
         "\\b(" +
           aspects +
-          ")\\s+between\\s+(" +
-          planets +
-          ")\\s+and\\s+(" +
-          planets +
+          ")\\s+between\\s+(?:the |my )?(" +
+          points +
+          ")\\s+and\\s+(?:the |my )?(" +
+          points +
           ")\\b",
       ),
     );
-    if (m) return { planet1: m[2], aspect: normalizeAspectName(m[1]), planet2: m[3] };
+    if (m) {
+      return {
+        planet1: canonicalAspectPoint(m[2]),
+        aspect: normalizeAspectName(m[1]),
+        planet2: canonicalAspectPoint(m[3]),
+      };
+    }
     return null;
   }
-  return { planet1: m[1], aspect: normalizeAspectName(m[2]), planet2: m[3] };
+  return {
+    planet1: canonicalAspectPoint(m[1]),
+    aspect: normalizeAspectName(m[2]),
+    planet2: canonicalAspectPoint(m[3]),
+  };
 }
 
 function samePlanetPair(a, b, x, y) {
@@ -1772,13 +1816,60 @@ function lensPlacement(architecture, name) {
   return cond || {};
 }
 
+function endpointClaim(name) {
+  const key = canonicalAspectPoint(name);
+  if (ANGLE_CLAIM[key]) return ANGLE_CLAIM[key];
+  return PLANET_CLAIM[key] || key;
+}
+
+function endpointSentence(architecture, birthChart, name, cond) {
+  const key = canonicalAspectPoint(name);
+  const label = titleCase(key);
+  const placement = cond || {};
+  if (isAnglePoint(key)) {
+    if (architecture.unknownBirthTime) {
+      return (
+        label +
+        " is an angle. Birth time is unknown, so this angle is not available."
+      );
+    }
+    const body = angleBody(birthChart, key);
+    const sign = body && body.sign ? normSign(body.sign) : "";
+    return (
+      label +
+      " is an angle: " +
+      (ANGLE_CLAIM[key] || label) +
+      (sign ? ", in " + sign : "") +
+      "."
+    );
+  }
+  if (architecture.unknownBirthTime) {
+    return (
+      label +
+      " is in " +
+      (placement.sign || "its sign") +
+      (placement.dignity ? " (" + placement.dignity + ")" : "") +
+      (placement.retrograde ? ", in cycles" : "") +
+      "."
+    );
+  }
+  return (
+    label +
+    " shows up most in " +
+    (HOUSE_CLAIM[placement.house] || "daily life") +
+    (placement.dignity ? " (" + placement.dignity + ")" : "") +
+    (placement.retrograde ? ", in cycles" : "") +
+    "."
+  );
+}
+
 function formatAspectLensForModel(architecture, clicked, birthChart) {
   if (!clicked || !architecture || !architecture.ok) return "";
-  const p1 = clicked.planet1;
-  const p2 = clicked.planet2;
+  const p1 = canonicalAspectPoint(clicked.planet1);
+  const p2 = canonicalAspectPoint(clicked.planet2);
   const aspect = normalizeAspectName(clicked.aspect);
-  const c1 = lensPlacement(architecture, p1);
-  const c2 = lensPlacement(architecture, p2);
+  const c1 = isAnglePoint(p1) ? {} : lensPlacement(architecture, p1);
+  const c2 = isAnglePoint(p2) ? {} : lensPlacement(architecture, p2);
   const lines = [
     "--- ASPECT LENS (computed; answer the click through this) ---",
     "Clicked: " +
@@ -1789,38 +1880,14 @@ function formatAspectLensForModel(architecture, clicked, birthChart) {
       titleCase(p2) +
       ".",
     "In life: " +
-      (PLANET_CLAIM[p1] || p1) +
+      endpointClaim(p1) +
       " / " +
-      (PLANET_CLAIM[p2] || p2) +
+      endpointClaim(p2) +
       " — " +
       (ASPECT_PLAIN[aspect] || "these two needs are linked") +
       ".",
-    architecture.unknownBirthTime
-      ? titleCase(p1) +
-        " is in " +
-        (c1.sign || "its sign") +
-        (c1.dignity ? " (" + c1.dignity + ")" : "") +
-        (c1.retrograde ? ", in cycles" : "") +
-        "."
-      : titleCase(p1) +
-        " shows up most in " +
-        (HOUSE_CLAIM[c1.house] || "daily life") +
-        (c1.dignity ? " (" + c1.dignity + ")" : "") +
-        (c1.retrograde ? ", in cycles" : "") +
-        ".",
-    architecture.unknownBirthTime
-      ? titleCase(p2) +
-        " is in " +
-        (c2.sign || "its sign") +
-        (c2.dignity ? " (" + c2.dignity + ")" : "") +
-        (c2.retrograde ? ", in cycles" : "") +
-        "."
-      : titleCase(p2) +
-        " shows up most in " +
-        (HOUSE_CLAIM[c2.house] || "daily life") +
-        (c2.dignity ? " (" + c2.dignity + ")" : "") +
-        (c2.retrograde ? ", in cycles" : "") +
-        ".",
+    endpointSentence(architecture, birthChart, p1, c1),
+    endpointSentence(architecture, birthChart, p2, c2),
   ];
   if (architecture.unknownBirthTime) {
     lines.push(
@@ -1836,7 +1903,11 @@ function formatAspectLensForModel(architecture, clicked, birthChart) {
     (architecture.configurations && architecture.configurations.tSquares) || [];
   tsqs.forEach(function (t) {
     const members = [t.focal].concat(t.opposition || []);
-    if (members.indexOf(p1) !== -1 || members.indexOf(p2) !== -1) {
+    if (
+      !isAnglePoint(p1) &&
+      !isAnglePoint(p2) &&
+      (members.indexOf(p1) !== -1 || members.indexOf(p2) !== -1)
+    ) {
       links.push(
         "this pair sits in a three-way stress with " +
           (PLANET_CLAIM[t.focal] || t.focal) +
@@ -1847,8 +1918,12 @@ function formatAspectLensForModel(architecture, clicked, birthChart) {
   const doms = (architecture.dominantPlanets || []).map(function (d) {
     return d.planet;
   });
-  if (doms.indexOf(p1) !== -1) links.push(titleCase(p1) + " is a main driver");
-  if (doms.indexOf(p2) !== -1) links.push(titleCase(p2) + " is a main driver");
+  if (!isAnglePoint(p1) && doms.indexOf(p1) !== -1) {
+    links.push(titleCase(p1) + " is a main driver");
+  }
+  if (!isAnglePoint(p2) && doms.indexOf(p2) !== -1) {
+    links.push(titleCase(p2) + " is a main driver");
+  }
   if (links.length) {
     lines.push("Tie to the through-line: " + links.join("; ") + ".");
   }
