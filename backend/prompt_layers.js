@@ -258,8 +258,7 @@ function buildRuntimeContext(options) {
     architectureBlock &&
     String(architectureBlock).trim() &&
     !thesisMode &&
-    !topicMode &&
-    !aspectMode
+    !topicMode
   ) {
     out +=
       "--- CHART ARCHITECTURE (computed structural evidence; not a reply outline) ---\n" +
@@ -310,9 +309,9 @@ function buildRuntimeContext(options) {
     out += chartAnalysisMode
       ? "--- CHART FACTS (geometry and placements – structural evidence only) ---\n"
       : "--- CHART FACTS (birth data – use for personalization) ---\n";
-    out += chartFactsOnly + "\n";
-    out += "--- END CHART FACTS ---\n\n";
-    out += webSection;
+  out += chartFactsOnly + "\n";
+  out += "--- END CHART FACTS ---\n\n";
+  out += webSection;
   }
 
   out +=
@@ -531,6 +530,10 @@ function composeSystemContent(runtime) {
   const knowledgeBlock = buildAlanLeoKnowledgeBlock(runtime || {});
   if (knowledgeBlock) {
     parts.splice(parts.length - 1, 0, section("SOURCE KNOWLEDGE", knowledgeBlock));
+  }
+  const depth = runtime && runtime.interpretiveDepth;
+  if (depth && depth.directive) {
+    parts.splice(parts.length - 1, 0, section("INTERPRETIVE DEPTH", depth.directive));
   }
   return parts.join("\n\n");
 }

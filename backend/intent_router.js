@@ -21,24 +21,90 @@ const {
 
 function isVagueFollowUp(message) {
   const t = String(message || "").toLowerCase().trim();
-  return /^(why(\?$| is that| do i)|how come|say more|tell me more|go (on|deeper)|and\?$|what do you mean|can you (say|explain|go) more|keep going|what else( stands out| do you see)?|anything else)\b/.test(
+  return /^(why(\?$| is that| do i)|how come|say more|tell me more|say that again|repeat( that)?|explain that|go (on|deeper)|and\?$|what do you mean|can you (say|explain|go) more|can you (repeat|clarify)( that)?|keep going|what else( stands out| do you see)?|anything else)\b/.test(
     t,
   );
 }
 
-function previousUserText(conversationHistory) {
-  const users = (conversationHistory || []).filter(function (entry) {
-    return entry && entry.role === "user" && String(entry.content || "").trim();
-  });
-  if (!users.length) return "";
-  return String(users[users.length - 1].content || "");
+function isContextOnlyFollowUp(message) {
+  if (hasExplicitAnalyticalTarget(message)) return false;
+  if (isFactualQuestion(message)) return false;
+  return isVagueFollowUp(message);
 }
 
-function effectiveQuestion(message, conversationHistory) {
-  if (isVagueFollowUp(message)) {
-    return previousUserText(conversationHistory) || message;
+function userTexts(conversationHistory) {
+  return (conversationHistory || [])
+    .filter(function (entry) {
+      return entry && entry.role === "user" && String(entry.content || "").trim();
+    })
+    .map(function (entry) {
+      return String(entry.content || "").trim();
+    });
+}
+
+function isAcknowledgement(message) {
+  const text = String(message || "").toLowerCase().trim();
+  return (
+    /^(hi|hello|hey|hiya|howdy|greetings|sup|yo|what's up|whats up)$/i.test(text) ||
+    /^(thanks|thank you|thx|ty|appreciate it)$/i.test(text) ||
+    /^(ok|okay|k|sure|yep|yeah|yes|no|nope|alright|got it)$/i.test(text) ||
+    /^(cool|nice|awesome|great|good|fine)$/i.test(text)
+  );
+}
+
+/**
+ * Walk recent user lines.
+ * A chart subject is usable. A factual or unrelated line blocks stored context.
+ * Vague follow-ups and bare acknowledgements are skipped.
+ */
+function historySubjectResolution(conversationHistory) {
+  const users = userTexts(conversationHistory);
+  for (let i = users.length - 1; i >= 0; i--) {
+    const text = users[i];
+    if (isContextOnlyFollowUp(text) || isAcknowledgement(text)) continue;
+    if (isInheritableChartSubject(text)) return { subject: text, blocked: false };
+    return { subject: "", blocked: true };
   }
-  return message;
+  return { subject: "", blocked: false };
+}
+
+function isInheritableChartSubject(text) {
+  if (!text || isFactualQuestion(text) || isContextOnlyFollowUp(text)) return false;
+  if (parseClickedAspect(text)) return true;
+  if (isChartSpecificQuestion(text)) return true;
+  if (isChartAnalysisQuestion(text)) return true;
+  return false;
+}
+
+function storedSubject(validatedState) {
+  const subject =
+    validatedState && typeof validatedState.subject === "string"
+      ? validatedState.subject.trim()
+      : "";
+  if (!isInheritableChartSubject(subject)) return "";
+  return subject;
+}
+
+function effectiveQuestion(message, conversationHistory, validatedState) {
+  if (!isContextOnlyFollowUp(message)) return message;
+  const found = historySubjectResolution(conversationHistory);
+  if (found.subject) return found.subject;
+  if (found.blocked) return message;
+  return storedSubject(validatedState) || message;
+}
+
+/**
+ * A short continuation of a planet, house, angle, aspect, or broad chart
+ * question. History wins. Stored state is used only when history has no
+ * subject and is not blocked by a recent factual or unrelated line.
+ */
+function continuesEstablishedChartSubject(message, history, validatedState) {
+  if (!isContextOnlyFollowUp(message)) return false;
+  const prior = historyBeforeCurrentTurn(message, history);
+  const found = historySubjectResolution(prior);
+  if (found.subject) return true;
+  if (found.blocked) return false;
+  return !!storedSubject(validatedState);
 }
 
 function isChartSpecificQuestion(message) {
@@ -107,15 +173,18 @@ function routeChatIntent(input) {
   const history = (input && input.history) || [];
   const priorConversation = historyBeforeCurrentTurn(message, history);
   const explicit = hasExplicitAnalyticalTarget(message);
+  const validatedState = input && input.validatedState;
   const questionForMode = explicit
     ? message
-    : effectiveQuestion(message, priorConversation);
+    : effectiveQuestion(message, priorConversation, validatedState);
   const inheritedIntent =
     !explicit &&
     isVagueFollowUp(message) &&
     questionForMode !== message;
   const factual = isFactualQuestion(message);
-  const clickedAspect = parseClickedAspect(message);
+  const clickedAspect =
+    parseClickedAspect(message) ||
+    (isContextOnlyFollowUp(message) ? parseClickedAspect(questionForMode) : null);
   const aspectMode = !!clickedAspect;
   const chartAnalysisMode =
     !aspectMode &&
@@ -144,9 +213,11 @@ function routeChatIntent(input) {
     explicitSubject: explicitSubjectOf(message),
     inheritedIntent: inheritedIntent,
     progressionEligible: !!(
-      chartAnalysisMode && isBroadChartAnalysisPrompt(questionForMode)
+      chartAnalysisMode &&
+      isBroadChartAnalysisPrompt(questionForMode, priorConversation)
     ),
     factual: factual,
+    asked: String(message || ""),
     questionForMode: questionForMode,
     priorConversation: priorConversation,
     topic: topic,
@@ -271,5 +342,6 @@ module.exports = {
   isRepeatPrompt,
   isVagueFollowUp,
   isChartSpecificQuestion,
+  continuesEstablishedChartSubject,
   userRequestsOutsideResearch,
 };

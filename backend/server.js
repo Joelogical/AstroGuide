@@ -41,7 +41,15 @@ const { generateFollowUpSuggestionsLLM } = require("./followup_suggestions");
 const { isGibberishPrompt, gibberishReply } = require("./gibberish_prompt");
 const { isPredictionQuestion } = require("./prediction_guard");
 const { validateBirthInput } = require("./birth_input");
-const { routeChatIntent } = require("./intent_router");
+const {
+  routeChatIntent,
+  continuesEstablishedChartSubject,
+} = require("./intent_router");
+const {
+  validateConversationState,
+  nextConversationState,
+} = require("./conversation_state");
+const { selectInterpretiveDepth } = require("./interpretive_depth");
 const { buildAnalysisState } = require("./analysis_state");
 const {
   historyBeforeCurrentTurn,
@@ -614,14 +622,15 @@ function buildLocalChartSynthesis(birthChart) {
   return parts.join(" ");
 }
 
-function buildLocalChatReply(message, birthChart, conversationHistory) {
+function buildLocalChatReply(message, birthChart, conversationHistory, routingState) {
   if (!birthChart) {
     return "I need a birth chart loaded before I can answer that.";
   }
   if (
     isCasualMessage(message) &&
     !wantsChartInterpretation(message) &&
-    !continuesEstablishedChartAnalysis(message, conversationHistory)
+    !continuesEstablishedChartAnalysis(message, conversationHistory) &&
+    !continuesEstablishedChartSubject(message, conversationHistory, routingState)
   ) {
     return "Hi — I'm here. Ask about a planet, house, or how the chart fits together.";
   }
@@ -644,6 +653,7 @@ function sendLocalChatFallback(res, payload) {
     payload.message,
     payload.birthChart,
     payload.conversationHistory,
+    payload.routingState,
   );
   console.warn("[CHAT] Using local fallback (OpenAI unavailable)");
   return res.json({
@@ -651,6 +661,7 @@ function sendLocalChatFallback(res, payload) {
     followUpSuggestions: [],
     followUpQuestion: null,
     usedLocalFallback: true,
+    routingState: payload.routingState || null,
   });
 }
 
@@ -669,6 +680,7 @@ function fallbackPayloadFromReq(req) {
     message: body.message,
     birthChart: birthChart,
     conversationHistory: body.conversationHistory || [],
+    routingState: validateConversationState(body.routingState, birthChart),
   };
 }
 
@@ -703,6 +715,10 @@ app.post("/api/chat", (req, res) => {
       const chartSystem = chatReading.chartSystem;
       const readingConfig = chatReading.readingConfig;
       const readingChart = chatReading.readingChart;
+      const activeRoutingState = validateConversationState(
+        body.routingState,
+        birthChart,
+      );
       stage = "after-body";
 
       if (!message || !birthChart) {
@@ -719,6 +735,7 @@ app.post("/api/chat", (req, res) => {
           followUpSuggestions: [],
           followUpQuestion: null,
           isGibberish: true,
+          routingState: activeRoutingState,
         });
       }
 
@@ -728,6 +745,7 @@ app.post("/api/chat", (req, res) => {
           response: missingTraditionalBody,
           followUpSuggestions: [],
           followUpQuestion: null,
+          routingState: activeRoutingState,
         });
       }
 
@@ -740,6 +758,7 @@ app.post("/api/chat", (req, res) => {
             isFactual: true,
             followUpSuggestions: [],
             followUpQuestion: null,
+            routingState: activeRoutingState,
           });
         }
       }
@@ -905,6 +924,7 @@ app.post("/api/chat", (req, res) => {
             followUpSuggestions,
             followUpQuestion: followUpSuggestions[0] || null,
             usedExternalResources: true,
+            routingState: activeRoutingState,
           });
         } else {
           console.log(
@@ -937,7 +957,12 @@ app.post("/api/chat", (req, res) => {
       if (
         isCasual &&
         !wantsInterpretation &&
-        !continuesEstablishedChartAnalysis(message, conversationHistory)
+        !continuesEstablishedChartAnalysis(message, conversationHistory) &&
+        !continuesEstablishedChartSubject(
+          message,
+          conversationHistory,
+          activeRoutingState,
+        )
       ) {
         const casualSystemContent =
           "You are AstroGuide. Stay generally neutral and professional; otherwise respond in a natural, helpful way—no fixed persona script.\n\n" +
@@ -974,12 +999,14 @@ app.post("/api/chat", (req, res) => {
           response: String(finalResponse),
           followUpSuggestions: [],
           followUpQuestion: null,
+          routingState: activeRoutingState,
         });
       }
 
       const route = routeChatIntent({
         message: message,
         history: conversationHistory,
+        validatedState: activeRoutingState,
       });
       const priorConversation = route.priorConversation;
       const questionForMode = route.questionForMode;
@@ -999,8 +1026,10 @@ app.post("/api/chat", (req, res) => {
       let aspectLens = "";
       let knowledgeStructures = null;
       let chartAnalysisProgression = null;
+      let builtArchitecture = null;
       try {
         const arch = ensureArchitecture(readingChart);
+        builtArchitecture = arch;
         if (arch && arch.ok) {
           knowledgeStructures = structuresFromArchitecture(arch);
           if (route.progressionEligible) {
@@ -1027,6 +1056,7 @@ app.post("/api/chat", (req, res) => {
               clickedAspect,
               birthChart,
             );
+            architectureBlock = formatArchitectureForAI(arch);
           } else if (chartMode || chartAnalysisMode) {
             architectureBlock = formatArchitectureForAI(arch);
           }
@@ -1034,6 +1064,13 @@ app.post("/api/chat", (req, res) => {
       } catch (archErr) {
         console.warn("[CHAT] architecture build failed:", archErr.message);
       }
+      const interpretiveDepth = selectInterpretiveDepth({
+        message: message,
+        route: route,
+        architecture: builtArchitecture,
+        chart: readingChart,
+        previous: activeRoutingState,
+      });
 
       // Web and architecture dumps only when the user asked about the chart itself.
       let webInterpretations = "";
@@ -1120,7 +1157,7 @@ app.post("/api/chat", (req, res) => {
         try {
           const { prioritizedBlock: block } = getPrioritizedChartPoints(
             readingChart,
-            message,
+            questionForMode,
             readingChart.currentTransits || null,
           );
           prioritizedBlock = block;
@@ -1179,11 +1216,12 @@ app.post("/api/chat", (req, res) => {
         question: questionForMode,
         structures: knowledgeStructures,
         chartAnalysisProgression,
+        interpretiveDepth: interpretiveDepth,
       });
 
       const advancedMode =
         profileMemory && profileMemory.preferredMode === "advanced";
-      const userContent = chartAnalysisMode
+      let userContent = chartAnalysisMode
         ? chartAnalysisGenerationContent(message, chartAnalysisProgression)
         : thesisMode
         ? message +
@@ -1201,6 +1239,9 @@ app.post("/api/chat", (req, res) => {
                 ? "\n\n[Expert aspect cut. Cite type, orb, applying/separating, dignity, houses, rulerships, and any configuration. Show why the contact ranks as it does. Do not define “square” or convert it into an intro metaphor.]"
                 : "\n\n[This is a clicked aspect. Answer that connection. Re-anchor to the internal claims, then stay with these two needs. Do not reprint the portrait. Do not tour the whole chart.]")
             : message;
+      if (interpretiveDepth && interpretiveDepth.userNote) {
+        userContent += "\n\n" + interpretiveDepth.userNote;
+      }
       const messages = buildGenerationMessages(
         systemContent,
         priorConversation,
@@ -1345,6 +1386,12 @@ app.post("/api/chat", (req, res) => {
         response: String(finalResponse),
         followUpSuggestions,
         followUpQuestion: followUpSuggestions[0] || null,
+        routingState: nextConversationState(
+          route,
+          birthChart,
+          activeRoutingState,
+          interpretiveDepth,
+        ),
         ...(memoryUpdate != null && Object.keys(memoryUpdate).length > 0
           ? { memoryUpdate }
           : {}),
