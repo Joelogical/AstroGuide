@@ -77,6 +77,30 @@
       <div class="chat-container">
         <div class="chat-header">
           <h1 class="app-title">AstroGuide</h1>
+          <div
+            class="layout-toggle"
+            role="group"
+            aria-label="Arrange chat and chart"
+          >
+            <button
+              type="button"
+              class="layout-toggle-btn"
+              id="layout-side-btn"
+              aria-pressed="false"
+              title="Chat and wheel side by side"
+            >
+              Side by side
+            </button>
+            <button
+              type="button"
+              class="layout-toggle-btn"
+              id="layout-stack-btn"
+              aria-pressed="false"
+              title="Chat above the wheel"
+            >
+              Chat above
+            </button>
+          </div>
           <div class="profile-switcher chat-header-controls">
             <div class="profile-menu">
             <button
@@ -1031,14 +1055,79 @@
         border-bottom-color: var(--border);
         font-size: 0.8rem;
       }
+      .layout-toggle {
+        display: inline-flex;
+        flex-shrink: 0;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        overflow: hidden;
+      }
+      .layout-toggle-btn {
+        padding: 5px 8px;
+        background: transparent;
+        border: 0;
+        color: var(--text-secondary);
+        font-size: 0.75rem;
+        line-height: 1.2;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .layout-toggle-btn + .layout-toggle-btn {
+        border-left: 1px solid var(--border);
+      }
+      .layout-toggle-btn:hover {
+        color: var(--text);
+        background: color-mix(in srgb, var(--text) 8%, transparent);
+      }
+      .layout-toggle-btn[aria-pressed="true"] {
+        background: var(--surface-raised);
+        color: var(--text);
+      }
+      .main-container.layout-side {
+        flex-direction: row;
+        align-items: flex-start;
+      }
+      .main-container.layout-side .chat-container {
+        flex: 1 1 320px;
+        max-width: none;
+        align-self: stretch;
+        min-height: calc(100vh - 32px);
+        max-height: calc(100vh - 32px);
+      }
+      .main-container.layout-side .chart-sidebar {
+        flex: 1 1 420px;
+        width: min(850px, 48vw);
+        max-width: none;
+        margin: 0;
+        position: sticky;
+        top: 16px;
+        max-height: calc(100vh - 32px);
+      }
+      .main-container.layout-stack {
+        flex-direction: column;
+      }
+      .main-container.layout-stack .chat-container {
+        flex: 0 0 auto;
+        width: 100%;
+        max-width: none;
+        min-height: min(62vh, 680px);
+        max-height: min(72vh, 820px);
+      }
+      .main-container.layout-stack .chart-sidebar {
+        width: 100%;
+        max-width: 850px;
+        margin: 12px auto 0;
+        position: static;
+        max-height: none;
+      }
       @media (max-width: 1400px) {
-        .main-container {
+        .main-container:not(.layout-side) {
           flex-direction: column;
         }
-        .chat-container {
+        .main-container:not(.layout-side) .chat-container {
           max-width: none;
         }
-        .chart-sidebar {
+        .main-container:not(.layout-side) .chart-sidebar {
           width: 100%;
           max-width: 850px;
           margin: 20px auto 0;
@@ -1079,6 +1168,19 @@
           overflow-y: auto !important;
           overflow-x: hidden;
           -webkit-overflow-scrolling: touch;
+        }
+        .layout-toggle {
+          display: none;
+        }
+        .main-container.layout-side,
+        .main-container.layout-stack {
+          flex-direction: column;
+        }
+        .main-container.layout-side .chat-container,
+        .main-container.layout-stack .chat-container {
+          min-height: 0;
+          max-height: none;
+          width: auto;
         }
         .mobile-nav-tabs {
           display: flex;
@@ -1968,6 +2070,88 @@
 
     <script src="profile_lifecycle.js"></script>
     <script>
+      const LAYOUT_STORAGE_KEY = "astroguideWorkspaceLayout";
+      function workspaceLayoutMode() {
+        const main = document.getElementById("main-container");
+        if (!main) return "";
+        if (main.classList.contains("layout-side")) return "side";
+        if (main.classList.contains("layout-stack")) return "stack";
+        return "";
+      }
+      function automaticWorkspaceLayout() {
+        return window.matchMedia("(min-width: 1400px)").matches
+          ? "side"
+          : "stack";
+      }
+      function syncLayoutToggle(mode) {
+        const sideBtn = document.getElementById("layout-side-btn");
+        const stackBtn = document.getElementById("layout-stack-btn");
+        if (sideBtn) {
+          sideBtn.setAttribute("aria-pressed", mode === "side" ? "true" : "false");
+        }
+        if (stackBtn) {
+          stackBtn.setAttribute(
+            "aria-pressed",
+            mode === "stack" ? "true" : "false",
+          );
+        }
+      }
+      function applyWorkspaceLayout(mode, persist) {
+        const main = document.getElementById("main-container");
+        if (!main) return;
+        main.classList.remove("layout-side", "layout-stack");
+        if (mode === "side") main.classList.add("layout-side");
+        if (mode === "stack") main.classList.add("layout-stack");
+        syncLayoutToggle(mode || automaticWorkspaceLayout());
+        if (!persist) return;
+        try {
+          if (mode === "side" || mode === "stack") {
+            localStorage.setItem(LAYOUT_STORAGE_KEY, mode);
+          }
+        } catch (err) {}
+      }
+      function refreshWheelForLayout() {
+        requestAnimationFrame(function () {
+          requestAnimationFrame(function () {
+            if (typeof getActiveProfile !== "function") return;
+            if (typeof renderChartWheel !== "function") return;
+            const profile = getActiveProfile();
+            if (profile && profile.birthChartData) {
+              renderChartWheel(profile.birthChartData);
+            }
+          });
+        });
+      }
+      (function initWorkspaceLayout() {
+        let saved = "";
+        try {
+          saved = localStorage.getItem(LAYOUT_STORAGE_KEY) || "";
+        } catch (err) {}
+        if (saved === "side" || saved === "stack") {
+          applyWorkspaceLayout(saved, false);
+        } else {
+          syncLayoutToggle(automaticWorkspaceLayout());
+        }
+        const sideBtn = document.getElementById("layout-side-btn");
+        const stackBtn = document.getElementById("layout-stack-btn");
+        if (sideBtn) {
+          sideBtn.addEventListener("click", function () {
+            applyWorkspaceLayout("side", true);
+            refreshWheelForLayout();
+          });
+        }
+        if (stackBtn) {
+          stackBtn.addEventListener("click", function () {
+            applyWorkspaceLayout("stack", true);
+            refreshWheelForLayout();
+          });
+        }
+        window.addEventListener("resize", function () {
+          if (workspaceLayoutMode()) return;
+          syncLayoutToggle(automaticWorkspaceLayout());
+        });
+      })();
+
       const messageInput = document.getElementById("message-input");
       const sendButton = document.getElementById("send-button");
       const chatMessages = document.getElementById("chat-messages");
